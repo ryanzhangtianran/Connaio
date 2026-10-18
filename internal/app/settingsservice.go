@@ -16,8 +16,16 @@ var appVersion = "dev"
 
 // SettingsService covers the GUI-side settings: launch at login and the about page.
 type SettingsService struct {
-	core     *CoreService
-	settings *settingsFile
+	core        *CoreService
+	settings    *settingsFile
+	openMonitor func() // app.go: shows the floating process monitor
+}
+
+// OpenMonitor shows the floating process monitor, a small window kept above the others.
+func (s *SettingsService) OpenMonitor() {
+	if s.openMonitor != nil {
+		s.openMonitor()
+	}
 }
 
 type About struct {

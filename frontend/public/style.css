@@ -489,6 +489,15 @@ tr.muted td.rule-actions { text-decoration: none; }
 .watch-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .watch-exit { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .watch-chain { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the floating process monitor (Monitor.tsx): one card filling its window, the head dragging it */
+.monitor { height: 100%; display: flex; flex-direction: column; padding: 8px 12px 10px; border-radius: 12px; background: var(--panel); overflow: hidden; }
+.monitor-head { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--line); --wails-draggable: drag; }
+.monitor-head .picker, .monitor-close { --wails-draggable: no-drag; }
+.monitor-head .picker { max-width: 45%; } /* a long name gives way to the speed */
+.monitor-rate { flex: 1; text-align: right; font-size: 11px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.monitor-close { border: 0; background: none; color: var(--text-2); font-size: 12px; padding: 2px 4px; }
+.monitor-close:hover { color: var(--text); }
+.monitor-body { flex: 1; min-height: 0; overflow: auto; font-size: 12px; }
 .deploy-log { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--card); max-height: 180px; overflow: auto; font-size: 12px; }
 
 /* Linux: no native blur shows through the window, and the window is frameless, its buttons at the

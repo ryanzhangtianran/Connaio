@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 
 	"github.com/ryanzhangtianran/Connaio/internal/core"
 	"github.com/ryanzhangtianran/Connaio/internal/profile"
@@ -91,10 +92,46 @@ func Run(assets fs.FS, trayIcon []byte) error {
 		e.Cancel()
 	})
 
+	// the floating process monitor: built on first use, kept above other windows, hidden when closed
+	// and shown again where it was left
+	var monitorMu sync.Mutex
+	var monitor *application.WebviewWindow
+	openMonitor := func() {
+		monitorMu.Lock()
+		defer monitorMu.Unlock()
+		if monitor == nil {
+			opts := application.WebviewWindowOptions{
+				Name: "monitor", Title: "进程监视", URL: "/?view=monitor",
+				Width: 340, Height: 220, MinWidth: 280, MinHeight: 140,
+				Frameless: true, AlwaysOnTop: true, BackgroundType: application.BackgroundTypeTranslucent,
+				Mac: application.MacWindow{
+					Backdrop:           application.MacBackdropTranslucent,
+					WindowLevel:        application.MacWindowLevelFloating,
+					CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces | application.MacWindowCollectionBehaviorFullScreenAuxiliary, // on every desktop, above full-screen apps
+				},
+				Windows: application.WindowsWindow{BackdropType: application.Acrylic, HiddenOnTaskbar: true},
+			}
+			if p := settings.Get().Monitor; len(p) == 2 {
+				opts.InitialPosition, opts.X, opts.Y = application.WindowXY, p[0], p[1]
+			}
+			monitor = app.Window.NewWithOptions(opts)
+			monitor.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { makeVibrant(monitor) })
+			monitor.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+				x, y := monitor.Position()
+				_ = settings.Update(func(st *Settings) { st.Monitor = []int{x, y} })
+				monitor.Hide()
+				e.Cancel()
+			})
+		}
+		monitor.Show()
+		monitor.Focus()
+	}
+	settingsSvc.openMonitor = openMonitor
+
 	tray := app.SystemTray.New()
 	tray.SetTemplateIcon(trayIcon)
 	newTrayMenu(&trayMenu{
-		app: app, tray: tray, icon: trayIcon, show: show,
+		app: app, tray: tray, icon: trayIcon, show: show, monitor: openMonitor,
 		svc: svc, profiles: profiles, sysProxy: sysProxy, enhanced: enhanced, settings: settings,
 	})
 

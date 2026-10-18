@@ -36,6 +36,7 @@ type trayMenu struct {
 	tray     *application.SystemTray
 	icon     []byte
 	show     func()
+	monitor  func() // shows the floating process monitor
 	svc      *CoreService
 	profiles *ProfileService
 	sysProxy *SystemProxyService
@@ -544,6 +545,7 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, 
 	}
 
 	m.Add("显示主窗口").SetAccelerator("CmdOrCtrl+M").OnClick(func(*application.Context) { t.show() })
+	m.Add("显示进程监视").OnClick(func(*application.Context) { t.monitor() })
 	var headers []*application.MenuItem
 	header := func(title string) {
 		if runtime.GOOS != "darwin" { // elsewhere a title is a plain disabled item, read as a greyed-out option

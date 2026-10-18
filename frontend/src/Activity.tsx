@@ -186,7 +186,7 @@ function NetTools() {
 
 // Picker is a compact dropdown for a card's head. Not a <select>: on Linux its popup is GTK's own
 // menu, out of keeping with the page; the menu is fixed to the window so the card doesn't clip it.
-function Picker({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
+export function Picker({ value, options, onChange }: { value: string; options: string[]; onChange: (v: string) => void }) {
   const [at, setAt] = useState<DOMRect | null>(null);
   useClickAway(!!at, () => setAt(null));
   return (
@@ -267,41 +267,56 @@ function ExitCell({ policy }: { policy: string }) {
   return <span className="selectable" title={full}>{text}</span>;
 }
 
-let watched = ""; // the process the monitor shows, kept across page switches
+let watched = ""; // the application the monitor shows, kept across page switches
 
-// ProcessWatch follows one application's live connections: each route it takes (the rule's policy down
-// to the node), the address that route comes out at, and the hosts on it.
-function ProcessWatch() {
+// useWatch follows one application's live connections, polled every ms: the applications with any
+// (as the applications card names them), the one shown (until one is chosen, the one with the most
+// connections, then kept) and its connections by route.
+export function useWatch(ms: number) {
   const [conns, setConns] = useState<Conn[]>([]);
   const [proc, setProc] = useState(watched);
-  usePoll(() => CoreService.Connections().then((c) => setConns(c ?? [])), 2000);
+  usePoll(() => CoreService.Connections().then((c) => setConns(c ?? [])), ms);
   const choose = (p: string) => { watched = p; setProc(p); };
   const counts = new Map<string, number>();
-  for (const c of conns) counts.set(c.app, (counts.get(c.app) ?? 0) + 1) // by application, as in the applications card;
+  for (const c of conns) counts.set(c.app, (counts.get(c.app) ?? 0) + 1);
   const busiest = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
-  const shown = proc || busiest; // until one is chosen, the one with the most connections, then kept
+  const shown = proc || busiest;
   useEffect(() => { if (!proc && busiest) choose(busiest); }, [proc, busiest]);
   const procs = [...new Set([...counts.keys(), ...(shown ? [shown] : [])])].sort((a, b) => a.localeCompare(b));
   const routes = new Map<string, Conn[]>();
   for (const c of conns) if (c.app === shown) routes.set(c.chain || "DIRECT", [...(routes.get(c.chain || "DIRECT") ?? []), c]);
+  return { conns, procs, shown, choose, routes };
+}
+
+// Routes lists each route the shown application takes (the rule's policy down to the node), the
+// address that route comes out at, and the hosts on it.
+export function Routes({ shown, routes }: { shown: string; routes: Map<string, Conn[]> }) {
+  if (routes.size === 0) return <div className="muted small">{shown ? `${shown} 当前没有连接` : "当前没有连接"}</div>;
+  return (
+    <>
+      {[...routes].map(([chain, cs]) => (
+        <div key={chain} className="watch-route" title={[...new Set(cs.map((c) => c.host))].join("\n")}>
+          <div className="watch-head"><span className="watch-chain">{chain}</span><span className="muted small">{cs.length} 个连接</span></div>
+          <div className="watch-exit"><ExitCell policy={chain.split(" → ").pop()!} /></div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+// ProcessWatch is the activity page's card of useWatch, which also opens as a floating window.
+function ProcessWatch() {
+  const { procs, shown, choose, routes } = useWatch(2000);
   return (
     <div className="card">
       <div className="head">
-        <div className="label">进程监视</div>
+        <div className="label">
+          进程监视
+          <button className="icon-btn" onClick={() => SettingsService.OpenMonitor()} title="在悬浮窗中显示">⧉</button>
+        </div>
         <Picker value={shown} options={procs} onChange={choose} />
       </div>
-      <div className="card-scroll">
-        {routes.size === 0 ? <div className="muted small">{shown ? `${shown} 当前没有连接` : "当前没有连接"}</div>
-          : [...routes].map(([chain, cs]) => {
-            const hosts = [...new Set(cs.map((c) => c.host))];
-            return (
-              <div key={chain} className="watch-route" title={hosts.join("\n")}>
-                <div className="watch-head"><span className="watch-chain">{chain}</span><span className="muted small">{cs.length} 个连接</span></div>
-                <div className="watch-exit"><ExitCell policy={chain.split(" → ").pop()!} /></div>
-              </div>
-            );
-          })}
-      </div>
+      <div className="card-scroll"><Routes shown={shown} routes={routes} /></div>
     </div>
   );
 }

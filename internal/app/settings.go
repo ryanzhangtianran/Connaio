@@ -20,6 +20,8 @@ type Settings struct {
 	HideTraySpeed bool `json:"hideTraySpeed"`
 	// VPNs are the VPN page's entries by name, kept while disconnected so 连接 needs no retyping.
 	VPNs map[string]VPN `json:"vpns,omitempty"`
+	// Monitor is where the floating process monitor was last closed, x and y, to open it there again.
+	Monitor []int `json:"monitor,omitempty"`
 }
 
 type settingsFile struct {
