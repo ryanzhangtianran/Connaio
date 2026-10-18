@@ -1,65 +1,47 @@
 package daemon
 
 import (
-	"os"
+	"encoding/base64"
 	"os/exec"
-	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
 
-func TestPlist(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "d.plist")
-	if err := os.WriteFile(p, []byte(plist(501)), 0o644); err != nil {
-		t.Fatal(err)
-	}
+// TestBundledPlist checks build/darwin/daemon.plist, which the app bundle carries, against what the
+// GUI expects of the daemon it starts.
+func TestBundledPlist(t *testing.T) {
+	p := "../../build/darwin/daemon.plist"
 	if out, err := exec.Command("plutil", "-lint", p).CombinedOutput(); err != nil {
 		t.Fatalf("plist invalid: %s", out)
 	}
-	out, err := exec.Command("plutil", "-extract", "EnvironmentVariables.CONNAIO_SOCKET_UID", "raw", p).Output()
-	if err != nil || strings.TrimSpace(string(out)) != "501" {
-		t.Fatalf("socket uid: %q %v", out, err)
-	}
-}
-
-// TestVerify runs the script's checksum line against a real file, as root would.
-func TestVerify(t *testing.T) {
-	dir := t.TempDir()
-	f := filepath.Join(dir, "helper")
-	os.WriteFile(f, []byte("good"), 0o644)
-	line := func(want string) string {
-		for _, l := range strings.Split(installScript("/x", want, dir, want), "\n") {
-			if strings.Contains(l, "shasum") {
-				return strings.ReplaceAll(l, shellQuote(Helper), shellQuote(f)) // point the check at the test file
-			}
+	get := func(key string) string {
+		out, err := exec.Command("plutil", "-extract", key, "raw", p).Output()
+		if err != nil {
+			t.Fatalf("%s: %v", key, err)
 		}
-		t.Fatal("no checksum line")
-		return ""
+		return strings.TrimSpace(string(out))
 	}
-	good := sum([]byte("good"))
-	if out, err := exec.Command("sh", "-c", strings.ReplaceAll(line(good), Helper, f)).CombinedOutput(); err != nil {
-		t.Fatalf("matching file rejected: %s", out)
+	args := map[string]string{}
+	for i := 1; i < 7; i += 2 { // after argv[0], flag and value pairs
+		args[get("ProgramArguments."+strconv.Itoa(i))] = get("ProgramArguments." + strconv.Itoa(i+1))
 	}
-	if out, err := exec.Command("sh", "-c", strings.ReplaceAll(line(sum([]byte("other"))), Helper, f)).CombinedOutput(); err == nil {
-		t.Fatalf("swapped file accepted: %s", out)
-	}
-	if _, err := os.Stat(f); !os.IsNotExist(err) {
-		t.Fatal("a mismatching file must be removed")
+	boot, _ := base64.StdEncoding.DecodeString(args["-config"])
+	for name, c := range map[string][2]string{
+		"Label": {get("Label"), Label}, "-d": {args["-d"], Dir}, "-ext-ctl-unix": {args["-ext-ctl-unix"], Socket},
+		"-config": {string(boot), BootConfig}, "StandardOutPath": {get("StandardOutPath"), LogPath},
+		"BundleProgram": {get("BundleProgram"), "Contents/MacOS/connaio-core"},
+	} {
+		if c[0] != c[1] {
+			t.Errorf("%s: %q, want %q", name, c[0], c[1])
+		}
 	}
 }
 
 func TestScripts(t *testing.T) {
-	// a path with spaces and a quote must survive shell and AppleScript quoting
-	core := "/Applications/Connaio's.app/Contents/MacOS/connaio-core"
-	script := installScript(core, "abc", "/tmp/stage", "def")
-	if !strings.Contains(script, `'/Applications/Connaio'\''s.app/Contents/MacOS/connaio-core'`) {
-		t.Fatalf("core path quoting:\n%s", script)
-	}
+	script := legacyRemoval()
 	if out, err := exec.Command("sh", "-n", "-c", script).CombinedOutput(); err != nil {
-		t.Fatalf("install script syntax: %s", out)
-	}
-	if out, err := exec.Command("sh", "-n", "-c", uninstallScript()).CombinedOutput(); err != nil {
-		t.Fatalf("uninstall script syntax: %s", out)
+		t.Fatalf("removal script syntax: %s", out)
 	}
 	// AppleScript string literal round trip, without the admin prompt
 	out, err := exec.Command("osascript", "-e", "return "+appleQuote(script)).Output()

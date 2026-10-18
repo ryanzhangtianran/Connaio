@@ -67,3 +67,6 @@ func RunAsAdmin(script, _ string) error {
 		return fmt.Errorf("修复失败：%s", cmp.Or(strings.TrimSpace(string(out)), err.Error()))
 	}
 }
+
+// InBundle says the daemon runs the app's own core; here it runs a copy, replaced by Install when Stale.
+const InBundle = false

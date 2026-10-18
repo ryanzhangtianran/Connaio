@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The root daemon, run from inside the app (SMAppService): updating the app updates it, with no
+     administrator prompt. Copied into Contents/Library/LaunchDaemons as com.ryanzhangtianran.connaio.core.plist;
+     internal/daemon checks it against its constants, the -config being daemon.BootConfig in base64. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key><string>com.ryanzhangtianran.connaio.core</string>
+	<key>BundleProgram</key><string>Contents/MacOS/connaio-core</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>connaio-core</string>
+		<string>-d</string><string>/Library/Application Support/Connaio Core</string>
+		<string>-ext-ctl-unix</string><string>/Library/Application Support/Connaio Core/core.sock</string>
+		<string>-config</string><string>bWl4ZWQtcG9ydDogNzg5OQptb2RlOiBydWxlCnJ1bGVzOgogIC0gTUFUQ0gsRElSRUNUCg==</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict><key>CONNAIO_SOCKET_GROUP</key><string>admin</string></dict>
+	<key>RunAtLoad</key><true/>
+	<key>KeepAlive</key><true/>
+	<key>StandardOutPath</key><string>/Library/Logs/Connaio Core.log</string>
+	<key>StandardErrorPath</key><string>/Library/Logs/Connaio Core.log</string>
+</dict>
+</plist>

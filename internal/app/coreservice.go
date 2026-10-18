@@ -18,6 +18,7 @@ import (
 
 	"github.com/ryanzhangtianran/Connaio/internal/core"
 	"github.com/ryanzhangtianran/Connaio/internal/daemon"
+	"github.com/ryanzhangtianran/Connaio/internal/run"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -386,15 +387,37 @@ func (s *CoreService) TestGroup(group string) (map[string]int, error) {
 }
 
 // streamTraffic forwards the core's per-second traffic to the frontend and menu bar, reconnecting on errors.
-// updateDaemon reinstalls the root daemon when an app update brought a new core: it keeps running
-// the old copy until then. It runs once the window is up and the old core attached, since the
-// administrator prompt holds the main thread; the heartbeat below re-pushes the config to the new one.
+// updateDaemon brings the root daemon up to the app's core after an update: it keeps running the
+// one it started with until then. A daemon that runs a copy (Linux, Windows, and macOS's older
+// LaunchDaemon) is installed again; one that runs the app's own core (macOS) is restarted when the
+// versions differ, which carry the core's commit. It runs once the window is up and the old core
+// attached, since an administrator prompt holds the main thread; the heartbeat below re-pushes the
+// config to the new one.
 func (s *CoreService) updateDaemon() {
 	bin, err := core.Binary()
-	if err != nil || !s.core.Daemon() || !daemon.Stale(bin) {
+	if err != nil || !s.core.Daemon() {
 		return
 	}
-	if err := daemon.Install(bin); err != nil {
+	if daemon.Stale(bin) {
+		if err := daemon.Install(bin); err != nil {
+			notify("warning", "root 内核未更新，仍在运行旧版：%v", err)
+		}
+		return
+	}
+	if !daemon.InBundle {
+		return
+	}
+	out, err := run.Command(bin, "-v").Output() // "Mihomo Meta <version> darwin arm64 with …"
+	f := strings.Fields(string(out))
+	var running struct {
+		Version string `json:"version"`
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err != nil || len(f) < 3 || s.core.Do(ctx, http.MethodGet, "/version", nil, &running) != nil || running.Version == f[2] {
+		return
+	}
+	if err := s.core.Do(ctx, http.MethodPost, "/restart", nil, nil); err != nil {
 		notify("warning", "root 内核未更新，仍在运行旧版：%v", err)
 	}
 }

@@ -1,122 +1,135 @@
 package daemon
 
+/*
+#cgo CFLAGS: -x objective-c
+#cgo LDFLAGS: -framework Foundation -framework ServiceManagement
+#import <Foundation/Foundation.h>
+#import <ServiceManagement/ServiceManagement.h>
+#include <stdlib.h>
+
+#pragma clang diagnostic ignored "-Wunguarded-availability-new" // SMAppService is macOS 13; the app needs 15
+
+static SMAppService *service(void) {
+	return [SMAppService daemonServiceWithPlistName:@"com.ryanzhangtianran.connaio.core.plist"];
+}
+
+// 0 not registered, 1 enabled, 2 waiting for the user's approval, 3 not found in the bundle
+static int serviceStatus(void) { return (int)service().status; }
+
+// serviceRegister and serviceUnregister return NULL on success, else a malloc'd message.
+static char *serviceRegister(void) {
+	NSError *err = nil;
+	return [service() registerAndReturnError:&err] ? NULL : strdup(err.localizedDescription.UTF8String);
+}
+static char *serviceUnregister(void) {
+	NSError *err = nil;
+	return [service() unregisterAndReturnError:&err] ? NULL : strdup(err.localizedDescription.UTF8String);
+}
+static void openLoginItems(void) { [SMAppService openSystemSettingsLoginItems]; }
+*/
+import "C"
+
 import (
+	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
+	"time"
+	"unsafe"
 )
 
 const (
-	Label     = "com.ryanzhangtianran.connaio.core"
-	Helper    = "/Library/PrivilegedHelperTools/Connaio Core" // named for 登录项与扩展, which lists an unsigned daemon by its executable
-	oldHelper = "/Library/PrivilegedHelperTools/" + Label     // 0.1.2 and before: removed on install
-	Plist     = "/Library/LaunchDaemons/" + Label + ".plist"
-	Dir       = "/Library/Application Support/Connaio Core"
-	Socket    = Dir + "/core.sock"
-	LogPath   = Dir + "/core.log" // launchd writes the daemon's output here
+	Label   = "com.ryanzhangtianran.connaio.core"
+	Dir     = "/Library/Application Support/Connaio Core"
+	Socket  = Dir + "/core.sock"
+	LogPath = "/Library/Logs/Connaio Core.log" // launchd writes the daemon's output here (build/darwin/daemon.plist)
+
+	// the LaunchDaemon of 0.1.3 and before: the core copied to a root-owned helper, so each update that
+	// changed its bytes (each one, as signing does) asked for the administrator password again
+	legacyPlist = "/Library/LaunchDaemons/" + Label + ".plist"
 )
 
-// Installed reports whether the LaunchDaemon is set up.
-func Installed() bool {
-	_, err := os.Stat(Plist)
+var legacyHelpers = []string{"/Library/PrivilegedHelperTools/Connaio Core", "/Library/PrivilegedHelperTools/" + Label}
+
+const (
+	notRegistered = iota
+	enabled
+	requiresApproval
+)
+
+func status() int { return int(C.serviceStatus()) }
+
+func legacy() bool {
+	_, err := os.Stat(legacyPlist)
 	return err == nil
 }
 
-func plist(uid int) string {
-	return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>Label</key><string>` + Label + `</string>
-	<key>AssociatedBundleIdentifiers</key><array><string>com.ryanzhangtianran.connaio</string></array>
-	<key>ProgramArguments</key>
-	<array>
-		<string>` + Helper + `</string>
-		<string>-d</string><string>` + Dir + `</string>
-		<string>-ext-ctl-unix</string><string>` + Socket + `</string>
-	</array>
-	<key>EnvironmentVariables</key>
-	<dict><key>CONNAIO_SOCKET_UID</key><string>` + strconv.Itoa(uid) + `</string></dict>
-	<key>RunAtLoad</key><true/>
-	<key>KeepAlive</key><true/>
-	<key>StandardOutPath</key><string>` + Dir + `/core.log</string>
-	<key>StandardErrorPath</key><string>` + Dir + `/core.log</string>
-</dict>
-</plist>
-`
+// InBundle says the daemon runs the core inside the app (SMAppService), not a copy: an app update
+// brings it a new core, which it picks up once restarted.
+const InBundle = true
+
+// Installed reports whether the daemon is set up: registered and allowed, or the older
+// LaunchDaemon still in place (Stale moves it over).
+func Installed() bool { return status() == enabled || legacy() }
+
+// Stale reports whether the older LaunchDaemon is still installed; Install moves it to the one run
+// from the app. The app's own core needs no reinstalling: see InBundle.
+func Stale(string) bool { return legacy() }
+
+// Install registers the daemon in the app's bundle (build/darwin/daemon.plist) with launchd, after
+// removing the older LaunchDaemon (its last administrator prompt). The first time, macOS asks the
+// user to allow it in System Settings, which is opened for them; this waits up to two minutes.
+func Install(string) error {
+	if legacy() {
+		if err := asAdmin(legacyRemoval(), "Connaio 要把 root 内核换成随 App 更新的方式，以后更新不再需要输入密码。"); err != nil {
+			return err
+		}
+	}
+	if status() != enabled {
+		if msg := C.serviceRegister(); msg != nil {
+			defer C.free(unsafe.Pointer(msg))
+			if status() != requiresApproval {
+				return fmt.Errorf("注册 root 内核失败：%s", C.GoString(msg))
+			}
+		}
+	}
+	if status() == requiresApproval {
+		C.openLoginItems()
+		for deadline := time.Now().Add(2 * time.Minute); status() == requiresApproval && time.Now().Before(deadline); {
+			time.Sleep(time.Second)
+		}
+	}
+	if status() != enabled {
+		return errors.New("请在「系统设置 → 通用 → 登录项与扩展」中允许 Connaio 在后台运行，然后再试一次")
+	}
+	return nil
 }
 
-// installScript runs as root. Its inputs come from user-writable places, so after copying, the
-// root-owned copies are checked against hashes taken before the prompt: a file swapped in between
-// is removed instead of run.
-func installScript(core, coreSum, stage, plistSum string) string {
-	q := shellQuote
-	verify := func(sum, path string) string {
-		return "echo " + q(sum+"  "+path) + " | shasum -a 256 -c -s || { rm -f " + q(path) + "; echo 'checksum mismatch: " + path + "' >&2; exit 1; }"
-	}
-	return strings.Join([]string{
-		"set -e",
-		"launchctl bootout system/" + Label + " 2>/dev/null || true",
-		"mkdir -p /Library/PrivilegedHelperTools " + q(Dir),
-		"chmod 755 " + q(Dir),
-		"rm -f " + q(oldHelper),
-		"install -o root -g wheel -m 755 " + q(core) + " " + q(Helper),
-		verify(coreSum, Helper),
-		"install -o root -g wheel -m 644 " + q(filepath.Join(stage, "daemon.plist")) + " " + q(Plist),
-		verify(plistSum, Plist),
-		"[ -f " + q(Dir+"/config.yaml") + " ] || install -o root -g wheel -m 644 " + q(filepath.Join(stage, "config.yaml")) + " " + q(Dir+"/config.yaml"),
-		"launchctl bootstrap system " + q(Plist),
-	}, "\n")
-}
-
-func uninstallScript() string {
-	return strings.Join([]string{
-		"launchctl bootout system/" + Label + " 2>/dev/null || true",
-		"rm -f " + shellQuote(Plist) + " " + shellQuote(Helper) + " " + shellQuote(oldHelper),
-	}, "\n")
-}
-
-// Install copies core (the app's bundled binary) to a root-owned location and starts the
-// LaunchDaemon for the current user, after one administrator prompt.
-func Install(core string) error {
-	stage, err := os.MkdirTemp("", "connaio-daemon-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(stage)
-	p := []byte(plist(os.Getuid()))
-	if err := os.WriteFile(filepath.Join(stage, "daemon.plist"), p, 0o644); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(stage, "config.yaml"), []byte(BootConfig), 0o644); err != nil {
-		return err
-	}
-	coreSum, err := fileSum(core)
-	if err != nil {
-		return err
-	}
-	prompt := "Connaio 需要 root 权限以开启增强（TUN）。"
-	if Installed() {
-		prompt = "Connaio 已更新内核，需要重新授予 root 权限。"
-	}
-	return asAdmin(installScript(core, coreSum, stage, sum(p)), prompt)
-}
-
-// Stale reports whether the installed daemon differs from what this app would install: another
-// core binary (an app update), none where this app puts it (one installed under the old name), or
-// another plist; Install again to replace it.
-func Stale(bin string) bool {
-	installed, err1 := fileSum(Helper)
-	bundled, err2 := fileSum(bin)
-	plistNow, err3 := fileSum(Plist)
-	return err2 == nil && err3 == nil && (err1 != nil || installed != bundled || plistNow != sum([]byte(plist(os.Getuid()))))
-}
-
-// Uninstall stops and removes the LaunchDaemon; its data dir is kept.
+// Uninstall stops and unregisters the daemon, and removes the older LaunchDaemon if it is there; its
+// data dir is kept.
 func Uninstall() error {
-	return asAdmin(uninstallScript(), "Connaio 需要移除 root 权限。")
+	if legacy() {
+		if err := asAdmin(legacyRemoval(), "Connaio 需要移除 root 权限。"); err != nil {
+			return err
+		}
+	}
+	if status() == notRegistered {
+		return nil
+	}
+	if msg := C.serviceUnregister(); msg != nil {
+		defer C.free(unsafe.Pointer(msg))
+		return fmt.Errorf("移除 root 内核失败：%s", C.GoString(msg))
+	}
+	return nil
+}
+
+// legacyRemoval stops the older LaunchDaemon and deletes it and its helper; it runs as root.
+func legacyRemoval() string {
+	files := []string{shellQuote(legacyPlist)}
+	for _, h := range legacyHelpers {
+		files = append(files, shellQuote(h))
+	}
+	return "launchctl bootout system/" + Label + " 2>/dev/null || true\nrm -f " + strings.Join(files, " ")
 }
 
 // asAdmin runs a shell script as root through the standard macOS administrator prompt.

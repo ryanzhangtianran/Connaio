@@ -65,8 +65,10 @@ tasks:
       # the core reports constant.Version, a 1.10.0 placeholder unless set here, as mihomo's Makefile does
       - CGO_ENABLED=0 go -C "{{.CORE_DIR}}" build -tags with_gvisor -trimpath -ldflags="-w -s -X github.com/metacubex/mihomo/constant.Version={{.CORE_VERSION}}" -o "{{.ROOT_DIR}}/{{.BIN_DIR}}/connaio-core" .
     vars:
+      # the mihomo release it is based on and its own commit, e.g. 1.19.32+07bcb6bc: the app restarts the
+      # root daemon, which runs the core in the bundle, when this differs from the running one's
       CORE_VERSION:
-        sh: git -C "{{.CORE_DIR}}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo unknown # the mihomo release it is based on, e.g. 1.19.32
+        sh: echo "$(git -C "{{.CORE_DIR}}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo unknown)+$(git -C "{{.CORE_DIR}}" rev-parse --short=8 HEAD)"
     env:
       GOOS: darwin
       GOARCH: '{{.ARCH | default ARCH}}'
@@ -187,6 +189,9 @@ tasks:
         fi
       - cp "{{.BIN_DIR}}/{{.BUNDLE_NAME}}" "{{.BIN_DIR}}/{{.BUNDLE_NAME}}.app/Contents/MacOS"
       - cp "{{.BIN_DIR}}/connaio-core" "{{.BIN_DIR}}/{{.BUNDLE_NAME}}.app/Contents/MacOS"
+      # the root daemon, run from the bundle (SMAppService, internal/daemon)
+      - mkdir -p "{{.BIN_DIR}}/{{.BUNDLE_NAME}}.app/Contents/Library/LaunchDaemons"
+      - cp build/darwin/daemon.plist "{{.BIN_DIR}}/{{.BUNDLE_NAME}}.app/Contents/Library/LaunchDaemons/com.ryanzhangtianran.connaio.core.plist"
       - sed "s/__VERSION__/{{.VERSION}}/g" build/darwin/Info.plist > "{{.BIN_DIR}}/{{.BUNDLE_NAME}}.app/Contents/Info.plist" # the version is the git tag
       - task: '{{if eq OS "darwin"}}codesign:adhoc{{else}}codesign:skip{{end}}'
 
@@ -224,6 +229,8 @@ tasks:
         fi
       - cp "{{.BIN_DIR}}/{{.BUNDLE_NAME}}" "{{.BIN_DIR}}/{{.BUNDLE_NAME}}.dev.app/Contents/MacOS"
       - cp "{{.BIN_DIR}}/connaio-core" "{{.BIN_DIR}}/{{.BUNDLE_NAME}}.dev.app/Contents/MacOS"
+      - mkdir -p "{{.BIN_DIR}}/{{.BUNDLE_NAME}}.dev.app/Contents/Library/LaunchDaemons"
+      - cp build/darwin/daemon.plist "{{.BIN_DIR}}/{{.BUNDLE_NAME}}.dev.app/Contents/Library/LaunchDaemons/com.ryanzhangtianran.connaio.core.plist"
       - cp "build/darwin/Info.dev.plist" "{{.BIN_DIR}}/{{.BUNDLE_NAME}}.dev.app/Contents/Info.plist"
       - xattr -cr "{{.BIN_DIR}}/{{.BUNDLE_NAME}}.dev.app"
       - codesign --force --deep --sign - "{{.BIN_DIR}}/{{.BUNDLE_NAME}}.dev.app"

@@ -30,7 +30,7 @@
 #### 安装说明
 
 - **macOS**：App 没有经过 Apple 公证，首次打开前在终端执行一次 `xattr -cr /Applications/Connaio.app`。
-- **增强模式（TUN）**：需要先在「通用」中授予 root 权限：macOS 输入一次管理员密码，内核装成 LaunchDaemon；Windows 一次 UAC 确认，内核装成 Windows 服务，Wintun 驱动随安装包附带；Linux 通过 polkit 授权，内核装成 systemd 服务。
+- **增强模式（TUN）**：需要先在「通用」中授予 root 权限：macOS 在「系统设置 → 通用 → 登录项与扩展」中允许 Connaio 在后台运行一次，内核随 App 一起更新，之后不再需要密码；Windows 一次 UAC 确认，内核装成 Windows 服务，Wintun 驱动随安装包附带；Linux 通过 polkit 授权，内核装成 systemd 服务。
 - **Linux 托盘**：需要桌面支持 AppIndicator（Ubuntu 自带的 GNOME 默认开启）。
 
 ---
@@ -50,7 +50,7 @@
 
 **macOS 提示「已损坏，无法打开」？** App 没有经过 Apple 公证，在终端执行 `xattr -cr /Applications/Connaio.app` 后再打开。
 
-**开启增强模式提示没有权限？** 先在「通用 → root 权限」中授予，内核会以系统服务运行；更新 App 后如果内核有变化，会再提示授予一次。
+**开启增强模式提示没有权限？** 先在「通用 → root 权限」中授予，内核会以系统服务运行。macOS 上内核随 App 一起更新，不会再提示；Windows 和 Linux 上更新 App 后如果内核有变化，会再提示授予一次。
 
 **流量排行里某个命令没有归到它的应用？** 内核在连接建立时读取进程的祖先链来归类；macOS 上实在找不到所属应用的命令会合并到 macOS 一项。Windows 的内核暂不支持读取祖先链，改为按进程名查找，退出很快的进程可能无法归类。
 

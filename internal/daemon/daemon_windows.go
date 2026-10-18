@@ -111,3 +111,6 @@ func RunAsAdmin(script, _ string) error {
 	defer os.RemoveAll(stage)
 	return asAdmin(stage, script)
 }
+
+// InBundle says the daemon runs the app's own core; here it runs a copy, replaced by Install when Stale.
+const InBundle = false

@@ -1,9 +1,11 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -62,6 +64,12 @@ func (s *ToolService) Repair(id string) (string, error) {
 		}
 		return fmt.Sprintf("结束了 %d 个残留内核", killed), nil
 	case "dns":
+		// a root core flushes it without an administrator prompt (macOS); otherwise the prompt
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if s.cs.core.Daemon() && s.cs.core.Do(ctx, http.MethodPost, "/flush-dns", nil, nil) == nil {
+			return "DNS 缓存已刷新", nil
+		}
 		return flushDNS()
 	}
 	return platformRepair(id)
