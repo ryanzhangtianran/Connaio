@@ -10,6 +10,12 @@ function loadFolded() {
   try { return localStorage.getItem("monitor.folded") !== "0"; } catch { return true; }
 }
 
+// Rate is one direction's speed: its arrow in the activity page's colour, the figure, a smaller unit.
+function Rate({ dir, bytes }: { dir: "up" | "down"; bytes: number }) {
+  const [n, unit] = speed(bytes);
+  return <span className={`monitor-rate ${dir}`}><i>{dir === "down" ? "↓" : "↑"}</i><b>{n}</b><small>{unit}</small></span>;
+}
+
 // Monitor is the floating process monitor: a bar with the shown application, its icon and speed,
 // unfolding into the activity page's 进程监视 card: its routes and their exit addresses. The bar
 // drags the window; ✕ hides it.
@@ -53,15 +59,15 @@ export default function Monitor() {
           <span className="monitor-node">{node}</span>
         </div>
         <div className="monitor-col monitor-speed">
-          <span className="monitor-down">↓ {speed(rate[1]).join(" ")}</span>
-          <span className="monitor-up">↑ {speed(rate[0]).join(" ")}</span>
+          <Rate dir="down" bytes={rate[1]} />
+          <Rate dir="up" bytes={rate[0]} />
         </div>
-        <div className="monitor-col">
+        <div className="monitor-btns">
           <button className="monitor-btn" onClick={() => setFolded(!folded)} title={folded ? "展开" : "收起"}>
-            <svg viewBox="0 0 10 6" width="9" height="6" style={{ transform: folded ? "" : "rotate(180deg)" }}><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+            <svg viewBox="0 0 10 6" width="10" height="6" style={{ transform: folded ? "" : "rotate(180deg)" }}><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
           </button>
           <button className="monitor-btn" onClick={() => Window.Close()} title="关闭">
-            <svg viewBox="0 0 10 10" width="8" height="8"><path d="M1 1l8 8M9 1l-8 8" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+            <svg viewBox="0 0 10 10" width="9" height="9"><path d="M1 1l8 8M9 1l-8 8" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
           </button>
         </div>
       </div>

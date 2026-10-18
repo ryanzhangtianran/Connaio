@@ -500,16 +500,27 @@ tr.muted td.rule-actions { text-decoration: none; }
 .monitor-bar .client-icon { flex: none; width: 28px; height: 28px; }
 .monitor-col { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
 .monitor-who { flex: 1; min-width: 0; }
-.monitor-speed { align-items: flex-end; font-variant-numeric: tabular-nums; }
-.monitor-name, .monitor-down { height: 17px; line-height: 17px; }
-.monitor-node, .monitor-up { height: 15px; line-height: 15px; font-size: 11px; color: var(--text-2); }
+.monitor-speed { align-items: flex-end; }
+.monitor-name, .monitor-rate.down { height: 17px; line-height: 17px; }
+.monitor-node, .monitor-rate.up { height: 15px; line-height: 15px; }
+.monitor-node { font-size: 11px; color: var(--text-2); }
 .monitor-name, .monitor-node, .monitor-name > span { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .monitor-name { font-size: 13px; font-weight: 600; }
 .monitor-name .picker { max-width: 100%; height: 17px; padding: 0 6px; margin-left: -6px; font-size: 13px; font-weight: 600; background: none; --wails-draggable: no-drag; }
 .monitor-name .picker:hover { background: var(--hover); }
-.monitor-down { font-size: 12px; font-weight: 500; white-space: nowrap; }
-.monitor-up { white-space: nowrap; }
-.monitor-btn { display: flex; align-items: center; justify-content: center; width: 18px; height: 16px; border: 0; border-radius: 4px; background: none; color: var(--text-2); opacity: 0.45; --wails-draggable: no-drag; }
+/* a speed: arrow, figure and unit together; the figure right-aligned in a set width and the unit
+   in its own, so it doesn't jitter as it changes */
+.monitor-rate { display: flex; align-items: baseline; justify-content: flex-end; gap: 3px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.monitor-rate i { font-style: normal; font-size: 10px; }
+.monitor-rate.down i { color: var(--down); }
+.monitor-rate.up i { color: var(--up); }
+.monitor-rate b { min-width: 30px; text-align: right; font-weight: 500; }
+.monitor-rate.down b { font-size: 12px; }
+.monitor-rate.up b { font-size: 11px; color: var(--text-2); }
+.monitor-rate small { width: 27px; font-size: 9.5px; color: var(--text-2); }
+/* fold and close, side by side, set off from the speeds by a rule */
+.monitor-btns { flex: none; display: flex; align-items: center; gap: 2px; padding-left: 8px; border-left: 1px solid var(--line); height: 26px; }
+.monitor-btn { display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 0; border-radius: 6px; background: none; color: var(--text-2); opacity: 0.55; --wails-draggable: no-drag; }
 .monitor:hover .monitor-btn { opacity: 1; }
 .monitor-btn:hover { background: var(--hover); color: var(--text); }
 .monitor-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; }
