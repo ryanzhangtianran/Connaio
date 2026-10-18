@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/png"
 	"math"
+	"runtime"
 	"strings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -80,12 +81,13 @@ func trayPNG(data []byte, fill color.NRGBA) []byte {
 func mix(v uint8, a float64) uint8 { return uint8(float64(v) + (0xff-float64(v))*a) }
 
 // detailSep sits between a menu item's label and its detail, and is how a label is told from
-// what decorate appended to it last time.
-const detailSep = " · "
+// what decorate appended to it last time. On Windows a tab, which puts the rest of the label in the
+// menu's right-hand column, where macOS draws its details.
+var detailSep = map[bool]string{true: "\t", false: " · "}[runtime.GOOS == "windows"]
 
 // decorate folds each detail into its item's label ("Proxy · 香港", "网络质量 · 86 ms"), since
-// Linux and Windows menus show plain text: a pill keeps its text, the mode badge becomes the mode's
-// name, and icons are skipped.
+// Linux and Windows menus show plain text: a pill keeps its text, a dot becomes ● or ○, the mode
+// badge becomes the mode's name, and icons are skipped.
 func sectionHeaders([]*application.MenuItem) {} // titles are separators here (build)
 
 func decorate(details, _ map[*application.MenuItem]string) {
@@ -104,8 +106,13 @@ func detailText(detail string) string {
 	if len(detail) > 1 && detail[0] == 1 { // a pill: "\x01color|text"
 		_, detail, _ = strings.Cut(detail[1:], "|")
 	}
-	if len(detail) > 1 && detail[0] == 2 { // a dot: "\x02color|text", its text alone in a plain-text menu
-		_, detail, _ = strings.Cut(detail[1:], "|")
+	if len(detail) > 1 && detail[0] == 2 { // a dot: "\x02color|text", a solid or (grey) hollow one before the text
+		color, text, _ := strings.Cut(detail[1:], "|")
+		mark := "●"
+		if color == "gray" {
+			mark = "○"
+		}
+		return mark + " " + text
 	}
 	for key, letter := range modeBadges {
 		if letter == detail {

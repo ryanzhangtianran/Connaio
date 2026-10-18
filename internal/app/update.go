@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ryanzhangtianran/Connaio/internal/core"
 )
 
 // releaseAPI answers with this app's newest release on GitHub.
@@ -74,9 +76,17 @@ func (s *SettingsService) InstallUpdate() error {
 	return relaunch(restartCommand())
 }
 
+// ruleThenDirect routes an update through the core first, where the rules pick its way (GitHub
+// through a node where it is slow or blocked), and direct only when the core isn't up.
+func ruleThenDirect(c *core.Core, timeout time.Duration) []*http.Client {
+	clients := directThenProxy(c, timeout)
+	slices.Reverse(clients)
+	return clients
+}
+
 func (s *SettingsService) latestRelease() (release, error) {
 	var errs []error
-	for _, c := range directThenProxy(s.core.core, 15*time.Second) {
+	for _, c := range ruleThenDirect(s.core.core, 15*time.Second) {
 		req, _ := http.NewRequest(http.MethodGet, releaseAPI, nil)
 		req.Header.Set("Accept", "application/vnd.github+json")
 		resp, err := c.Do(req)
@@ -108,7 +118,7 @@ func (s *SettingsService) downloadVerified(a asset) (string, error) {
 	}
 	path := filepath.Join(dir, a.Name)
 	var errs []error
-	for _, c := range directThenProxy(s.core.core, 10*time.Minute) {
+	for _, c := range ruleThenDirect(s.core.core, 10*time.Minute) {
 		if err := fetchTo(c, a.URL, path, want); err != nil {
 			errs = append(errs, err)
 			continue

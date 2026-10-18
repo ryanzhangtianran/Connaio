@@ -257,30 +257,19 @@ func addChoice(m *application.Menu, label string, on bool) *application.MenuItem
 	return item
 }
 
-// addSwitch adds an on/off item. On macOS and Linux its state is a detail after the label
-// (setOn), like the menu's other states, so the main menu needs no column of ticks; Windows keeps a
-// checkbox.
+// addSwitch adds an on/off item: its state is a detail after the label (setOn), like the menu's
+// other states, so the main menu needs no column of ticks.
 func (t *trayMenu) addSwitch(m *application.Menu, label string, on bool) *application.MenuItem {
-	if runtime.GOOS == "windows" {
-		return m.AddCheckbox(label, on)
-	}
 	item := m.Add(label)
 	t.setOn(item, on)
 	return item
 }
 
-// setOn shows a switch (addSwitch) on or off; called with the lock held. macOS shows off too, so
-// every switch reads alike; Linux, where the detail is plain text, only on.
+// setOn shows a switch (addSwitch) on or off; called with the lock held.
 func (t *trayMenu) setOn(item *application.MenuItem, on bool) {
-	switch {
-	case runtime.GOOS == "windows":
-		item.SetChecked(on)
-	case on:
+	t.details[item] = dot("gray", "未开启")
+	if on {
 		t.details[item] = dot("good", "已开启")
-	case runtime.GOOS == "darwin":
-		t.details[item] = dot("gray", "未开启")
-	default:
-		t.details[item] = ""
 	}
 }
 
@@ -611,14 +600,14 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, 
 	}
 
 	header("接管")
-	t.proxyItem = t.addSwitch(m, "系统代理", t.proxy).SetAccelerator("CmdOrCtrl+S").OnClick(func(*application.Context) {
+	t.proxyItem = t.addSwitch(m, "系统代理", t.proxy).OnClick(func(*application.Context) {
 		if err := t.sysProxy.SetEnabled(!t.sysProxy.Enabled()); err != nil {
 			notify("error", "设置系统代理失败：%v", err)
 			t.sysProxy.onChange(t.sysProxy.Enabled()) // put the checkbox back
 		}
 	})
 	t.partialItem = t.addSwitch(m, "部分增强", false).OnClick(func(*application.Context) { go t.toggleEnhanced(false) })
-	t.enhancedItem = t.addSwitch(m, "增强模式", false).SetAccelerator("CmdOrCtrl+E").OnClick(func(*application.Context) { go t.toggleEnhanced(true) })
+	t.enhancedItem = t.addSwitch(m, "增强模式", false).OnClick(func(*application.Context) { go t.toggleEnhanced(true) })
 	t.checkEnhanced()
 
 	// 配置: what the menu can change in place, each with the window's page for the rest at the end
