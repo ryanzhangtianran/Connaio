@@ -56,6 +56,7 @@ export default function Profiles() {
   const [field, setField] = useState("");
   const [value, setValue] = useState("");
   const [editing, setEditing] = useState<{ id: string; name: string; text: string; saved?: string } | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null); // the row whose name is an input
 
   const load = useCallback(() => ProfileService.Profiles().then(setData), []);
   useEffect(() => {
@@ -75,6 +76,11 @@ export default function Profiles() {
     .then(() => ProfileService.Override()).then((o) => { setOverride(o); setSavedOverride(o); setField(""); setValue(""); }));
   const list = data.profiles ?? [];
   const selected = list.find((p) => p.id === sel);
+  const rename = () => {
+    const r = renaming;
+    setRenaming(null);
+    if (r && r.name.trim() && r.name.trim() !== list.find((p) => p.id === r.id)?.name) run("rename", () => ProfileService.Rename(r.id, r.name));
+  };
   const use = (id: string) => id !== data.current && run("use", () => ProfileService.Select(id));
   const add = () => run("add", () => ProfileService.Add(name, link).then(() => { setName(""); setLink(""); setAdding(false); }));
 
@@ -92,7 +98,12 @@ export default function Profiles() {
             <div key={p.id} className={`plist-row ${p.id === sel ? "selected" : ""}`} onClick={() => setSel(p.id)} onDoubleClick={() => use(p.id)}>
               <span className="plist-check">{p.id === data.current ? "✓" : ""}</span>
               <div className="plist-main">
-                <div className="plist-name">{p.name}</div>
+                {renaming?.id === p.id
+                  ? <input className="plist-rename" value={renaming.name} autoFocus onFocus={(e) => e.target.select()}
+                      onChange={(e) => setRenaming({ id: p.id, name: e.target.value })} onBlur={rename}
+                      onKeyDown={(e) => { if (e.key === "Enter") rename(); if (e.key === "Escape") setRenaming(null); }}
+                      onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()} />
+                  : <div className="plist-name">{p.name}</div>}
                 <div className="muted small">
                   {p.url ? host(p.url) : "本地"} · 更新于 {ago(p.updatedAt)}{p.interval > 0 && ` · 每 ${p.interval} 小时自动更新`}
                 </div>
@@ -121,6 +132,7 @@ export default function Profiles() {
           <button className="btn" title="删除所选配置" disabled={!selected || !!busy} onClick={() => selected && run("remove", () => ProfileService.Remove(selected.id).then(() => setSel("")))}>－</button>
           <button className="btn" disabled={!selected?.url || !!busy} onClick={() => selected && run("update", () => ProfileService.Update(selected.id))}>{busy === "update" ? "更新中…" : "更新"}</button>
           <button className="btn" disabled={!selected || !!busy} onClick={() => selected && ProfileService.Content(selected.id).then((text) => setEditing({ id: selected.id, name: selected.name, text, saved: text }))}>编辑</button>
+          <button className="btn" disabled={!selected || !!busy} onClick={() => selected && setRenaming({ id: selected.id, name: selected.name })}>重命名</button>
           <button className="btn" disabled={!!busy} onClick={() => run("import", () => ProfileService.ImportFile())}>导入…</button>
           <span className="grow" />
           <button className="btn" disabled={!selected || selected.id === data.current || !!busy} onClick={() => selected && use(selected.id)}>{busy === "use" ? "切换中…" : "使用"}</button>

@@ -195,6 +195,15 @@ func (s *ProfileService) Remove(id string) error {
 	return nil
 }
 
+// Rename renames a profile. The name is only shown, so the config is not applied again.
+func (s *ProfileService) Rename(id, name string) error {
+	if err := s.store.Rename(id, name); err != nil {
+		return err
+	}
+	s.changed()
+	return nil
+}
+
 // Select switches profiles; on a rejected config the previous one stays selected and running.
 func (s *ProfileService) Select(id string) error {
 	s.mu.Lock()

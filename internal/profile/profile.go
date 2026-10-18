@@ -189,6 +189,22 @@ func (s *Store) Remove(id string) error {
 	return s.save()
 }
 
+// Rename sets a profile's name, as listed and in the menu bar; an update keeps it.
+func (s *Store) Rename(id, name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return errors.New("名称不能为空")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := slices.IndexFunc(s.index.Profiles, func(p Profile) bool { return p.ID == id })
+	if i < 0 {
+		return fmt.Errorf("profile %s not found", id)
+	}
+	s.index.Profiles[i].Name = name
+	return s.save()
+}
+
 // Content is a profile's YAML as stored.
 func (s *Store) Content(id string) (string, error) {
 	if !s.has(id) {

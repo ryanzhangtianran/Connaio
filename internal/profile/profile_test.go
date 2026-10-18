@@ -56,6 +56,18 @@ func TestStore(t *testing.T) {
 	if cur, list := s.List(); cur != p.ID || len(list) != 1 {
 		t.Fatalf("first profile should become current: %s %v", cur, list)
 	}
+	if err := s.Rename(p.ID, "  "); err == nil {
+		t.Fatal("a blank name must be rejected")
+	}
+	if err := s.Rename(p.ID, " 公司 "); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Update(p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, list := s.List(); list[0].Name != "公司" {
+		t.Fatalf("renamed, then updated: %q, want 公司", list[0].Name)
+	}
 
 	if err := s.SetOverride("not: [valid"); err == nil {
 		t.Fatal("broken override accepted")
