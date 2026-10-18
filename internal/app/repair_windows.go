@@ -50,8 +50,8 @@ func platformChecks() []RepairItem {
 	}
 	return []RepairItem{
 		tun,
-		{ID: "winsock", Title: "Winsock", Detail: "重置 Winsock", Fix: "重置", Reboot: true},
-		{ID: "ipstack", Title: "TCP/IP", Detail: "重置 TCP/IP", Fix: "重置", Reboot: true},
+		{ID: "winsock", Title: "Winsock", Detail: "清除代理、VPN、加速器等软件残留的网络组件；所有程序都连不上网时用", Fix: "重置", Reboot: true},
+		{ID: "ipstack", Title: "TCP/IP", Detail: "把网卡的 IP、路由设置恢复默认；拿不到 IP 或网络设置被改乱时用", Fix: "重置", Reboot: true},
 	}
 }
 

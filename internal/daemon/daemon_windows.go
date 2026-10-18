@@ -10,10 +10,13 @@ import (
 	"strings"
 )
 
-// The root core is the ConnaioCore Windows service, running as LocalSystem from its own copy of
-// the binary under ProgramData (the core runs in service mode when started by the SCM). It
-// serves its API on a named pipe. Install and Uninstall run a batch script elevated, so each is
-// one UAC prompt.
+// The root core is the ConnaioCore Windows service, running as LocalSystem (the core runs in
+// service mode when started by the SCM). It runs the installed core in place, under Program Files,
+// where only administrators write: the installer, elevated already, stops it, replaces the files and
+// starts it again, so an update needs no second UAC prompt. A core anywhere else (a build run from
+// its folder) is copied to ProgramData first, since the service must not run a file its user can
+// change. It serves its API on a named pipe. Install and Uninstall run a batch script elevated, so
+// each is one UAC prompt.
 var (
 	Service = "ConnaioCore"
 	Dir     = filepath.Join(cmp.Or(os.Getenv("ProgramData"), `C:\ProgramData`), "Connaio Core")
@@ -27,20 +30,38 @@ func Installed() bool {
 	return run.Command("sc", "query", Service).Run() == nil
 }
 
-// installScript sets the service up (or points an existing one at the new binary) and starts it.
+// inProgramFiles says whether path is under Program Files, which only administrators can write.
+func inProgramFiles(path string) bool {
+	pf := os.Getenv("ProgramFiles")
+	return pf != "" && strings.HasPrefix(strings.ToLower(path), strings.ToLower(strings.TrimRight(pf, `\`))+`\`)
+}
+
+// installScript sets the service up (or points an existing one at core) and starts it: core itself
+// when it is under Program Files, removing the copy an older version ran; else a copy of it.
 func installScript(core, stage string) string {
 	q := func(s string) string { return `"` + s + `"` }
-	binPath := q(`\"` + Helper + `\" -d \"` + Dir + `\" -ext-ctl-pipe ` + Socket)
-	return strings.Join([]string{
+	exe := Helper
+	lines := []string{
 		"@echo off",
 		"if not exist " + q(Dir) + " mkdir " + q(Dir) + " || exit /b 1",
 		"if not exist " + q(filepath.Join(Dir, "config.yaml")) + " copy /Y " + q(filepath.Join(stage, "config.yaml")) + " " + q(filepath.Join(Dir, "config.yaml")) + " >nul || exit /b 1",
 		"sc stop " + Service + " >nul 2>&1",
-		"copy /Y " + q(core) + " " + q(Helper) + " >nul || exit /b 1",
-		"if exist " + q(filepath.Join(filepath.Dir(core), "wintun.dll")) + " copy /Y " + q(filepath.Join(filepath.Dir(core), "wintun.dll")) + " " + q(filepath.Join(Dir, "wintun.dll")) + " >nul",
-		"sc query " + Service + " >nul 2>&1 && (sc config " + Service + " binPath= " + binPath + " start= auto >nul || exit /b 1) || (sc create " + Service + " binPath= " + binPath + " start= auto DisplayName= \"Connaio Core\" >nul || exit /b 1)",
-		"sc start " + Service + " >nul || exit /b 1",
-	}, "\r\n") + "\r\n"
+	}
+	if inProgramFiles(core) {
+		exe = core
+	} else {
+		lines = append(lines,
+			"copy /Y "+q(core)+" "+q(Helper)+" >nul || exit /b 1",
+			"if exist "+q(filepath.Join(filepath.Dir(core), "wintun.dll"))+" copy /Y "+q(filepath.Join(filepath.Dir(core), "wintun.dll"))+" "+q(filepath.Join(Dir, "wintun.dll"))+" >nul")
+	}
+	binPath := q(`\"` + exe + `\" -d \"` + Dir + `\" -ext-ctl-pipe ` + Socket)
+	lines = append(lines,
+		"sc query "+Service+" >nul 2>&1 && (sc config "+Service+" binPath= "+binPath+" start= auto >nul || exit /b 1) || (sc create "+Service+" binPath= "+binPath+" start= auto DisplayName= \"Connaio Core\" >nul || exit /b 1)",
+		"sc start "+Service+" >nul || exit /b 1")
+	if exe == core {
+		lines = append(lines, "del /F /Q "+q(Helper)+" >nul 2>&1", "del /F /Q "+q(filepath.Join(Dir, "wintun.dll"))+" >nul 2>&1")
+	}
+	return strings.Join(lines, "\r\n") + "\r\n"
 }
 
 func uninstallScript() string {
@@ -66,8 +87,14 @@ func Install(core string) error {
 	return asAdmin(stage, installScript(core, stage))
 }
 
-// Stale reports whether the service runs another core binary than the one bundled with this app.
+// Stale reports whether the service runs another core binary than the one bundled with this app:
+// for an installed core, whether it still runs a copy (an older version's way, moved over once);
+// otherwise whether its copy differs.
 func Stale(bin string) bool {
+	if inProgramFiles(bin) {
+		_, err := os.Stat(Helper)
+		return err == nil
+	}
 	installed, err1 := fileSum(Helper)
 	bundled, err2 := fileSum(bin)
 	return err1 == nil && err2 == nil && installed != bundled

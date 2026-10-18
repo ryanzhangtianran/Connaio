@@ -1,8 +1,9 @@
-import { System } from "@wailsio/runtime";
-
-// platform is the OS the window runs on; words are what that OS calls its parts, one row per
-// phrase and a column per platform, so a new platform fills a column rather than every page.
-export const platform = System.IsWindows() ? "windows" : System.IsLinux() ? "linux" : "macos";
+// platform is the OS the window runs on, read from the user agent: the runtime's System.IsWindows
+// is false while this module loads on Windows, where WebView2 hands the environment over only once
+// the page has loaded, and Windows got macOS's layout. words are what that OS calls its parts, one
+// row per phrase and a column per platform, so a new platform fills a column rather than every page.
+const ua = navigator.userAgent;
+export const platform = ua.includes("Windows") ? "windows" : ua.includes("Linux") ? "linux" : "macos";
 export const words = {
   showInFiles: { macos: "在 Finder 中显示", linux: "在文件管理器中显示", windows: "在资源管理器中显示" }[platform],
   pickApp: { macos: "从 Finder 添加…", linux: "选择应用…", windows: "选择应用…" }[platform],
