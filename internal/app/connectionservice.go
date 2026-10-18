@@ -21,8 +21,9 @@ type Conn struct {
 	Inbound  string `json:"inbound"` // TUN, HTTP, FRP, ...
 	Process  string `json:"process"`
 	Path     string `json:"path"`
-	App      string `json:"app"` // the application it counts towards (clientOf): WeChat for WeChat Helper, macOS for apsd
-	System   bool   `json:"-"`   // a system service's: NetworkManager, livepatch on Linux; svchost on Windows
+	App      string `json:"app"`            // the application it counts towards (clientOf): WeChat for WeChat Helper, macOS for apsd
+	Icon     string `json:"icon,omitempty"` // and the file whose icon stands for it
+	System   bool   `json:"-"`              // a system service's: NetworkManager, livepatch on Linux; svchost on Windows
 	Source   string `json:"source"`
 	SrcPort  string `json:"-"`    // for finding this process's own test connection
 	Host     string `json:"host"` // domain, or destination IP when there is none
@@ -157,7 +158,7 @@ func (s *CoreService) fetchConnections() ([]Conn, error) {
 			Host: host, Port: m.DestPort, Rule: rule, Chain: strings.Join(chain, " → "),
 			Upload: c.Upload, Download: c.Download, Start: c.Start.Format(time.RFC3339),
 		}
-		conn.App, _ = clientOf(conn)
+		conn.App, conn.Icon = clientOf(conn)
 		conns = append(conns, conn)
 	}
 	slices.SortFunc(conns, func(a, b Conn) int { return strings.Compare(b.Start, a.Start) })

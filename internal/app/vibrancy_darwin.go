@@ -53,6 +53,32 @@ static void makeVibrant(void *w) {
 	});
 }
 
+// makeFloating dresses the floating process monitor: the menus' translucent material, kept clear
+// while the window isn't focused (as a floating one mostly isn't), cut to the page's rounded corners,
+// with a shadow following them.
+static void makeFloating(void *p) {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		NSWindow *w = p;
+		w.opaque = NO;
+		w.backgroundColor = NSColor.clearColor;
+		w.hasShadow = YES;
+		for (NSView *v in w.contentView.subviews) {
+			if ([v isKindOfClass:NSVisualEffectView.class]) {
+				NSVisualEffectView *e = (NSVisualEffectView *)v;
+				e.material = NSVisualEffectMaterialMenu;
+				e.state = NSVisualEffectStateActive;
+				e.wantsLayer = YES;
+				e.layer.cornerRadius = 12; // style.css .monitor
+				e.layer.masksToBounds = YES;
+			} else if ([v isKindOfClass:WKWebView.class]) {
+				[v setValue:@NO forKey:@"drawsBackground"];
+				if (@available(macOS 12, *)) ((WKWebView *)v).underPageBackgroundColor = NSColor.clearColor;
+			}
+		}
+		[w invalidateShadow];
+	});
+}
+
 // pngOf draws img into a px×px PNG, centred and scaled so its longer side fills it, in a malloc'd
 // buffer of *n bytes, or NULL.
 static void *pngOf(NSImage *img, int px, int *n) {
@@ -104,6 +130,12 @@ func setDockVisible(visible bool) { C.setDockVisible(C.bool(visible)) }
 func makeVibrant(w *application.WebviewWindow) {
 	if p := w.NativeWindow(); p != nil {
 		C.makeVibrant(p)
+	}
+}
+
+func makeFloating(w *application.WebviewWindow) {
+	if p := w.NativeWindow(); p != nil {
+		C.makeFloating(p)
 	}
 }
 

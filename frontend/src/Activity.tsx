@@ -348,7 +348,7 @@ function HourChart({ values }: { values: number[] }) {
 }
 
 // ClientIcon is a client's Finder icon (an app's, or an executable's generic one), or a device glyph.
-function ClientIcon({ path }: { path?: string }) {
+export function ClientIcon({ path }: { path?: string }) {
   const src = useCachedURL(path || (platform === "linux" ? "device" : undefined), SettingsService.AppIcon); // Linux has a theme icon for devices
   if (src) return <img className="client-icon" src={src} alt="" />;
   return (

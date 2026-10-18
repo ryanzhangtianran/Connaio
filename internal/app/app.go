@@ -102,7 +102,7 @@ func Run(assets fs.FS, trayIcon []byte) error {
 		if monitor == nil {
 			opts := application.WebviewWindowOptions{
 				Name: "monitor", Title: "进程监视", URL: "/?view=monitor",
-				Width: 340, Height: 220, MinWidth: 280, MinHeight: 140,
+				Width: 340, Height: 44, MinWidth: 280, MinHeight: 44, // folded: Monitor.tsx sets the height as it opens or folds
 				Frameless: true, AlwaysOnTop: true, BackgroundType: application.BackgroundTypeTranslucent,
 				Mac: application.MacWindow{
 					Backdrop:           application.MacBackdropTranslucent,
@@ -115,7 +115,7 @@ func Run(assets fs.FS, trayIcon []byte) error {
 				opts.InitialPosition, opts.X, opts.Y = application.WindowXY, p[0], p[1]
 			}
 			monitor = app.Window.NewWithOptions(opts)
-			monitor.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { makeVibrant(monitor) })
+			monitor.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { makeFloating(monitor) })
 			monitor.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 				x, y := monitor.Position()
 				_ = settings.Update(func(st *Settings) { st.Monitor = []int{x, y} })
