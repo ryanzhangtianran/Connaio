@@ -493,12 +493,16 @@ tr.muted td.rule-actions { text-decoration: none; }
    routes. On macOS the window's own translucent material (makeFloating) is the background. */
 .monitor { height: 100%; display: flex; flex-direction: column; border-radius: 12px; background: var(--panel); overflow: hidden; font-size: 12px; }
 .macos .monitor { background: transparent; }
-.monitor-bar { flex: none; height: 44px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; --wails-draggable: drag; }
+.monitor-bar { flex: none; height: 44px; display: flex; align-items: center; gap: 9px; padding: 0 8px 0 10px; --wails-draggable: drag; }
 .monitor:not(.folded) .monitor-bar { border-bottom: 1px solid var(--line); }
-.monitor-bar .client-icon { width: 18px; height: 18px; flex: none; }
-.monitor-bar .picker { max-width: 45%; --wails-draggable: no-drag; }
-.monitor-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.monitor-rate { flex: 1; display: flex; flex-direction: column; align-items: flex-end; font-size: 10.5px; line-height: 1.25; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.monitor-bar .client-icon { width: 26px; height: 26px; flex: none; }
+/* the name over the node it goes through, together about the icon's height */
+.monitor-who { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+.monitor-who .picker { max-width: 100%; height: 20px; padding: 0 8px; margin-left: -8px; font-size: 12.5px; font-weight: 600; background: none; --wails-draggable: no-drag; }
+.monitor-who .picker:hover { background: var(--hover); }
+.monitor-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+.monitor-node { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 1.3; color: var(--text-2); }
+.monitor-rate { flex: none; display: flex; flex-direction: column; align-items: flex-end; font-size: 10.5px; line-height: 1.25; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .monitor-btn { flex: none; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 0; border-radius: 6px; background: none; color: var(--text-2); --wails-draggable: no-drag; }
 .monitor-btn:hover { background: var(--hover); color: var(--text); }
 .monitor-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; }
