@@ -3,7 +3,7 @@ import { Window } from "@wailsio/runtime";
 import { ClientIcon, Picker, Routes, useWatch } from "./Activity";
 import { speed } from "./format";
 
-const FOLDED = 44, OPEN = 240; // the window's height either way (app.go builds it folded)
+const FOLDED = 52, OPEN = 248; // the window's height either way (app.go builds it folded)
 
 // folded is whether the monitor was last left folded, kept by the webview between runs
 function loadFolded() {
@@ -43,19 +43,19 @@ export default function Monitor() {
 
   return (
     <div className={`monitor ${folded ? "folded" : ""}`}>
+      {/* two rows: the app over the node it goes through, download over upload */}
       <div className="monitor-bar">
         <ClientIcon path={icon} />
-        <div className="monitor-who">
-          {/* the picker's menu needs the open window's room; folded, the name alone */}
-          {folded ? <span className="monitor-name">{shown || "—"}</span> : <Picker value={shown} options={procs} onChange={choose} />}
-          <span className="monitor-node">{node}</span>
-        </div>
-        <span className="monitor-rate"><span>↑ {speed(rate[0]).join(" ")}</span><span>↓ {speed(rate[1]).join(" ")}</span></span>
-        <button className="monitor-btn" onClick={() => setFolded(!folded)} title={folded ? "展开" : "收起"}>
-          <svg viewBox="0 0 10 6" width="10" height="6" style={{ transform: folded ? "" : "rotate(180deg)" }}><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+        {/* the picker's menu needs the open window's room; folded, the name alone */}
+        <div className="monitor-name">{folded ? <span>{shown || "—"}</span> : <Picker value={shown} options={procs} onChange={choose} />}</div>
+        <span className="monitor-node">{node}</span>
+        <span className="monitor-down">↓ {speed(rate[1]).join(" ")}</span>
+        <span className="monitor-up">↑ {speed(rate[0]).join(" ")}</span>
+        <button className="monitor-btn fold" onClick={() => setFolded(!folded)} title={folded ? "展开" : "收起"}>
+          <svg viewBox="0 0 10 6" width="9" height="6" style={{ transform: folded ? "" : "rotate(180deg)" }}><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
         </button>
-        <button className="monitor-btn" onClick={() => Window.Close()} title="关闭">
-          <svg viewBox="0 0 10 10" width="9" height="9"><path d="M1 1l8 8M9 1l-8 8" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
+        <button className="monitor-btn close" onClick={() => Window.Close()} title="关闭">
+          <svg viewBox="0 0 10 10" width="8" height="8"><path d="M1 1l8 8M9 1l-8 8" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
         </button>
       </div>
       {!folded && <div className="monitor-body"><Routes shown={shown} routes={routes} /></div>}

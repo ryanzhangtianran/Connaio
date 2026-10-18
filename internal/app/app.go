@@ -102,7 +102,7 @@ func Run(assets fs.FS, trayIcon []byte) error {
 		if monitor == nil {
 			opts := application.WebviewWindowOptions{
 				Name: "monitor", Title: "进程监视", URL: "/?view=monitor",
-				Width: 340, Height: 44, MinWidth: 280, MinHeight: 44, // folded: Monitor.tsx sets the height as it opens or folds
+				Width: 340, Height: 52, MinWidth: 280, MinHeight: 52, // folded: Monitor.tsx sets the height as it opens or folds
 				Frameless: true, AlwaysOnTop: true, BackgroundType: application.BackgroundTypeTranslucent,
 				Mac: application.MacWindow{
 					Backdrop:           application.MacBackdropTranslucent,
