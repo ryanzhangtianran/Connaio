@@ -85,7 +85,6 @@ static void setTray(void *item, const void *icon, int iconLen, const char *badge
 static const CGFloat kInset = 5;      // the highlight's inset from the menu edge
 static const CGFloat kTitleX = 16;    // where native titles start in this menu with no state column
 static const CGFloat kStateW = 14;    // the state column AppKit adds once any item is checked (measured)
-static const CGFloat kArrowW = 24;    // room for the submenu arrow at the right
 static const CGFloat kMinW = 240;     // the menu no narrower than this: room for the details
 static const CGFloat kItemH = 22;
 static const CGFloat kHeaderH = 32;   // a section title, with its breathing room above
@@ -122,7 +121,7 @@ static NSFont *pillFont(void) { return [NSFont monospacedDigitSystemFontOfSize:1
 }
 - (CGFloat)fittingWidth {
 	CGFloat x = self.titleX + (self.icon ? 22 : 0);
-	return x + ceil([self.label sizeWithAttributes:@{NSFontAttributeName: menuFont()}].width) + 24 + self.detailWidth + (self.enclosingMenuItem.hasSubmenu ? kArrowW : 10) + kInset; // as drawRect lays it out
+	return x + ceil([self.label sizeWithAttributes:@{NSFontAttributeName: menuFont()}].width) + 24 + self.detailWidth + 10 + kInset;
 }
 
 - (void)drawRect:(NSRect)dirty {
@@ -149,7 +148,7 @@ static NSFont *pillFont(void) { return [NSFont monospacedDigitSystemFontOfSize:1
 	NSSize ts = [self.label sizeWithAttributes:ta];
 	[self.label drawAtPoint:NSMakePoint(x, (kItemH - ts.height) / 2) withAttributes:ta];
 
-	CGFloat right = NSMaxX(b) - kInset - (item.hasSubmenu ? kArrowW : 10); // without an arrow, near the edge like the arrows
+	CGFloat right = NSMaxX(b) - kInset - 10; // every row's detail ends where the native shortcuts do; submenus show no arrow
 	if (self.detail.length && self.pill) {
 		CGFloat w = self.detailWidth, h = 16;
 		NSRect r = NSMakeRect(right - w, (kItemH - h) / 2, w, h);
@@ -167,14 +166,6 @@ static NSFont *pillFont(void) { return [NSFont monospacedDigitSystemFontOfSize:1
 			[(hi ? NSColor.selectedMenuItemTextColor : self.pillColor) setFill];
 			[[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(right - ds.width - kDotW, (kItemH - 7) / 2, 7, 7)] fill];
 		}
-	}
-	if (item.hasSubmenu) {
-		NSImage *chev = [NSImage imageWithSystemSymbolName:@"chevron.right" accessibilityDescription:nil];
-		NSImageSymbolConfiguration *cfg = [NSImageSymbolConfiguration configurationWithPointSize:11 weight:NSFontWeightSemibold];
-		chev = [chev imageWithSymbolConfiguration:[cfg configurationByApplyingConfiguration:[NSImageSymbolConfiguration configurationWithHierarchicalColor:fg]]];
-		NSSize cs = chev.size;
-		[chev drawInRect:NSMakeRect(NSMaxX(b) - kInset - 10 - cs.width, (kItemH - cs.height) / 2, cs.width, cs.height)
-			fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1 respectFlipped:YES hints:nil];
 	}
 }
 

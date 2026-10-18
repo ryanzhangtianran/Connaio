@@ -54,22 +54,23 @@ type trayMenu struct {
 	enh          string // EnhancedService.Mode: "", "tun" or "process-tun"
 	layout       string // groups and profiles the menu was built for
 	rows         []procRow
-	lastActive   map[string]time.Time // process -> when it last moved bytes
-	modeItem     *application.MenuItem
+	lastActive   map[string]time.Time             // process -> when it last moved bytes
 	vpnItem      *application.MenuItem            // the VPN submenu: the connected ones as its detail
 	vpnItems     map[string]*application.MenuItem // the VPN page's entries: state shown, click connects or disconnects
 	proxyItem    *application.MenuItem
 	enhancedItem *application.MenuItem
 	modeItems    map[string]*application.MenuItem
 	partialItem  *application.MenuItem
-	partialMenu  *application.MenuItem // the 部分增强 submenu, which says when it is on
 	qualityItem  *application.MenuItem
 	procItems    []*application.MenuItem
 	details      map[*application.MenuItem]string // right of the label: grey text, or a pill (see pill)
 	icons        map[*application.MenuItem]string // file whose Finder icon the item shows
 	groupItems   map[string]*application.MenuItem
 	memberItems  map[string]map[string]*application.MenuItem
-	profileItems map[string]*application.MenuItem
+	profileItems map[string]*application.MenuItem // the 配置 submenu, one row per profile: the one in use says so
+	profileMenu  *application.MenuItem            // 配置: the profile in use as its detail
+	appsMenu     *application.MenuItem            // 增强: how many apps partial enhancement takes
+	appItems     map[string]*application.MenuItem // the 增强 submenu, by executable lowercased: a click picks or drops it
 }
 
 type procRow struct {
@@ -91,7 +92,7 @@ func newTrayMenu(t *trayMenu) {
 	t.lastActive = map[string]time.Time{}
 	t.updates = make(chan func(), 1)
 	t.menu = application.NewMenu()
-	t.build(nil, Profiles{}, nil)
+	t.build(nil, Profiles{}, nil, nil)
 	t.tray.SetMenu(t.menu)
 	t.svc.onMode = t.setMode
 	// the data path (ledger count, traffic stream) must never wait on the main thread, which the
@@ -137,9 +138,11 @@ func (t *trayMenu) offer(fn func()) {
 func (t *trayMenu) locked(change func()) {
 	t.mu.Lock()
 	change()
-	t.details[t.modeItem] = ""
-	if letter := modeBadges[t.mode]; letter != "" {
-		t.details[t.modeItem] = pill("accent", letter)
+	for key, item := range t.modeItems {
+		t.details[item] = ""
+		if key == t.mode {
+			t.details[item] = dot("good", "使用中")
+		}
 	}
 	state := ""
 	switch {
@@ -168,9 +171,6 @@ func (t *trayMenu) locked(change func()) {
 func (t *trayMenu) setMode(mode string) {
 	t.locked(func() {
 		t.mode = mode
-		for key, item := range t.modeItems {
-			check(item, key == mode)
-		}
 	})
 }
 
@@ -181,12 +181,8 @@ func (t *trayMenu) checkEnhanced() {
 	t.setOn(t.partialItem, partial)
 	t.enhancedItem.SetEnabled(granted)
 	t.partialItem.SetEnabled(granted)
-	t.details[t.partialMenu] = ""
-	switch {
-	case partial && full:
-		t.details[t.partialMenu] = "增强模式下暂停"
-	case partial:
-		t.details[t.partialMenu] = "已开启"
+	if partial && full {
+		t.details[t.partialItem] = dot("warn", "增强模式下暂停")
 	}
 }
 
@@ -261,10 +257,11 @@ func addChoice(m *application.Menu, label string, on bool) *application.MenuItem
 	return item
 }
 
-// addSwitch adds an on/off item. On Linux its state is a detail after the label (setOn), so the
-// main menu needs no column of ticks.
+// addSwitch adds an on/off item. On macOS and Linux its state is a detail after the label
+// (setOn), like the menu's other states, so the main menu needs no column of ticks; Windows keeps a
+// checkbox.
 func (t *trayMenu) addSwitch(m *application.Menu, label string, on bool) *application.MenuItem {
-	if runtime.GOOS != "linux" {
+	if runtime.GOOS == "windows" {
 		return m.AddCheckbox(label, on)
 	}
 	item := m.Add(label)
@@ -272,15 +269,18 @@ func (t *trayMenu) addSwitch(m *application.Menu, label string, on bool) *applic
 	return item
 }
 
-// setOn shows a switch (addSwitch) on or off; called with the lock held.
+// setOn shows a switch (addSwitch) on or off; called with the lock held. macOS shows off too, so
+// every switch reads alike; Linux, where the detail is plain text, only on.
 func (t *trayMenu) setOn(item *application.MenuItem, on bool) {
-	if runtime.GOOS != "linux" {
+	switch {
+	case runtime.GOOS == "windows":
 		item.SetChecked(on)
-		return
-	}
-	t.details[item] = ""
-	if on {
-		t.details[item] = "已开启"
+	case on:
+		t.details[item] = dot("good", "已开启")
+	case runtime.GOOS == "darwin":
+		t.details[item] = dot("gray", "未开启")
+	default:
+		t.details[item] = ""
 	}
 }
 
@@ -362,11 +362,12 @@ func (t *trayMenu) tick() {
 	}
 	list := t.profiles.Profiles()
 	vpns := t.vpnStates()
+	apps := t.partialApps()
 	rebuilt := false
 	t.locked(func() {
-		if layout := menuLayout(groups, list, vpns); layout != t.layout {
+		if layout := menuLayout(groups, list, vpns, apps); layout != t.layout {
 			t.layout = layout
-			t.build(groups, list, vpns)
+			t.build(groups, list, vpns, apps)
 			rebuilt = true
 		}
 		for _, g := range groups {
@@ -376,7 +377,27 @@ func (t *trayMenu) tick() {
 			}
 		}
 		for id, item := range t.profileItems {
-			check(item, id == list.Current)
+			t.details[item] = ""
+			if id == list.Current {
+				t.details[item] = dot("good", "使用中")
+			}
+		}
+		t.details[t.profileMenu] = ""
+		for _, p := range list.Profiles {
+			if p.ID == list.Current {
+				t.details[t.profileMenu] = p.Name
+			}
+		}
+		picked := 0
+		for _, a := range apps {
+			t.setOn(t.appItems[strings.ToLower(a.exec)], a.on)
+			if a.on {
+				picked++
+			}
+		}
+		t.details[t.appsMenu] = "未选择"
+		if picked > 0 {
+			t.details[t.appsMenu] = fmt.Sprintf("%d 个应用", picked)
 		}
 		var up []string
 		for name, item := range t.vpnItems {
@@ -397,8 +418,67 @@ func (t *trayMenu) tick() {
 	}
 }
 
-func menuLayout(groups []Group, list Profiles, vpns map[string]string) string {
+// partialApp is a row of the 增强 submenu: a running app, or one partial enhancement has picked.
+type partialApp struct {
+	name, exec string
+	on         bool // picked
+}
+
+// pickedApps is capture.processes, the executables partial enhancement takes.
+func (t *trayMenu) pickedApps() []string {
+	v, _ := t.profiles.Value("capture.processes")
+	list, _ := v.([]any)
+	var out []string
+	for _, p := range list {
+		if s, ok := p.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// partialApps lists the running apps and the picked ones, by name, as the 增强 page does.
+func (t *trayMenu) partialApps() []partialApp {
+	picked := t.pickedApps()
+	on := func(exec string) bool {
+		return slices.ContainsFunc(picked, func(p string) bool { return strings.EqualFold(p, exec) })
+	}
+	seen := map[string]bool{}
+	var apps []partialApp
+	add := func(name, exec string) {
+		if k := strings.ToLower(exec); !seen[k] {
+			seen[k] = true
+			apps = append(apps, partialApp{name, exec, on(exec)})
+		}
+	}
+	for _, c := range runningApps() {
+		add(c.Name, c.Exec)
+	}
+	for _, p := range picked {
+		add(p, p)
+	}
+	slices.SortFunc(apps, func(a, b partialApp) int { return strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name)) })
+	return apps
+}
+
+// togglePartialApp picks exec for partial enhancement, or drops it when picked.
+func (t *trayMenu) togglePartialApp(exec string) {
+	picked := t.pickedApps()
+	next := slices.DeleteFunc(slices.Clone(picked), func(p string) bool { return strings.EqualFold(p, exec) })
+	if len(next) == len(picked) {
+		next = append(next, exec)
+	}
+	if err := t.profiles.Set("capture.processes", next); err != nil {
+		notify("error", "修改部分增强的应用失败：%v", err)
+	}
+	t.tick()
+}
+
+func menuLayout(groups []Group, list Profiles, vpns map[string]string, apps []partialApp) string {
 	var b strings.Builder
+	for _, a := range apps {
+		b.WriteString("app:" + a.exec + "\x00")
+	}
 	for _, name := range slices.Sorted(maps.Keys(vpns)) {
 		b.WriteString("vpn:" + name + "\x00")
 	}
@@ -465,7 +545,7 @@ func (t *trayMenu) showRows() {
 }
 
 // build lays the menu out afresh; called with the lock held, or before the app runs.
-func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string) {
+func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, apps []partialApp) {
 	m := t.menu
 	m.Clear()
 	quality := t.details[t.qualityItem] // kept across the rebuild
@@ -487,19 +567,22 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string) 
 		headers = append(headers, m.Add(title).SetEnabled(false))
 	}
 	header("路由")
-	sub, item := submenu("出站模式")
-	t.modeItem, t.modeItems = item, map[string]*application.MenuItem{}
+	// the outbound modes, one row each
+	t.modeItems = map[string]*application.MenuItem{}
 	for _, md := range modes {
 		key := md.key
-		t.modeItems[key] = addChoice(sub, md.label, key == t.mode).OnClick(func(*application.Context) {
+		t.modeItems[key] = m.Add(md.label).OnClick(func(*application.Context) {
 			if err := t.svc.SetMode(key); err != nil {
 				notify("error", "切换出站模式失败：%v", err)
-				t.setMode(t.mode) // put the radio back
 			}
 		})
 	}
 
+	// 代理组: the profile's groups by their names, each a submenu of its nodes
 	t.groupItems, t.memberItems = map[string]*application.MenuItem{}, map[string]map[string]*application.MenuItem{}
+	if len(groups) > 0 {
+		header("代理组")
+	}
 	for _, g := range groups {
 		sub, item := submenu(g.Name)
 		t.groupItems[g.Name], t.memberItems[g.Name] = item, map[string]*application.MenuItem{}
@@ -514,19 +597,6 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string) 
 		}
 	}
 
-	// the VPNs: a submenu of every one with its state (click connects or disconnects), and the way to add more
-	sub, item = submenu("VPN")
-	t.vpnItem, t.vpnItems = item, map[string]*application.MenuItem{}
-	for _, name := range slices.Sorted(maps.Keys(vpns)) {
-		t.vpnItems[name] = sub.Add(name).OnClick(func(*application.Context) { t.toggleVPN(name) })
-	}
-	if len(vpns) > 0 {
-		sub.AddSeparator()
-	}
-	sub.Add("添加 VPN…").OnClick(func(*application.Context) {
-		t.show()
-		emit("navigate", "vpn")
-	})
 	header("网络")
 	t.qualityItem = m.Add("网络质量").OnClick(func(*application.Context) { go t.measure() })
 	t.details[t.qualityItem] = quality
@@ -547,29 +617,42 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string) 
 			t.sysProxy.onChange(t.sysProxy.Enabled()) // put the checkbox back
 		}
 	})
-	sub, t.partialMenu = submenu("部分增强")
-	t.partialItem = t.addSwitch(sub, "开启", false).OnClick(func(*application.Context) { go t.toggleEnhanced(false) })
-	sub.Add("配置…").OnClick(func(*application.Context) {
-		t.show()
-		emit("navigate", "processes") // the window opens the 增强 page, where the apps are picked
-	})
+	t.partialItem = t.addSwitch(m, "部分增强", false).OnClick(func(*application.Context) { go t.toggleEnhanced(false) })
 	t.enhancedItem = t.addSwitch(m, "增强模式", false).SetAccelerator("CmdOrCtrl+E").OnClick(func(*application.Context) { go t.toggleEnhanced(true) })
 	t.checkEnhanced()
 
-	t.profileItems = map[string]*application.MenuItem{}
-	if len(list.Profiles) > 0 {
-		m.AddSeparator()
-		sub, _ := submenu("配置")
-		for _, p := range list.Profiles {
-			id := p.ID
-			t.profileItems[id] = addChoice(sub, p.Name, id == list.Current).OnClick(func(*application.Context) {
-				if err := t.profiles.Select(id); err != nil {
-					notify("error", "切换配置失败：%v", err)
-				}
-				t.tick()
-			})
-		}
+	// 配置: what the menu can change in place, each with the window's page for the rest at the end
+	header("配置")
+	open := func(sub *application.Menu, label, page string) {
+		sub.AddSeparator()
+		sub.Add(label).OnClick(func(*application.Context) { t.show(); emit("navigate", page) })
 	}
+	var sub *application.Menu
+	sub, t.profileMenu = submenu("配置")
+	t.profileItems = map[string]*application.MenuItem{}
+	for _, p := range list.Profiles {
+		id := p.ID
+		t.profileItems[id] = sub.Add(p.Name).OnClick(func(*application.Context) {
+			if err := t.profiles.Select(id); err != nil {
+				notify("error", "切换配置失败：%v", err)
+			}
+			t.tick()
+		})
+	}
+	open(sub, "打开配置…", "profiles")
+	sub, t.appsMenu = submenu("增强")
+	t.appItems = map[string]*application.MenuItem{}
+	for _, a := range apps {
+		exec := a.exec
+		t.appItems[strings.ToLower(exec)] = t.addSwitch(sub, a.name, a.on).OnClick(func(*application.Context) { go t.togglePartialApp(exec) })
+	}
+	open(sub, "打开增强…", "processes")
+	sub, t.vpnItem = submenu("VPN")
+	t.vpnItems = map[string]*application.MenuItem{}
+	for _, name := range slices.Sorted(maps.Keys(vpns)) {
+		t.vpnItems[name] = sub.Add(name).OnClick(func(*application.Context) { t.toggleVPN(name) })
+	}
+	open(sub, "打开 VPN…", "vpn")
 	m.AddSeparator()
 	m.Add("退出").SetAccelerator("CmdOrCtrl+Q").OnClick(func(*application.Context) { t.app.Quit() })
 	m.Update()
