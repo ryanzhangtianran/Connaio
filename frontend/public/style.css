@@ -214,8 +214,11 @@ select { font: inherit; color: var(--text); background: var(--card); border: 1px
 .form-grid { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center; margin-top: 4px; }
 .form-grid > label { color: var(--text-2); text-align: right; }
 .radio { display: block; margin: 4px 0; }
+/* long lines scroll sideways; the rows sit in one box as wide as the longest line (at least the
+   card), so every row's rule reaches as far */
 .logs { margin-top: 10px; font: 12px/1.5 var(--mono); user-select: text; -webkit-user-select: text; max-height: calc(100vh - 220px); overflow: auto; }
-.log { display: flex; padding: 2px 0; border-bottom: 1px solid var(--line); white-space: pre; width: max-content; min-width: 100%; } /* long lines scroll sideways */
+.log-rows { width: max-content; min-width: 100%; }
+.log { display: flex; padding: 2px 0; border-bottom: 1px solid var(--line); white-space: pre; }
 .log .time { flex: none; width: 76px; }
 .log .lvl { flex: none; width: 64px; color: var(--text-2); }
 .log .msg { flex: none; } /* a multi-line message keeps its continuation lines under its first */

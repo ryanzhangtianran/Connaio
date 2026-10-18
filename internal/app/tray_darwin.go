@@ -325,3 +325,6 @@ func showTray(tray *application.SystemTray, icon []byte, t Traffic, mode, state 
 		C.free(p) // free(NULL) is a no-op
 	}
 }
+
+// menuRebuilt has nothing to do: the menu bar shows the menu itself, rebuilt in place.
+func menuRebuilt(*application.SystemTray, *application.Menu) {}

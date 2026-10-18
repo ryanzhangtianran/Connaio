@@ -399,11 +399,8 @@ func (t *trayMenu) tick() {
 		t.details[t.vpnItem] = cmp.Or(strings.Join(up, "、"), "未连接")
 		t.showRows()
 	})
-	if rebuilt && runtime.GOOS == "linux" {
-		// the tray hands its menu to the panel over D-Bus only when one is set: Update redraws GTK's
-		// menus, not that copy, which kept the first layout, made before the core had any groups.
-		// Outside the lock, as it waits on the main thread.
-		t.tray.SetMenu(t.menu)
+	if rebuilt {
+		menuRebuilt(t.tray, t.menu) // outside the lock, as it waits on the main thread
 	}
 }
 
