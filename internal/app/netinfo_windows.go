@@ -73,7 +73,9 @@ func parseWindowsARP(out string) map[string]string {
 // interfaceLabel is the interface alias itself: Windows names them for users already (以太网, WLAN).
 func interfaceLabel(iface string) string { return iface }
 
+// powershell runs command and returns its output, as UTF-8: by default it writes in the console's
+// code page (GBK on Chinese Windows), and names like 以太网 came out garbled.
 func powershell(command string) (string, error) {
-	out, err := run.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", command).Output()
+	out, err := run.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "+command).Output()
 	return string(out), err
 }
