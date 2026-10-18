@@ -17,6 +17,8 @@
 
 ## Install
 
+第一次使用请看 [使用说明](./usage.md)。
+
 请到发布页面下载对应的安装包：[Release page](https://github.com/ryanzhangtianran/Connaio/releases)
 
 支持 macOS 15+（Apple 芯片）、Windows 10 1809+ / 11（x64）和 Ubuntu 22.04+（x64）。
