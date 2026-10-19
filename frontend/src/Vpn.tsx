@@ -38,8 +38,8 @@ function parseOvpn(text: string): Record<string, any> {
 }
 
 // A KV is one typed entry: a route (rule type + value) or a bypass condition (kind + value).
-type KV = { t: string; v: string };
-type Kind = { key: string; label: string; placeholder?: string; fixed?: boolean }; // fixed: no value
+export type KV = { t: string; v: string };
+export type Kind = { key: string; label: string; placeholder?: string; fixed?: boolean }; // fixed: no value
 
 const routeKinds: Kind[] = [
   { key: "IP-CIDR", label: "网段", placeholder: "10.0.0.0/8" },
@@ -49,7 +49,7 @@ const routeKinds: Kind[] = [
   { key: "GEOSITE", label: "GEOSITE", placeholder: "cn" },
   { key: "GEOIP", label: "GEOIP", placeholder: "cn" },
 ];
-const bypassKinds: Kind[] = [
+export const bypassKinds: Kind[] = [
   { key: "SSID", label: "Wi-Fi 名称", placeholder: "名称" },
   { key: "BSSID", label: "Wi-Fi BSSID", placeholder: "aa:bb:cc:dd:ee:ff" },
   { key: "ROUTER", label: "网关地址", placeholder: "192.168.1.1" },
@@ -62,8 +62,8 @@ const ruleOf = (r: KV, target: string) => `${r.t},${r.t === "IP-CIDR" && !r.v.in
 // routeOf reads a rule back, or null for a rule the page didn't write.
 const routeOf = (rule: string): KV | null => { const f = rule.split(",").map((x) => x.trim()); return routeKinds.some((k) => k.key === f[0]) ? { t: f[0], v: f[1] } : null; };
 // condOf is the subnet group's key for a bypass entry, and bypassOf reads it back.
-const condOf = (b: KV) => (b.t === "CIDR" ? b.v : b.t.startsWith("TYPE:") ? b.t : `${b.t}:${b.v}`);
-const bypassOf = (key: string): KV => { const [t, ...rest] = key.split(":"); return key.startsWith("TYPE:") ? { t: key, v: "" } : ["SSID", "BSSID", "ROUTER"].includes(t) ? { t, v: rest.join(":") } : { t: "CIDR", v: key }; };
+export const condOf = (b: KV) => (b.t === "CIDR" ? b.v : b.t.startsWith("TYPE:") ? b.t : `${b.t}:${b.v}`);
+export const bypassOf = (key: string): KV => { const [t, ...rest] = key.split(":"); return key.startsWith("TYPE:") ? { t: key, v: "" } : ["SSID", "BSSID", "ROUTER"].includes(t) ? { t, v: rest.join(":") } : { t: "CIDR", v: key }; };
 
 // KVRow is a kind selector and a value with a + button, as the rows above it, and a table of what
 // was added, each row with a 删除.

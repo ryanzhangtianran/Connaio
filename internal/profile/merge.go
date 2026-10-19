@@ -210,6 +210,8 @@ func Merge(profile, override map[string]any) map[string]any {
 	delete(override, "group-members")
 	patches, _ := override["patch-proxies"].(map[string]any) // name -> fields merged over that proxy
 	delete(override, "patch-proxies")
+	replaced, _ := override["replace-proxy-groups"].(map[string]any) // name -> the group in full
+	delete(override, "replace-proxy-groups")
 	hidden, _ := override["remove-rules"].([]any) // profile rules deleted from the GUI
 	delete(override, "remove-rules")
 	removed := map[string]bool{}
@@ -241,6 +243,11 @@ func Merge(profile, override map[string]any) map[string]any {
 	}
 	// group-members: the GUI's own key, prepends user proxies into existing groups
 	groups, _ := cfg["proxy-groups"].([]any)
+	for i, g := range groups {
+		if group, ok := replaced[groupName(g)].(map[string]any); ok {
+			groups[i] = group
+		}
+	}
 	for _, g := range groups {
 		group, _ := g.(map[string]any)
 		name, _ := group["name"].(string)
@@ -419,4 +426,10 @@ func mtime(path string) string {
 		return ""
 	}
 	return fmt.Sprintf("%d@%d", st.Size(), st.ModTime().UnixNano())
+}
+
+func groupName(g any) string {
+	m, _ := g.(map[string]any)
+	name, _ := m["name"].(string)
+	return name
 }

@@ -1,4 +1,4 @@
-// The override's keys and the order Merge applies them in: README.md, 覆写. The GUI edits it
+// The override's keys and the order Merge applies them in: Merge in merge.go. The GUI edits it
 // through the functions below, on its YAML tree so the user's comments and layout survive.
 
 package profile
@@ -150,6 +150,30 @@ func (s *Store) AddGroup(group map[string]any) error {
 	})
 }
 
+// EditGroup replaces the named group with group, its name kept (rules and groups refer to it). A
+// user group is replaced in place; a profile's is kept whole in replace-proxy-groups, which Merge
+// swaps in, so the edit survives subscription updates.
+func (s *Store) EditGroup(name string, group map[string]any) error {
+	group["name"] = name
+	var n yaml.Node
+	if err := n.Encode(group); err != nil {
+		return err
+	}
+	orderKeys(&n)
+	return s.editOverride(func(root *yaml.Node) error {
+		if seq := listOf(root, "prepend-proxy-groups"); findNamed(seq, name) >= 0 {
+			seq.Content[findNamed(seq, name)] = &n
+			return nil
+		}
+		groups := child(root, "replace-proxy-groups", yaml.MappingNode)
+		if groups.Kind != yaml.MappingNode {
+			return errors.New("覆写中的 replace-proxy-groups 不是字典")
+		}
+		*child(groups, name, yaml.MappingNode) = n
+		return nil
+	})
+}
+
 // RemoveGroup deletes a user group, or lists a profile's group under remove-proxy-groups.
 func (s *Store) RemoveGroup(name string) error {
 	return s.editOverride(func(root *yaml.Node) error {
@@ -286,6 +310,7 @@ func (s *Store) editOverride(change func(root *yaml.Node) error) error {
 	if err := change(root); err != nil {
 		return err
 	}
+	tidy(root)
 	blockStyle(&doc)
 	b, err := yaml.Marshal(&doc)
 	if err != nil {
@@ -403,4 +428,39 @@ func (s *Store) SetPath(path []string, value any) error {
 		m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: last}, &n)
 		return nil
 	})
+}
+
+// guiKeys are the override keys the GUI writes; tidy only touches these, a key the user wrote stays.
+var guiKeys = []string{"prepend-proxies", "prepend-proxy-groups", "prepend-rules", "append-proxies", "append-proxy-groups", "append-rules",
+	"group-members", "patch-proxies", "replace-proxy-groups", "remove-proxies", "remove-proxy-groups", "remove-rules", "reverse-tunnels"}
+
+// tidy drops what an undone edit leaves behind: the patch or replacement of a removed proxy or
+// group, a group-members entry with no proxies left, and GUI keys that are now empty.
+func tidy(root *yaml.Node) {
+	removed := func(key string) []string {
+		var names []string
+		if seq := listOf(root, key); seq != nil {
+			for _, n := range seq.Content {
+				names = append(names, n.Value)
+			}
+		}
+		return names
+	}
+	for key, gone := range map[string][]string{"patch-proxies": removed("remove-proxies"), "replace-proxy-groups": removed("remove-proxy-groups"), "group-members": nil} {
+		m := valueOf(root, key)
+		if m == nil || m.Kind != yaml.MappingNode {
+			continue
+		}
+		for i := len(m.Content) - 2; i >= 0; i -= 2 {
+			if slices.Contains(gone, m.Content[i].Value) || len(m.Content[i+1].Content) == 0 {
+				m.Content = slices.Delete(m.Content, i, i+2)
+			}
+		}
+	}
+	for i := len(root.Content) - 2; i >= 0; i -= 2 {
+		v := root.Content[i+1]
+		if slices.Contains(guiKeys, root.Content[i].Value) && (v.Kind == yaml.MappingNode || v.Kind == yaml.SequenceNode) && len(v.Content) == 0 {
+			root.Content = slices.Delete(root.Content, i, i+2)
+		}
+	}
 }

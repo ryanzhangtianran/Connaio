@@ -42,6 +42,7 @@ export default function Proxies({ status }: { status: Status }) {
   const [measuring, setMeasuring] = useState("");
   const [dialog, setDialog] = useState<"proxy" | "group" | "">("");
   const [editing, setEditing] = useState<Record<string, any> | null>(null);
+  const [editingGroup, setEditingGroup] = useState<Record<string, any> | null>(null);
   const [diagnose, setDiagnose] = useState("");
   const [pending, setPending] = useState<Set<string>>(new Set()); // nodes being tested
   const [open, setOpen] = useState(""); // group whose members are shown
@@ -100,6 +101,7 @@ export default function Proxies({ status }: { status: Status }) {
   };
 
   const hint = modes.find((m) => m.key === mode)?.hint;
+  const editGroup = (name: string) => ProfileService.Group(name).then(setEditingGroup);
 
   return (
     <>
@@ -145,13 +147,6 @@ export default function Proxies({ status }: { status: Status }) {
             </button>
             {open === g.name && (
               <div className="menu members" onClick={(e) => e.stopPropagation()}>
-                {g.type === "Subnet" && (
-                  <div className="detail-head">
-                    按当前网络自动选择
-                    {Object.entries(g.rules ?? {}).map(([cond, target]) => <div key={cond}>{cond} → {target}</div>)}
-                    <div>其他网络 → {g.default}</div>
-                  </div>
-                )}
                 {(g.all ?? []).map((p) => (
                   <button key={p.name} disabled={g.type !== "Selector"} className={p.name === g.now ? "current" : ""}
                     onClick={() => { select(g.name, p.name); setOpen(""); }}>
@@ -159,6 +154,7 @@ export default function Proxies({ status }: { status: Status }) {
                     <span className={delayClass(p.delay)}>{p.delay > 0 ? `${p.delay} ms` : ""}</span>
                   </button>
                 ))}
+                <button onClick={() => { setOpen(""); editGroup(g.name); }}>编辑此策略组</button>
                 <button className="danger" onClick={() => ProfileService.RemoveGroup(g.name).then(load)}>删除此策略组</button>
               </div>
             )}
@@ -171,6 +167,7 @@ export default function Proxies({ status }: { status: Status }) {
         <div className="menu" style={{ position: "fixed", left: menu.x, top: menu.y }}>
           {menu.kind === "proxy" && <button onClick={() => ProfileService.Proxy(menu.target)
             .then((p) => (protocols[p?.type] ? setEditing(p) : CoreService.Notify("warning", `${p?.type} 类型的代理暂不支持表单编辑，可在「配置」中直接编辑 YAML`)))}>编辑</button>}
+          {menu.kind === "group" && <button onClick={() => editGroup(menu.target)}>编辑</button>}
           <button onClick={() => testOne(menu.name)}>测试延迟</button>
           <button disabled={!!measuring} onClick={() => speed(menu.name)}>测试带宽</button>
           <button onClick={() => setDiagnose(menu.target)}>诊断</button>
@@ -181,6 +178,7 @@ export default function Proxies({ status }: { status: Status }) {
       {diagnose && <ProxyDiagnose nodes={nodes.map((n) => n.name)} groups={shownGroups.map((g) => g.name)} initial={diagnose} onClose={() => setDiagnose("")} />}
       {editing && <ProxyDialog groups={[]} editing={editing} onClose={() => { setEditing(null); load(); }} />}
       {dialog === "group" && <GroupDialog onClose={() => { setDialog(""); load(); }} />}
+      {editingGroup && <GroupDialog editing={editingGroup} onClose={() => { setEditingGroup(null); load(); }} />}
     </>
   );
 }

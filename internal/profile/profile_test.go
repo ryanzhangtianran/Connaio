@@ -550,7 +550,7 @@ func TestOverrideIsWrittenInBlockStyle(t *testing.T) {
 		t.Fatal(err)
 	}
 	text, _ := s.Override()
-	if !strings.Contains(text, "prepend-proxies:\n    - name: VPN\n") || !strings.Contains(text, "prepend-rules:\n    - 'EASYCONNECT,VPN,VPN'\n") || !strings.Contains(text, "group-members: {}") {
+	if !strings.Contains(text, "prepend-proxies:\n    - name: VPN\n") || !strings.Contains(text, "prepend-rules:\n    - 'EASYCONNECT,VPN,VPN'\n") || strings.Contains(text, "group-members") { // emptied: tidied away
 		t.Errorf("override:\n%s", text)
 	}
 }
@@ -572,5 +572,83 @@ func TestRuleTarget(t *testing.T) {
 		if got := RuleTarget(rule); got != want {
 			t.Errorf("RuleTarget(%q) = %q, want %q", rule, got, want)
 		}
+	}
+}
+
+// TestEditGroup: a profile group's edit is swapped in whole, a user group's replaced in place,
+// both keep their name and place.
+func TestEditGroup(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddLocal("p", []byte("proxies:\n  - {name: A, type: ss, server: 1.1.1.1, port: 1}\nproxy-groups:\n  - {name: X, type: select, proxies: [DIRECT]}\n  - {name: G, type: subnet, default: DIRECT, rules: {\"SSID:a\": DIRECT}}\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddGroup(map[string]any{"name": "U", "type": "select", "proxies": []any{"DIRECT"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EditGroup("G", map[string]any{"name": "renamed", "type": "subnet", "default": "X", "rules": map[string]any{"SSID:b": "DIRECT"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EditGroup("U", map[string]any{"type": "select", "proxies": []any{"X", "DIRECT"}}); err != nil {
+		t.Fatal(err)
+	}
+	v, _ := s.Value(false, []string{"proxy-groups"})
+	groups, _ := v.([]any)
+	var names []string
+	for _, g := range groups {
+		names = append(names, groupName(g))
+	}
+	if !slices.Equal(names, []string{"U", "X", "G"}) {
+		t.Fatalf("groups %v", names)
+	}
+	g, u := groups[2].(map[string]any), groups[0].(map[string]any)
+	if g["default"] != "X" || len(g["rules"].(map[string]any)) != 1 || g["rules"].(map[string]any)["SSID:b"] != "DIRECT" {
+		t.Fatalf("G = %v", g)
+	}
+	if len(u["proxies"].([]any)) != 2 {
+		t.Fatalf("U = %v", u)
+	}
+}
+
+// TestTidyOverride: an undone edit leaves no empty or dangling keys; keys the user wrote stay.
+func TestTidyOverride(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.AddLocal("p", []byte("proxies:\n  - {name: A, type: ss, server: 1.1.1.1, port: 1}\nproxy-groups:\n  - {name: G, type: select, proxies: [A]}\n")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetOverride("rules: []\ngroup-members: {}\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EditProxy("A", map[string]any{"udp": true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EditGroup("G", map[string]any{"type": "select", "proxies": []any{"DIRECT"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PrependRule("DOMAIN,a.com,DIRECT"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveRule("DOMAIN,a.com,DIRECT"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveGroup("G"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RemoveProxy("A"); err != nil {
+		t.Fatal(err)
+	}
+	text, _ := s.Override()
+	for _, gone := range []string{"group-members", "patch-proxies", "replace-proxy-groups", "prepend-rules"} {
+		if strings.Contains(text, gone) {
+			t.Fatalf("%s left behind:\n%s", gone, text)
+		}
+	}
+	if !strings.Contains(text, "rules: []") {
+		t.Fatalf("the user's own key went:\n%s", text)
 	}
 }

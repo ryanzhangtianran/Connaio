@@ -311,6 +311,26 @@ func (s *ProfileService) AddGroup(group map[string]any) error {
 	return s.edit(func() error { return s.store.AddGroup(group) })
 }
 
+// Group is the named group as the config has it, for editing.
+func (s *ProfileService) Group(name string) (map[string]any, error) {
+	v, err := s.store.Value(false, []string{"proxy-groups"})
+	if err != nil {
+		return nil, err
+	}
+	list, _ := v.([]any)
+	for _, g := range list {
+		if m, ok := g.(map[string]any); ok && m["name"] == name {
+			return m, nil
+		}
+	}
+	return nil, fmt.Errorf("没有名为 %s 的策略组", name)
+}
+
+// EditGroup replaces the named group; its name stays.
+func (s *ProfileService) EditGroup(name string, group map[string]any) error {
+	return s.edit(func() error { return s.store.EditGroup(name, group) })
+}
+
 func (s *ProfileService) RemoveGroup(name string) error {
 	return s.edit(func() error { return s.store.RemoveGroup(name) })
 }
