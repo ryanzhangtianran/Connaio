@@ -53,7 +53,7 @@ export default function Devices({ status }: { status: Status }) {
                 : "局域网内的手机、电脑等可以通过本机代理上网"}
             </div>
           </div>
-          <Switch on={!!lan?.allowLan} disabled={!status.running} onChange={(on) => DeviceService.SetAllowLan(on).then(load)} />
+          <Switch on={!!lan?.allowLan} disabled={!status.running} onChange={(on) => { if (lan) setLan({ ...lan, allowLan: on }); DeviceService.SetAllowLan(on).finally(load); }} />
         </div>
       </div>
 

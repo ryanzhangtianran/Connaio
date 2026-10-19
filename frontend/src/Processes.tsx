@@ -25,7 +25,10 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
 
   const [partial, setPartial] = useState(false); // partial enhancement chosen, running or waiting under enhanced mode
   const refresh = () => EnhancedService.Partial().then(setPartial);
-  useEffect(() => { refresh(); }, [mode]);
+  // the switches move when clicked, not when the core answers (a jump, not a slide): enhanced mode
+  // holds the new position until the mode changes, or drops it if the switch failed
+  const [full, setFull] = useState<boolean | null>(null);
+  useEffect(() => { refresh(); setFull(null); }, [mode]);
   const load = useCallback(() => SettingsService.ProcessChoices().then((c) => setChoices(c ?? [])), []);
   usePoll(load, 5000, status.running && partial);
 
@@ -65,7 +68,7 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
       <div className="plist">
         <div className="plist-row static">
           <div className="plist-main"><div className="plist-name">增强模式</div><div className="muted small">{busy === "enh" ? "切换中…" : !rooted ? "需先在「通用」中授予 root 权限" : mode === "tun" ? "TUN 已接管全部流量" : "以 TUN 接管全部流量，包括不遵循系统代理的应用"}</div></div>
-          <Switch on={mode === "tun"} disabled={off} onChange={(v) => run("enh", EnhancedService.SetFull(v))} />
+          <Switch on={full ?? mode === "tun"} disabled={off} onChange={(v) => { setFull(v); run("enh", EnhancedService.SetFull(v).catch((e) => { setFull(null); throw e; })); }} />
         </div>
       </div>
 
@@ -78,7 +81,7 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
       <div className="plist">
         <div className="plist-row static">
           <div className="plist-main"><div className="plist-name">部分增强</div><div className="muted small">{partialState}</div></div>
-          <Switch on={partial} disabled={off} onChange={(v) => run("partial", EnhancedService.SetPartial(v))} />
+          <Switch on={partial} disabled={off} onChange={(v) => { setPartial(v); run("partial", EnhancedService.SetPartial(v)); }} />
         </div>
       </div>
 

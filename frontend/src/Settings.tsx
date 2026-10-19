@@ -35,7 +35,12 @@ export function useSetting<T>(path: string, fallback: T): [T, (v: T) => Promise<
     load();
     return on("setting", (d) => d === path && load()); // also changed from the menu bar
   }, [path]);
-  const save = (v: T) => ProfileService.Set(path, v).then(() => setValue(v));
+  // shown at once, so a switch slides instead of jumping when the core answers; put back if refused
+  const save = (v: T) => {
+    const old = value;
+    setValue(v);
+    return ProfileService.Set(path, v).catch((e) => { setValue(old); throw e; });
+  };
   return [value, save];
 }
 
@@ -93,11 +98,11 @@ export function General() {
       <div className="card settings-card">
         <div className="section-title">应用</div>
         <Row title="开机时启动">
-          <Switch on={login} onChange={(v) => run(SettingsService.SetLaunchAtLogin(v))} />
+          <Switch on={login} onChange={(v) => { setLogin(v); run(SettingsService.SetLaunchAtLogin(v)); }} />
         </Row>
         {platform === "macos" && ( // only the menu bar has room for it: the Linux and Windows trays show the icon alone
           <Row title={`${words.tray}显示网速`}>
-            <Switch on={traySpeed} onChange={(v) => run(SettingsService.SetTraySpeed(v))} />
+            <Switch on={traySpeed} onChange={(v) => { setTraySpeed(v); run(SettingsService.SetTraySpeed(v)); }} />
           </Row>
         )}
       </div>
