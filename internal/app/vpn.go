@@ -27,6 +27,8 @@ type VPN struct {
 	// Kicked says the EasyConnect login is paused: the gateway kept ending the session, the
 	// account probably signed in elsewhere; ReconnectVPN resumes it.
 	Kicked bool `json:"kicked"`
+	// Kicks is how often the gateway ended the session in the last 10 minutes.
+	Kicks int `json:"kicks"`
 }
 
 func (v VPN) name() string { n, _ := v.Proxy["name"].(string); return n }
@@ -62,7 +64,7 @@ func (s *ProfileService) VPNs() ([]VPN, error) {
 			list[i].State = "down"
 			for _, tn := range tunnels {
 				if tn.Name == list[i].name() {
-					list[i].State, list[i].Kicked = tn.State, tn.Kicked
+					list[i].State, list[i].Kicked, list[i].Kicks = tn.State, tn.Kicked, tn.Kicks
 				}
 			}
 		}
@@ -145,7 +147,7 @@ func (s *ProfileService) SetVPN(v VPN, replace string) error {
 // saveDraft keeps v as its draft, in place of the one named replace when renamed.
 func (s *ProfileService) saveDraft(v VPN, replace string) {
 	draft := v
-	draft.Active, draft.State, draft.Kicked = false, "", false
+	draft.Active, draft.State, draft.Kicked, draft.Kicks = false, "", false, 0
 	_ = s.settings.Update(func(st *Settings) {
 		if st.VPNs == nil {
 			st.VPNs = map[string]VPN{}

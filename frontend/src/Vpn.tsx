@@ -263,6 +263,7 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
         <div className="label" style={{ gap: 12, alignItems: "baseline", fontSize: 13 }}>状态
           <span className={stateClass[tunnel?.state ?? "down"]}>{stateLabel[tunnel?.state ?? "down"]}</span>
           {tunnel?.address && <span>隧道地址 {tunnel.address}</span>}
+          {!tunnel?.kicked && tunnel?.kicks ? <span className="delay-warn">网关在 {new Date(tunnel.lastKick).toLocaleTimeString("zh-CN", { hour12: false })} 结束了会话，10 分钟内 {tunnel.kicks} 次：可能有人用这个账号在别处登录，满 3 次暂停自动重连</span> : null}
           {tunnel?.kicked && <span className="error">账号可能在别处登录：网关反复结束会话，已停止自动重连。先断开其他设备上的这个账号，再点「重连」</span>}
           {routing?.dns?.length ? <span>DNS {routing.dns.join(", ")}</span> : null}
         </div>
@@ -321,7 +322,7 @@ export default function Vpn({ status }: { status: Status }) {
             <button key={name} className={`tile ${current?.proxy?.name === name ? "selected" : ""}`} onClick={() => setEditing(current?.proxy?.name === name ? null : v)}>
               <span className="kind">{types[v.proxy?.["connaio-lan"] ? "lan" : String(v.proxy?.type)] ?? ""}</span>
               <span className="name">{name}</span>
-              <span className={`foot ${v.kicked ? "delay-bad" : stateClass[state]}`}>{v.kicked ? "别处登录，已暂停" : stateLabel[state]}</span>
+              <span className={`foot ${v.kicked ? "delay-bad" : v.kicks ? "delay-warn" : stateClass[state]}`}>{v.kicked ? "别处登录，已暂停" : v.kicks ? `被打断 ${v.kicks} 次` : stateLabel[state]}</span>
             </button>
           );
         })}

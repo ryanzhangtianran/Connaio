@@ -48,6 +48,10 @@ type EasyConnectTunnel struct {
 	Kicked  bool                `json:"kicked"` // paused: the gateway kept ending the session, the account probably signed in elsewhere
 	Address string              `json:"address"`
 	Routing *EasyConnectRouting `json:"routing"`
+
+	// Kicks is how often the gateway ended the session in the last 10 minutes, the last at LastKick.
+	Kicks    int       `json:"kicks"`
+	LastKick time.Time `json:"lastKick"`
 }
 
 // EasyConnectRouting is what the gateway routes: traffic outside it is dropped by the gateway.

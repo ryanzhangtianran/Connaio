@@ -337,6 +337,8 @@ func (t *trayMenu) vpnStates() map[string]string {
 		states[v.name()] = vpnPills[v.State]
 		if v.Kicked {
 			states[v.name()] = dot("bad", "别处登录，已暂停") // reconnected from the VPN page
+		} else if v.Kicks > 0 {
+			states[v.name()] = dot("warn", fmt.Sprintf("被打断 %d 次", v.Kicks))
 		}
 	}
 	return states
