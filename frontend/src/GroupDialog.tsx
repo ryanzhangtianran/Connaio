@@ -66,9 +66,9 @@ export default function GroupDialog({ editing, onClose }: { editing?: Record<str
           <>
             <div className="section-title">按网络选择</div>
             {rules.map((r, i) => (
-              <div key={i} className="inline" style={{ marginBottom: 6 }}>
+              <div key={i} className="subnet-row">
                 <select value={r.t} onChange={(e) => setRule(i, { t: e.target.value, v: "" })}>{bypassKinds.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}</select>
-                {!fixed(r.t) && <input value={r.v} placeholder={bypassKinds.find((k) => k.key === r.t)?.placeholder} onChange={(e) => setRule(i, { v: e.target.value })} className="grow" />}
+                {fixed(r.t) ? <span /> : <input value={r.v} placeholder={bypassKinds.find((k) => k.key === r.t)?.placeholder} onChange={(e) => setRule(i, { v: e.target.value })} />}
                 <span className="muted">→</span>
                 <select value={r.target} onChange={(e) => setRule(i, { target: e.target.value })}>{names.map((n) => <option key={n}>{n}</option>)}</select>
                 <button className="btn" onClick={() => setRules(rules.filter((_, j) => j !== i))}>×</button>

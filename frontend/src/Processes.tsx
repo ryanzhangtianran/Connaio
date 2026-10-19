@@ -87,10 +87,7 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
           </div>
           {showTools && <details className="plist-group">
             <summary className="plist-row static">
-              <div className="plist-main">
-                <div className="plist-name">Shell Tools</div>
-                <div className="muted small">{pickedTools.length ? pickedTools.join("、") : "ssh、git、curl、npm、claude 等不遵循系统代理的命令，及其启动的子进程"}</div>
-              </div>
+              <div className="plist-main"><div className="plist-name">Shell Tools</div></div>
               <Switch on={pickedTools.length > 0} onChange={setTools} />
             </summary>
             {toolNames.map((t) => (

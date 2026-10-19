@@ -227,6 +227,9 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .section-title { font-weight: 600; margin: 16px 0 6px; }
 .form-grid input:not([type=checkbox]), .form-grid select { width: 100%; }
 .inline { display: flex; align-items: center; gap: 6px; }
+/* a subnet group rule: kind, value, →, policy, ×, in columns that line up and fit the dialog */
+.subnet-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto 120px auto; gap: 6px; align-items: center; margin-bottom: 6px; }
+.subnet-row > input, .subnet-row > select { width: 100%; min-width: 0; }
 .checks { display: flex; flex-direction: column; }
 .checks.scroll { max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
 
