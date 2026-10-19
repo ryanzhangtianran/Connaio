@@ -37,6 +37,9 @@ type Conn struct {
 	// the process's ancestors' executables, nearest first, as the core read them when the
 	// connection opened; none from an older core, or on Windows, where the core can't read them
 	Ancestors []string `json:"-"`
+	// InName is the inbound's name: for a connection a reverse tunnel brought in (Inbound SSH or
+	// FRP), the tunnel's
+	InName string `json:"inName,omitempty"`
 }
 
 type TempRule struct {
@@ -122,6 +125,7 @@ func (s *CoreService) fetchConnections() ([]Conn, error) {
 				UID         *uint32 `json:"uid"`
 
 				Ancestors []string `json:"processAncestors"`
+				InName    string   `json:"inboundName"`
 			} `json:"metadata"`
 		} `json:"connections"`
 	}
@@ -154,7 +158,7 @@ func (s *CoreService) fetchConnections() ([]Conn, error) {
 		chain := slices.Clone(c.Chains)
 		slices.Reverse(chain) // the core lists the exit first; show group → node
 		conn := Conn{
-			ID: c.ID, Network: m.Network, Inbound: m.Type, Process: process, Path: m.ProcessPath, System: system, Source: m.SourceIP, SrcPort: m.SourcePort, Ancestors: m.Ancestors,
+			ID: c.ID, Network: m.Network, Inbound: m.Type, Process: process, Path: m.ProcessPath, System: system, Source: m.SourceIP, SrcPort: m.SourcePort, Ancestors: m.Ancestors, InName: m.InName,
 			Host: host, Port: m.DestPort, Rule: rule, Chain: strings.Join(chain, " → "),
 			Upload: c.Upload, Download: c.Download, Start: c.Start.Format(time.RFC3339),
 		}

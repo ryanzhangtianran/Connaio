@@ -229,6 +229,9 @@ func clientOf(c Conn) (name, icon string) {
 	if c.Inbound == "Inner" {
 		return "Connaio", cmp.Or(ownBundle, ownExe)
 	}
+	if (c.Inbound == "SSH" || c.Inbound == "FRP") && c.InName != "" {
+		return "隧道 " + c.InName, "" // came in from the server through a reverse tunnel, not this machine's
+	}
 	if systemDaemon(c.Path) {
 		return "macOS", "/System/Applications/System Settings.app"
 	}

@@ -103,6 +103,9 @@ func TestClientOf(t *testing.T) {
 	if n, i := clientOf(Conn{Source: "192.168.1.9"}); n != "192.168.1.9" || i != "" {
 		t.Fatalf("%q %q", n, i)
 	}
+	if n, _ := clientOf(Conn{Inbound: "SSH", InName: "vps", Source: "127.0.0.1"}); n != "隧道 vps" {
+		t.Errorf("a connection a reverse tunnel brought in: %q", n) // not this machine's, though its source is loopback
+	}
 	if n, _ := clientOf(Conn{Inbound: "Inner"}); n != "Connaio" {
 		t.Fatalf("the core's own connection is %q", n)
 	}
