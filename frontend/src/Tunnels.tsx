@@ -16,8 +16,7 @@ export const localRule = (tunnel: string) => `IN-NAME,${tunnel},DIRECT`;
 export default function Tunnels({ status }: { status: Status }) {
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [mine, setMine] = useState<Record<string, any>[]>([]);
-  const [dialog, setDialog] = useState(false);
-  const [editing, setEditing] = useState<Record<string, any> | null>(null);
+  const [dialog, setDialog] = useState<Record<string, any> | true | null>(null); // true: a new tunnel; else the one edited
   const [open, setOpen] = useState("");
 
   const loadMine = () => ProfileService.UserItems().then((u) => setMine(nonNull(u.tunnels)));
@@ -61,7 +60,7 @@ export default function Tunnels({ status }: { status: Status }) {
                   {own && <>
                     {/* a stopped tunnel stays in the config, disabled, until started again */}
                     <button onClick={() => { ProfileService.SetTunnelDisabled(t.name, t.state !== "stopped"); setOpen(""); }}>{t.state === "stopped" ? "开始连接" : "停止连接"}</button>
-                    <button onClick={() => { setEditing(own); setOpen(""); }}>编辑此隧道</button>
+                    <button onClick={() => { setDialog(own); setOpen(""); }}>编辑此隧道</button>
                     <button className="danger" onClick={() => { remove(t.name); setOpen(""); }}>删除此隧道</button>
                   </>}
                 </div>
@@ -72,8 +71,7 @@ export default function Tunnels({ status }: { status: Status }) {
         <button className="tile add" disabled={!status.running} onClick={() => setDialog(true)} title="增加隧道">＋</button>
       </div>
 
-      {dialog && <TunnelDialog onClose={() => { setDialog(false); load(); }} />}
-      {editing && <TunnelDialog editing={editing} onClose={() => { setEditing(null); load(); }} />}
+      {dialog && <TunnelDialog editing={dialog === true ? undefined : dialog} onClose={() => { setDialog(null); load(); }} />}
     </>
   );
 }

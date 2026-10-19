@@ -119,8 +119,8 @@ func (s *ProfileService) SetVPN(v VPN, replace string) error {
 	if err != nil {
 		return err
 	}
-	if name != replace && slices.ContainsFunc(active, func(a VPN) bool { return a.name() == name }) {
-		return errors.New("已有名为 " + name + " 的 VPN")
+	if err := nameTaken(active, name, replace); err != nil {
+		return err
 	}
 	s.saveDraft(v, replace)
 	return s.edit(func() error {
@@ -178,10 +178,18 @@ func (s *ProfileService) SaveVPN(v VPN, replace string) error {
 	if slices.ContainsFunc(active, func(a VPN) bool { return a.name() == cmp.Or(replace, v.name()) }) {
 		return s.SetVPN(v, replace)
 	}
-	if v.name() != replace && slices.ContainsFunc(active, func(a VPN) bool { return a.name() == v.name() }) {
-		return errors.New("已有名为 " + v.name() + " 的 VPN")
+	if err := nameTaken(active, v.name(), replace); err != nil {
+		return err
 	}
 	s.saveDraft(v, replace)
+	return nil
+}
+
+// nameTaken refuses name when another connected VPN has it (replace being the one renamed).
+func nameTaken(active []VPN, name, replace string) error {
+	if name != replace && slices.ContainsFunc(active, func(a VPN) bool { return a.name() == name }) {
+		return errors.New("已有名为 " + name + " 的 VPN")
+	}
 	return nil
 }
 

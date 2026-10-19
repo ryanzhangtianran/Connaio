@@ -12,6 +12,7 @@ const defaultName = "VPN";
 // lan: another Connaio on the LAN that is connected to the VPN, used through its proxy port (an http
 // node marked connaio-lan), so one account is signed in once
 const types: Record<string, string> = { easyconnect: "EasyConnect", wireguard: "WireGuard", openvpn: "OpenVPN", tailscale: "Tailscale", lan: "局域网 Connaio" };
+const defaultPort: Record<string, string> = { easyconnect: "443", lan: "7890" };
 const noServer = new Set(["openvpn", "tailscale"]); // the address comes from the file, or the control plane
 
 const stateLabel: Record<string, string> = { up: "已连接", connecting: "连接中", down: "未连接" };
@@ -212,11 +213,11 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
         <div className="label">{initial ? "编辑 VPN" : "添加 VPN"}</div>
         <div className="form">
           <input style={{ width: 150 }} placeholder="名称" value={name} onChange={(e) => setName(e.target.value)} />
-          <select style={{ width: 150 }} value={form.type} disabled={saved} onChange={(e) => setForm({ ...empty, type: e.target.value, port: { easyconnect: "443", lan: "7890" }[e.target.value] ?? "" })}>
+          <select style={{ width: 150 }} value={form.type} disabled={saved} onChange={(e) => setForm({ ...empty, type: e.target.value, port: defaultPort[e.target.value] ?? "" })}>
             {Object.entries(types).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
           {!noServer.has(form.type) && text("server", { easyconnect: "网关地址，如 vpn.example.edu.cn", lan: "另一台设备的局域网 IP，如 192.168.1.20" }[form.type] ?? "服务器地址")}
-          {!noServer.has(form.type) && <input style={{ width: 80 }} placeholder={{ easyconnect: "443", lan: "7890" }[form.type] ?? "端口"} value={form.port ?? ""} onChange={set("port")} />}
+          {!noServer.has(form.type) && <input style={{ width: 80 }} placeholder={defaultPort[form.type] ?? "端口"} value={form.port ?? ""} onChange={set("port")} />}
         </div>
         {form.type === "lan" && <div className="muted small" style={{ margin: "4px 0 8px" }}>
           用另一台已连接 VPN 的 Connaio 上网：那台设备在「设备」页打开「允许局域网设备连接」，端口填它的代理端口；下方「VPN 路由」填要经它访问的网段和域名。这样一个账号只在一处登录。
@@ -316,7 +317,7 @@ export default function Vpn({ status }: { status: Status }) {
           return (
             <div key={name} className="tile-wrap">
               <button className={`tile ${current?.proxy?.name === name ? "selected" : ""}`} onClick={() => setEditing(current?.proxy?.name === name ? null : v)}>
-                <span className="kind">{types[String(v.proxy?.type)] ?? ""}</span>
+                <span className="kind">{types[v.proxy?.["connaio-lan"] ? "lan" : String(v.proxy?.type)] ?? ""}</span>
                 <span className="name">{name}</span>
                 <span className={`foot ${v.kicked ? "delay-bad" : stateClass[state]}`}>{v.kicked ? "别处登录，已暂停" : stateLabel[state]}</span>
               </button>
