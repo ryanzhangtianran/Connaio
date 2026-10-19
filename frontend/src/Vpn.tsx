@@ -193,6 +193,9 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
   const save = () => run(ProfileService.SaveVPN(build() as any, prevName).then(onDone));
   const connect = () => run(ProfileService.SetVPN(build() as any, prevName).then(() => { setSaved(true); onDone(); }));
   const reconnect = () => run(ProfileService.ReconnectVPN(prevName || name).then(onDone));
+  // logging in takes the account from wherever else it is signed in: after a recent kick, ask first
+  const [askKick, setAskKick] = useState(false);
+  const login = () => { setAskKick(false); (saved ? reconnect : connect)(); };
   const disconnect = () => run(ProfileService.RemoveVPN(name).then(onDone));
   const remove = () => run(ProfileService.DeleteVPN(prevName || name).then(onDone));
   // probeGateway logs in with the form as it is, without saving: the core reports what the gateway handed out.
@@ -248,7 +251,7 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
       <div className="label section-label">{form.type === "easyconnect" ? "附加路由" : "VPN 路由"}</div>
       <KVRow kinds={routeKinds} items={addrs} onChange={setAddrs} />
       <div className="form">
-        <button className="btn primary" disabled={busy || !ready || !name.trim() || !status.running} onClick={saved ? reconnect : connect}>{saved ? "重连" : "连接"}</button>
+        <button className="btn primary" disabled={busy || !ready || !name.trim() || !status.running} onClick={tunnel?.kicked || tunnel?.kicks ? () => setAskKick(true) : login}>{saved ? "重连" : "连接"}</button>
         <button className="btn" disabled={busy || !ready || !name.trim()} onClick={save}>保存</button>
         {saved && <button className="btn" disabled={busy} onClick={disconnect}>断开</button>}
         {initial && <button className="btn" style={{ color: "var(--bad)" }} disabled={busy} onClick={remove}>删除</button>}
@@ -256,6 +259,11 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
         {form.type === "easyconnect" && tunnel?.state !== "up" && <button className="btn" disabled={probing || !ready || !status.running || tunnel?.state === "connecting"} onClick={probeGateway}>{probing ? "登录中…" : "测试登录"}</button>}
         {probe.length > 0 && <span className={`small ${/失败|错误|refused|rejected/i.test(probe[0]) ? "error" : "muted"}`} style={{ alignSelf: "center" }}>{probe.join("；")}</span>}
       </div>
+      {askKick && <div className="form delay-warn small" style={{ alignItems: "center" }}>
+        这个账号最近被别处登录打断过：现在连接会把对方挤下线，对方再连又会挤掉这里。
+        <button className="btn small-btn" disabled={busy} onClick={login}>仍然连接</button>
+        <button className="btn small-btn" onClick={() => setAskKick(false)}>取消</button>
+      </div>}
       {error && <div className="error small" style={{ marginTop: 8 }}>{error}</div>}
 
     {saved && form.type === "easyconnect" && (
