@@ -23,8 +23,11 @@ jobs:
           fetch-depth: 0 # the latest tag is the package version
       - uses: ./Connaio/.github/actions/setup
       - name: Install NSIS
+        # choco exits 0 even when its feed fails to answer: check for makensis, and try again
         run: |
-          choco install nsis -y --no-progress
+          nsis="/c/Program Files (x86)/NSIS/makensis.exe"
+          for i in 1 2 3; do choco install nsis -y --no-progress; [ -x "$nsis" ] && break; sleep 20; done
+          [ -x "$nsis" ]
           echo "C:\\Program Files (x86)\\NSIS" >> "$GITHUB_PATH" # a native path: wails3 looks makensis up through the Windows PATH
 
       - name: Build the installer
