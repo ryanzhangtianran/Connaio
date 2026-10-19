@@ -101,12 +101,12 @@ function KVRow({ kinds, items, onChange, fill }: { kinds: Kind[]; items: KV[]; o
 }
 
 // formOf fills the editor from a VPN as build writes it.
-function formOf(v: VPN): { form: Form; addrs: KV[]; bypass: KV[] } {
+function formOf(v: VPN): { form: Form; addrs: KV[]; bypass: KV[]; skip: string[] } {
   const p = v.proxy ?? {};
   const form: Form = { type: p["connaio-lan"] ? "lan" : String(p.type ?? "easyconnect") };
   for (const [k, x] of Object.entries(p)) if (k !== "name" && k !== "type" && k !== "connaio-lan" && (typeof x === "string" || typeof x === "number" || typeof x === "boolean")) form[k] = String(x);
   if (Array.isArray(p["allowed-ips"])) form["allowed-ips"] = p["allowed-ips"].join(", ");
-  return { form, addrs: nonNull(v.rules).map(routeOf).filter((x): x is KV => !!x), bypass: Object.keys(v.group?.rules ?? {}).map(bypassOf) };
+  return { form, addrs: nonNull(v.rules).map(routeOf).filter((x): x is KV => !!x), bypass: Object.keys(v.group?.rules ?? {}).map(bypassOf), skip: nonNull(p["skip-routes"] as string[]) };
 }
 
 // VpnEditor edits one VPN (initial null: a new one) and connects, disconnects or deletes it.
@@ -116,6 +116,8 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
   const [form, setForm] = useState<Form>(init?.form ?? empty);
   const [addrs, setAddrs] = useState<KV[]>(init?.addrs ?? []);
   const [bypass, setBypass] = useState<KV[]>(init?.bypass ?? []);
+  // skip: the gateway's routes (rangeKey, or a name) left to the other rules
+  const [skip, setSkip] = useState<string[]>(init?.skip ?? []);
   const [name, setName] = useState(prevName || defaultName);
   const [saved, setSaved] = useState(!!initial?.active);
   const [busy, setBusy] = useState(false);
@@ -149,6 +151,7 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
     switch (form.type) {
       case "easyconnect":
         str("server"); num("port", 443); str("username"); str("password"); str("totp-secret");
+        if (skip.length) proxy["skip-routes"] = skip;
         break;
       case "wireguard":
         str("server"); num("port"); str("private-key"); str("public-key"); str("pre-shared-key"); str("ip"); str("ipv6"); num("mtu");
@@ -202,6 +205,11 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
   const currentNetwork = () => CoreService.CurrentNetwork().then((n): KV | null => (n.ssid ? { t: "SSID", v: n.ssid } : n.router ? { t: "ROUTER", v: n.router } : null));
 
   const routing = tunnel?.routing;
+  // routeBox picks whether one of the gateway's routes goes through the VPN; unticked, the rules
+  // after the VPN's decide. 保存 applies it without logging in again.
+  const routeBox = (key: string) => (
+    <td><input type="checkbox" checked={!skip.includes(key)} onChange={(e) => setSkip(e.target.checked ? skip.filter((k) => k !== key) : [...skip, key])} /></td>
+  );
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
@@ -258,19 +266,20 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
           {tunnel?.kicked && <span className="error">账号可能在别处登录：网关反复结束会话，已停止自动重连。先断开其他设备上的这个账号，再点「重连」</span>}
           {routing?.dns?.length ? <span>DNS {routing.dns.join(", ")}</span> : null}
         </div>
-        {routing && (routing.ip?.length || routing.domains?.length) ? (
+        {routing && (routing.ip?.length || routing.domains?.length) ? (<>
               <div className="table-wrap tight">
                 <table className="table">
-                  <thead><tr><th>网关下发的网段</th><th>端口</th><th>协议</th></tr></thead>
+                  <thead><tr><th style={{ width: 1 }}>走 VPN</th><th>网关下发的网段</th><th>端口</th><th>协议</th></tr></thead>
                   <tbody>
                     {nonNull(routing.ip).map((r, i) => (
-                      <tr key={i}><td>{r.from === r.to ? r.from : `${r.from} ~ ${r.to}`}</td><td>{r.portMin === r.portMax ? r.portMin : `${r.portMin}-${r.portMax}`}</td><td>{r.protocol}</td></tr>
+                      <tr key={i}>{routeBox(r.from === r.to ? r.from : `${r.from}-${r.to}`)}<td>{r.from === r.to ? r.from : `${r.from} ~ ${r.to}`}</td><td>{r.portMin === r.portMax ? r.portMin : `${r.portMin}-${r.portMax}`}</td><td>{r.protocol}</td></tr>
                     ))}
-                    {nonNull(routing.domains).map((d) => <tr key={d}><td>{d}</td><td /><td>域名</td></tr>)}
+                    {nonNull(routing.domains).map((d) => <tr key={d}>{routeBox(d)}<td>{d}</td><td /><td>域名</td></tr>)}
                   </tbody>
                 </table>
               </div>
-        ) : null}
+              <div className="muted small" style={{ marginTop: 6 }}>未勾选的网段和域名不走 VPN，交给后面的规则；改完点「保存」生效，不会重新登录。</div>
+        </>) : null}
       </div>
     )}
     </div>
