@@ -11,7 +11,7 @@ import PasswordInput from "./PasswordInput";
 const defaultName = "VPN";
 // lan: another Connaio on the LAN that is connected to the VPN, used through its proxy port (an http
 // node marked connaio-lan), so one account is signed in once
-const types: Record<string, string> = { easyconnect: "EasyConnect", wireguard: "WireGuard", openvpn: "OpenVPN", tailscale: "Tailscale", lan: "局域网" };
+const types: Record<string, string> = { easyconnect: "EasyConnect", wireguard: "WireGuard", openvpn: "OpenVPN", tailscale: "Tailscale", lan: "LAN" };
 const defaultPort: Record<string, string> = { easyconnect: "443", lan: "7890" };
 const noServer = new Set(["openvpn", "tailscale"]); // the address comes from the file, or the control plane
 
