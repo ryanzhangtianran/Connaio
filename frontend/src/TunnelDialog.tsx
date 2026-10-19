@@ -2,31 +2,69 @@ import { validPort } from "./format";
 import { useEffect, useState } from "react";
 import PasswordInput from "./PasswordInput";
 import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
+import type { KeyPair } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { localRule } from "./Tunnels";
 import { on, useDirty } from "./hooks";
 
 type Row = Record<string, string>;
 
-function Rows({ cols, rows, setRows }: { cols: [string, string][]; rows: Row[]; setRows: (r: Row[]) => void }) {
+// splitAddr is "host:port" at its last colon; joinAddr puts it back.
+export const splitAddr = (s = "") => { const i = s.lastIndexOf(":"); return i < 0 ? [s, ""] : [s.slice(0, i), s.slice(i + 1)]; };
+const joinAddr = (host: string, port: string) => `${host}:${port}`;
+
+// Rows edits a list of forwards: a column per key, or two for a "host:port" key in addr (its IP, its
+// port); a cell locked for a row keeps what Connaio set there.
+function Rows({ cols, rows, setRows, addr = [], locked }: { cols: [string, string][]; rows: Row[]; setRows: (r: Row[]) => void; addr?: string[]; locked?: (r: Row, k: string) => boolean }) {
   const update = (i: number, k: string, value: string) => setRows(rows.map((r, j) => (j === i ? { ...r, [k]: value } : r)));
   return (
     <table className="table">
-      <thead><tr>{cols.map(([k, l]) => <th key={k}>{l}</th>)}<th /></tr></thead>
+      <thead><tr>{cols.flatMap(([k, l]) => (addr.includes(k) ? [<th key={k}>{l} IP</th>, <th key={k + ":port"}>{l}端口</th>] : [<th key={k}>{l}</th>]))}<th /></tr></thead>
       <tbody>
         {rows.map((r, i) => (
           <tr key={i}>
-            {cols.map(([k]) => (
-              <td key={k}>
-                {k === "type"
-                  ? <select value={r[k] ?? "tcp"} onChange={(e) => update(i, k, e.target.value)}>{["tcp", "udp", "http", "https", "stcp"].map((t) => <option key={t}>{t}</option>)}</select>
-                  : <input value={r[k] ?? ""} onChange={(e) => update(i, k, e.target.value)} style={{ width: "100%" }} />}
-              </td>
-            ))}
+            {cols.flatMap(([k]) => {
+              const fixed = !!locked?.(r, k);
+              if (addr.includes(k)) {
+                const [host, port] = splitAddr(r[k]);
+                return [
+                  <td key={k}><input value={host} readOnly={fixed} onChange={(e) => update(i, k, joinAddr(e.target.value, port))} style={{ width: "100%" }} /></td>,
+                  <td key={k + ":port"}><input value={port} readOnly={fixed} placeholder="端口" onChange={(e) => update(i, k, joinAddr(host, e.target.value))} style={{ width: "100%" }} /></td>,
+                ];
+              }
+              return [
+                <td key={k}>
+                  {k === "type"
+                    ? <select value={r[k] ?? "tcp"} disabled={fixed} onChange={(e) => update(i, k, e.target.value)}>{["tcp", "udp", "http", "https", "stcp"].map((t) => <option key={t}>{t}</option>)}</select>
+                    : <input value={r[k] ?? ""} readOnly={fixed} onChange={(e) => update(i, k, e.target.value)} style={{ width: "100%" }} />}
+                </td>,
+              ];
+            })}
             <td><button className="btn" onClick={() => setRows(rows.filter((_, j) => j !== i))}>×</button></td>
           </tr>
         ))}
       </tbody>
     </table>
+  );
+}
+
+// KeySelect picks an SSH key from the pairs kept in ~/.connaio, or generates one named genName there:
+// keys come only from there, so each one's public half is at hand to install on a server.
+function KeySelect({ value, genName, onChange }: { value: string; genName: string; onChange: (key: string, note: string) => void }) {
+  const [keys, setKeys] = useState<KeyPair[]>([]);
+  const load = () => ToolService.KeyPairs().then((k) => setKeys(k ?? []));
+  useEffect(() => { load(); }, []);
+  const current = keys.find((k) => k.private === value);
+  const other = value && !current; // a key the config has from before, kept until another is chosen
+  return (
+    <>
+      <select value={current?.name ?? (other ? "\u0000" : "")} onChange={(e) => { const k = keys.find((x) => x.name === e.target.value); if (k) onChange(k.private, k.path); }}>
+        <option value="" disabled>{keys.length ? "选择 ~/.connaio 中的密钥" : "~/.connaio 中还没有密钥"}</option>
+        {other && <option value={"\u0000"}>配置中原有的密钥</option>}
+        {keys.map((k) => <option key={k.name} value={k.name}>{k.name}</option>)}
+      </select>
+      <button className="btn small-btn" disabled={!validName(genName)} title={`生成 ed25519 密钥对 ~/.connaio/${genName || "<名称>"}_ed25519；已有则沿用`}
+        onClick={() => ToolService.KeyPair(genName).then((k) => { load(); onChange(k.private, `已保存在 ${k.path}`); })}>生成密钥对</button>
+    </>
   );
 }
 
@@ -73,7 +111,7 @@ function DeployFrps({ onDone, onClose }: { onDone: (host: string, port: number, 
             <AuthSeg auth={auth} setAuth={setAuth} />
             {auth === "password"
               ? <><label>密码</label>{f("password", "", "password")}</>
-              : <><label>私钥</label><textarea className="code" rows={3} placeholder="粘贴私钥内容" value={d.key ?? ""} onChange={(e) => setD({ ...d, key: e.target.value })} /></>}
+              : <><label>私钥</label><div className="inline"><KeySelect value={d.key ?? ""} genName="frps" onChange={(key) => setD({ ...d, key })} /></div></>}
             <label>frps 端口</label>{f("bindPort", "7000")}
           </div>
           {log.length > 0 && (
@@ -129,11 +167,24 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
   const proxyTarget = `127.0.0.1:${mixedPort}`;
   const viaRules = kind === "frp" ? frpRows.some((r) => r.name === "connaio") : sshRows.some((r) => r.local === proxyTarget);
   const setViaRules = (on: boolean) => {
-    if (kind === "frp") setFrpRows(on ? [...frpRows, { name: "connaio", type: "tcp", localIP: "127.0.0.1", localPort: String(mixedPort), remotePort: "17890" }] : frpRows.filter((r) => r.name !== "connaio"));
-    else setSshRows(on ? [...sshRows, { remote: "127.0.0.1:17890", local: proxyTarget }] : sshRows.filter((r) => r.local !== proxyTarget));
+    if (kind === "frp") setFrpRows(on ? [...frpRows, { name: "connaio", type: "tcp", localIP: "127.0.0.1", localPort: String(mixedPort), remotePort: "" }] : frpRows.filter((r) => r.name !== "connaio"));
+    else setSshRows(on ? [...sshRows, { remote: "127.0.0.1:", local: proxyTarget }] : sshRows.filter((r) => r.local !== proxyTarget));
+  };
+  // the via-rules forward's local end is Connaio's proxy port, kept so if that port has changed since
+  useEffect(() => { if (mixedPort) setFrpRows((rows) => rows.map((r) => (r.name === "connaio" ? { ...r, localIP: "127.0.0.1", localPort: String(mixedPort) } : r))); }, [mixedPort]);
+  const viaPort = kind === "frp" ? frpRows.find((r) => r.name === "connaio")?.remotePort ?? "" : splitAddr(sshRows.find((r) => r.local === proxyTarget)?.remote)[1];
+  const lockedCell = (r: Row, k: string) => (kind === "frp" ? r.name === "connaio" && ["name", "type", "localIP", "localPort"].includes(k) : r.local === proxyTarget && k === "local");
+  // test: the server tried from here before saving (ToolService.TestTunnel)
+  const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null);
+  const runTest = () => {
+    setTest({ ok: true, text: "测试中…" });
+    ToolService.TestTunnel(kind === "frp"
+      ? { type: "frp", host: v.serverAddr ?? "", port: num(v.serverPort) ?? 7000 }
+      : { type: "ssh", host: v.server ?? "", port: num(v.port) ?? 22, user: v.username, password: auth === "password" ? v.password : "", key: auth === "key" ? v.key : "", hostKey: v.hostKey })
+      .then((t) => setTest({ ok: true, text: t + (v.dialer ? "（直接连接测试，未经跳板代理）" : "") }))
+      .catch((e) => setTest({ ok: false, text: String(e).replace(/^\w*Error:\s*/, "") }));
   };
   useEffect(() => { CoreService.ProxyNames().then((n) => setNames((n ?? []).filter((x) => x !== "DIRECT"))); }, []); // DIRECT is 直连
-  const genKey = () => ToolService.KeyPair(v.name).then((k) => { setV((x) => ({ ...x, key: k.private })); setKeyNote(`已保存在 ${k.path}`); });
   const installKey = () => {
     setBusy(true);
     ToolService.InstallKey({ host: v.server, port: num(v.port) ?? 22, user: v.username, password: installing ?? "", hostKey: v.hostKey ?? "" }, v.key)
@@ -171,8 +222,9 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
   // every port the form sends must be a real one; a blank optional port is fine
   const ports = kind === "frp"
     ? [v.serverPort, ...frpRows.flatMap((r) => [r.localPort, r.remotePort])]
-    : [v.port];
-  const ready = validName(v.name ?? "") && ports.every((p) => !p || validPort(p)) && (kind === "frp" ? !!v.serverAddr : !!v.server && !!v.username);
+    : [v.port, ...sshRows.flatMap((r) => [splitAddr(r.remote)[1], splitAddr(r.local)[1]])];
+  const ready = validName(v.name ?? "") && ports.every((p) => !p || validPort(p)) && (kind === "frp" ? !!v.serverAddr : !!v.server && !!v.username)
+    && (!viaRules || validPort(viaPort)); // the via-rules forward's server port has no default
 
   return (
     <div className="modal-bg" onClick={dirty ? undefined : onClose}>
@@ -204,9 +256,8 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
                 : <>
                   <label>私钥</label>
                   <div>
-                    <textarea className="code" rows={3} placeholder="粘贴私钥内容，或生成一对" value={v.key ?? ""} onChange={(e) => setV({ ...v, key: e.target.value })} style={{ width: "100%" }} />
                     <div className="inline">
-                      <button className="btn small-btn" disabled={!validName(v.name ?? "")} title="生成 ed25519 密钥对，保存在 ~/.connaio；已有则沿用" onClick={genKey}>生成密钥对</button>
+                      <KeySelect value={v.key ?? ""} genName={v.name ?? ""} onChange={(key, note) => { setV((x) => ({ ...x, key })); setKeyNote(note); }} />
                       <button className="btn small-btn" disabled={!v.key || !v.server || !v.username} title="用一次服务器密码把公钥加入 ~/.ssh/authorized_keys，密码不保存" onClick={() => setInstalling("")}>安装公钥到服务器</button>
                       {keyNote && <span className="muted small">{keyNote}</span>}
                     </div>
@@ -233,15 +284,17 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
           <label>入站流量</label>
           <label className="radio" style={{ textAlign: "left", color: "var(--text)" }}>
             <input type="checkbox" checked={viaRules} disabled={!mixedPort} onChange={(e) => setViaRules(e.target.checked)} /> 按规则分流
-            <span className="muted small" style={{ marginLeft: 8 }}>服务器 17890 端口作为 HTTP / SOCKS5 代理，接入 Connaio</span>
+            <span className="muted small" style={{ marginLeft: 8 }}>{viaRules ? `服务器 ${viaPort || "（在下方填写）"} 端口作为 HTTP / SOCKS5 代理，接入 Connaio 的 ${mixedPort} 端口` : "服务器上的一个端口作为 HTTP / SOCKS5 代理，接入 Connaio"}</span>
           </label>
         </div>
         <div className="section-title">{kind === "frp" ? "FRP 代理" : "转发（远端监听 → 本地目标）"}</div>
         {kind === "frp"
-          ? <Rows cols={[["name", "名称"], ["type", "类型"], ["localIP", "本地 IP"], ["localPort", "本地端口"], ["remotePort", "远端端口"], ["customDomains", "域名（http/https）"]]} rows={frpRows} setRows={setFrpRows} />
-          : <Rows cols={[["remote", "远端监听"], ["local", "本地目标"]]} rows={sshRows} setRows={setSshRows} />}
+          ? <Rows cols={[["name", "名称"], ["type", "类型"], ["localIP", "本地 IP"], ["localPort", "本地端口"], ["remotePort", "远端端口"], ["customDomains", "域名（http/https）"]]} rows={frpRows} setRows={setFrpRows} locked={lockedCell} />
+          : <Rows cols={[["remote", "远端"], ["local", "本地"]]} rows={sshRows} setRows={setSshRows} addr={["remote", "local"]} locked={lockedCell} />}
         <button className="btn" style={{ marginTop: 8 }} onClick={() => (kind === "frp" ? setFrpRows([...frpRows, { type: "tcp", localIP: "127.0.0.1" }]) : setSshRows([...sshRows, { remote: "127.0.0.1:" }]))}>{kind === "frp" ? "添加代理" : "添加转发"}</button>
         <div className="actions end">
+          <button className="btn" disabled={!(kind === "frp" ? v.serverAddr : v.server && v.username)} onClick={runTest}>测试</button>
+          <span className={`small tunnel-test ${test ? (test.ok ? "muted" : "error") : ""}`}>{test?.text}</span>
           <button className="btn" onClick={onClose}>取消</button>
           <button className="btn primary" disabled={!ready || busy} onClick={save}>完成</button>
         </div>

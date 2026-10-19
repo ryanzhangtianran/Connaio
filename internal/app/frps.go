@@ -78,19 +78,9 @@ func (s *ToolService) DeployFRPS(d FrpsDeploy) (Frps, error) {
 	if d.BindPort == 0 {
 		d.BindPort = 7000
 	}
-	var auth []ssh.AuthMethod
-	if d.Key != "" {
-		signer, err := ssh.ParsePrivateKey([]byte(d.Key))
-		if err != nil {
-			return Frps{}, fmt.Errorf("私钥无法解析：%w", err)
-		}
-		auth = append(auth, ssh.PublicKeys(signer))
-	}
-	if d.Password != "" {
-		auth = append(auth, ssh.Password(d.Password))
-	}
-	if len(auth) == 0 {
-		return Frps{}, errors.New("需要密码或私钥")
+	auth, err := sshAuth(d.Password, d.Key)
+	if err != nil {
+		return Frps{}, err
 	}
 	cfg := &ssh.ClientConfig{
 		User: d.User, Auth: auth, Timeout: 15 * time.Second,
@@ -148,10 +138,69 @@ func (s *ToolService) HostKey(host string, port int) (string, error) {
 	return strings.TrimSpace(string(ssh.MarshalAuthorizedKey(got))), nil
 }
 
+// sshAuth is a login by key, by password, or by both, the key tried first.
+func sshAuth(password, key string) ([]ssh.AuthMethod, error) {
+	var auth []ssh.AuthMethod
+	if key != "" {
+		signer, err := ssh.ParsePrivateKey([]byte(key))
+		if err != nil {
+			return nil, fmt.Errorf("私钥无法解析：%w", err)
+		}
+		auth = append(auth, ssh.PublicKeys(signer))
+	}
+	if password != "" {
+		auth = append(auth, ssh.Password(password))
+	}
+	if len(auth) == 0 {
+		return nil, errors.New("需要密码或私钥")
+	}
+	return auth, nil
+}
+
+// hostKeyCheck checks the server against hostKey ("type base64") when given; otherwise it trusts
+// the server on first use.
+func hostKeyCheck(hostKey string) (ssh.HostKeyCallback, error) {
+	if hostKey == "" {
+		return ssh.InsecureIgnoreHostKey(), nil // ponytail: trust on first use, as DeployFRPS
+	}
+	k, _, _, _, err := ssh.ParseAuthorizedKey([]byte(hostKey))
+	if err != nil {
+		return nil, fmt.Errorf("服务器公钥无法解析：%w", err)
+	}
+	return ssh.FixedHostKey(k), nil
+}
+
 // KeyPair is an SSH key pair kept in ~/.connaio for a tunnel.
 type KeyPair struct {
+	Name    string `json:"name"`    // what it was generated for: ~/.connaio/<name>_ed25519
 	Private string `json:"private"` // OpenSSH private key text, for the tunnel's private-key
 	Path    string `json:"path"`    // the private key's file; the public one is beside it with .pub
+}
+
+// keysDir is ~/.connaio, where the tunnels' key pairs are kept.
+func keysDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, ".connaio"), nil
+}
+
+// KeyPairs lists the key pairs in ~/.connaio, by name: the only keys a tunnel takes, so each one
+// is generated here and its public half is at hand to install on a server.
+func (s *ToolService) KeyPairs() ([]KeyPair, error) {
+	dir, err := keysDir()
+	if err != nil {
+		return nil, err
+	}
+	paths, _ := filepath.Glob(filepath.Join(dir, "*_ed25519"))
+	var keys []KeyPair
+	for _, p := range paths {
+		if text, err := os.ReadFile(p); err == nil {
+			keys = append(keys, KeyPair{Name: strings.TrimSuffix(filepath.Base(p), "_ed25519"), Private: string(text), Path: p})
+		}
+	}
+	return keys, nil
 }
 
 // KeyPair loads ~/.connaio/<name>_ed25519, generating it (ed25519, no passphrase) only when missing,
@@ -160,11 +209,11 @@ func (s *ToolService) KeyPair(name string) (KeyPair, error) {
 	if name == "" || strings.ContainsAny(name, `/\`) {
 		return KeyPair{}, errors.New("先填写隧道名称")
 	}
-	home, err := os.UserHomeDir()
+	dir, err := keysDir()
 	if err != nil {
 		return KeyPair{}, err
 	}
-	path := filepath.Join(home, ".connaio", name+"_ed25519")
+	path := filepath.Join(dir, name+"_ed25519")
 	text, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		_, key, _ := ed25519.GenerateKey(nil)
@@ -187,7 +236,7 @@ func (s *ToolService) KeyPair(name string) (KeyPair, error) {
 	} else if err != nil {
 		return KeyPair{}, err
 	}
-	return KeyPair{Private: string(text), Path: path}, nil
+	return KeyPair{Name: name, Private: string(text), Path: path}, nil
 }
 
 // SSHLogin is a password login, used once to put a key on a server.
@@ -209,13 +258,9 @@ func (s *ToolService) InstallKey(l SSHLogin, privateKey string) error {
 	if err != nil {
 		return fmt.Errorf("私钥无法解析：%w", err)
 	}
-	hostKey := ssh.InsecureIgnoreHostKey() // ponytail: trust on first use, as DeployFRPS
-	if l.HostKey != "" {
-		k, _, _, _, err := ssh.ParseAuthorizedKey([]byte(l.HostKey))
-		if err != nil {
-			return fmt.Errorf("服务器公钥无法解析：%w", err)
-		}
-		hostKey = ssh.FixedHostKey(k)
+	hostKey, err := hostKeyCheck(l.HostKey)
+	if err != nil {
+		return err
 	}
 	cfg := &ssh.ClientConfig{User: l.User, Auth: []ssh.AuthMethod{ssh.Password(l.Password)}, HostKeyCallback: hostKey, Timeout: 15 * time.Second}
 	client, err := ssh.Dial("tcp", net.JoinHostPort(l.Host, strconv.Itoa(cmp.Or(l.Port, 22))), cfg)
@@ -233,4 +278,52 @@ func (s *ToolService) InstallKey(l SSHLogin, privateKey string) error {
 		return fmt.Errorf("安装公钥失败：%s", cmp.Or(strings.TrimSpace(string(out)), err.Error()))
 	}
 	return nil
+}
+
+// TunnelTest is a tunnel's server as the dialog has it, to try before saving.
+type TunnelTest struct {
+	Type     string `json:"type"` // "ssh" or "frp"
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user,omitempty"`
+	Password string `json:"password,omitempty"`
+	Key      string `json:"key,omitempty"`
+	HostKey  string `json:"hostKey,omitempty"`
+}
+
+// TestTunnel tries a tunnel's server from here, directly: an SSH tunnel logs in with its password or
+// key (and checks the server's key when one is given); an FRP tunnel's server port is reached, its
+// token checked only when the tunnel connects.
+func (s *ToolService) TestTunnel(t TunnelTest) (string, error) {
+	if t.Host == "" || t.Port == 0 {
+		return "", errors.New("先填写服务器和端口")
+	}
+	addr := net.JoinHostPort(t.Host, strconv.Itoa(t.Port))
+	if t.Type == "frp" {
+		c, err := net.DialTimeout("tcp", addr, 8*time.Second)
+		if err != nil {
+			return "", fmt.Errorf("连不上 %s：%w", addr, err)
+		}
+		c.Close()
+		return "frps 端口可达，token 在隧道连接时校验", nil
+	}
+	auth, err := sshAuth(t.Password, t.Key)
+	if err != nil {
+		return "", err
+	}
+	check, err := hostKeyCheck(t.HostKey)
+	if err != nil {
+		return "", err
+	}
+	var fingerprint string
+	cfg := &ssh.ClientConfig{User: t.User, Auth: auth, Timeout: 10 * time.Second, HostKeyCallback: func(host string, remote net.Addr, key ssh.PublicKey) error {
+		fingerprint = ssh.FingerprintSHA256(key)
+		return check(host, remote, key)
+	}}
+	client, err := ssh.Dial("tcp", addr, cfg)
+	if err != nil {
+		return "", fmt.Errorf("SSH 登录失败：%w", err)
+	}
+	client.Close()
+	return "SSH 登录成功，服务器指纹 " + fingerprint, nil
 }

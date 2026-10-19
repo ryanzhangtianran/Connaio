@@ -263,6 +263,8 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .menu button.danger { color: var(--bad); }
 .menu button.danger:hover { background: var(--bad); color: #fff; }
 .menu.detail { min-width: 320px; padding: 8px; }
+.menu.detail button { padding-inline: 8px; } /* in line with the rows above */
+.tunnel-test { margin-right: auto; align-self: center; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .detail-head { padding: 4px 8px 6px; font-size: 12px; color: var(--text-2); }
 .detail-row { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 6px 8px; border-top: 1px solid var(--line); font-size: 12px; }
 
