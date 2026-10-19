@@ -354,7 +354,12 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .plist-main > input.plist-rename { width: 100%; max-width: 320px; font-weight: 500; } /* the name being renamed, in place */
 .plist-usage { width: 150px; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
 .plist-meter { height: 4px; margin: 4px 0 2px; border-radius: 2px; background: var(--track); overflow: hidden; }
-.plist-meter i { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+.plist-meter i { display: block; height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.2s; }
+/* the update's progress under its row; a bar of unknown length slides along */
+.update-progress { padding: 0 0 12px; }
+.update-progress .plist-meter { height: 6px; margin: 0 0 6px; border-radius: 3px; }
+.plist-meter i.busy { animation: meter-slide 1.2s ease-in-out infinite; }
+@keyframes meter-slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 .plist-empty { padding: 18px 16px; }
 .plist-add { display: flex; gap: 8px; padding: 10px 16px; }
 .plist-tools { display: flex; align-items: center; gap: 6px; padding: 8px 10px; }

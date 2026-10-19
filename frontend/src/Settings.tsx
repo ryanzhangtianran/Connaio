@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { CoreService, EnhancedService, ProfileService, SettingsService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import type { About, DNSLeak, LeakServer, Update } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
+import type { About, DNSLeak, LeakServer, Update, UpdateProgress } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { on } from "./hooks";
-import { platform, words, validPort } from "./format";
+import { platform, sizeText, words, validPort } from "./format";
 
 
 function Row({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
@@ -48,7 +48,9 @@ export function General() {
   const [logLevel, setLogLevel] = useSetting<string>("log-level", "info");
   const [version, setVersion] = useState("");
   const [update, setUpdate] = useState<Update | null>(null);
+  const [progress, setProgress] = useState<UpdateProgress | null>(null); // the update's download, then install
   useEffect(() => { SettingsService.About().then((a) => setVersion(a.version)); }, []);
+  useEffect(() => on("update-progress", setProgress), []);
 
   const load = useCallback(() => {
     EnhancedService.DaemonInstalled().then(setDaemon);
@@ -103,12 +105,27 @@ export function General() {
         <div className="section-title">更新</div>
         <Row title={`当前版本 ${version}`} desc={update ? (update.newer ? `发现新版本 ${update.latest}，从 GitHub Releases 下载安装后自动重启` : "已是最新版本") : undefined}>
           {update?.newer
-            ? <button className="btn ctl" disabled={!!busy} onClick={() => run(SettingsService.InstallUpdate(), "update")}>{busy === "update" ? "更新中…" : "更新"}</button>
+            ? <button className="btn ctl" disabled={!!busy} onClick={() => { setProgress(null); run(SettingsService.InstallUpdate(), "update"); }}>{busy === "update" ? updateLabel(progress) : "更新"}</button>
             : <button className="btn ctl" disabled={!!busy} onClick={() => run(SettingsService.CheckUpdate().then(setUpdate), "check")}>{busy === "check" ? "检查中…" : "检查更新"}</button>}
         </Row>
+        {busy === "update" && (
+          <div className="update-progress">
+            <div className="plist-meter"><i className={progress?.total ? "" : "busy"} style={{ width: progress?.total ? `${(progress.done / progress.total) * 100}%` : progress?.stage === "install" ? "100%" : "30%" }} /></div>
+            <div className="muted small">
+              {progress?.stage === "install" ? "下载完成，正在安装，完成后自动重启"
+                : progress ? `${sizeText(progress.done)}${progress.total ? ` / ${sizeText(progress.total)}` : ""}` : "正在连接…"}
+            </div>
+          </div>
+        )}
       </div>
     </>
   );
+}
+
+// updateLabel is the update button's text while it runs: the download's percentage, then the install.
+function updateLabel(p: UpdateProgress | null) {
+  if (p?.stage === "install") return "安装中…";
+  return p?.total ? `下载中 ${Math.floor((p.done / p.total) * 100)}%` : "下载中…";
 }
 
 // ListSetting edits a string list setting item by item: each one a row that can be removed, and an

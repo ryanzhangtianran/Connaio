@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ryanzhangtianran/Connaio/internal/core"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // releaseAPI answers with this app's newest release on GitHub.
@@ -28,6 +29,17 @@ type Update struct {
 	Newer   bool   `json:"newer"`
 	URL     string `json:"url"` // its release page
 }
+
+// UpdateProgress is how far an update has got, sent to the window as "update-progress": the
+// package's bytes so far and in all while it downloads (Total 0 when the server doesn't say), then
+// the install.
+type UpdateProgress struct {
+	Stage string `json:"stage"` // "download" or "install"
+	Done  int64  `json:"done"`
+	Total int64  `json:"total"`
+}
+
+func init() { application.RegisterEvent[UpdateProgress]("update-progress") }
 
 type release struct {
 	Tag    string  `json:"tag_name"`
@@ -69,6 +81,7 @@ func (s *SettingsService) InstallUpdate() error {
 		return err
 	}
 	defer os.RemoveAll(filepath.Dir(file))
+	emit("update-progress", UpdateProgress{Stage: "install"})
 	if err := installPackage(file); err != nil {
 		return err
 	}
@@ -129,6 +142,22 @@ func (s *SettingsService) downloadVerified(a asset) (string, error) {
 	return "", fmt.Errorf("下载更新失败：%w", errors.Join(errs...))
 }
 
+// progress counts the bytes written through it and sends them as "update-progress", at most every
+// 200 ms and once at the end.
+type progress struct {
+	done, total int64
+	sent        time.Time
+}
+
+func (p *progress) Write(b []byte) (int, error) {
+	p.done += int64(len(b))
+	if time.Since(p.sent) >= 200*time.Millisecond || p.done == p.total {
+		p.sent = time.Now()
+		emit("update-progress", UpdateProgress{Stage: "download", Done: p.done, Total: max(p.total, 0)})
+	}
+	return len(b), nil
+}
+
 // fetchTo saves url at path, failing unless its SHA-256 is want (hex).
 func fetchTo(c *http.Client, url, path, want string) error {
 	resp, err := c.Get(url)
@@ -144,7 +173,7 @@ func fetchTo(c *http.Client, url, path, want string) error {
 		return err
 	}
 	h := sha256.New()
-	_, err = io.Copy(io.MultiWriter(f, h), resp.Body)
+	_, err = io.Copy(io.MultiWriter(f, h, &progress{total: resp.ContentLength}), resp.Body)
 	if err := errors.Join(err, f.Close()); err != nil {
 		return err
 	}
