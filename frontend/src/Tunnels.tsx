@@ -36,6 +36,7 @@ export default function Tunnels({ status }: { status: Status }) {
       <div className="tiles">
         {tunnels.map((t) => {
           const forwards = t.forwards ?? [];
+          const own = mine.find((m) => m.name === t.name);
           return (
             <div key={t.name} className="tile-wrap">
               <button className={`tile ${open === t.name ? "selected" : ""}`} onClick={() => setOpen(open === t.name ? "" : t.name)}>
@@ -57,8 +58,8 @@ export default function Tunnels({ status }: { status: Status }) {
                       {f.error && <span className="error small">{f.error}</span>}
                     </div>
                   ))}
-                  {mine.some((m) => m.name === t.name) && <>
-                    <button onClick={() => { setEditing(mine.find((m) => m.name === t.name)!); setOpen(""); }}>编辑此隧道</button>
+                  {own && <>
+                    <button onClick={() => { setEditing(own); setOpen(""); }}>编辑此隧道</button>
                     <button className="danger" onClick={() => { remove(t.name); setOpen(""); }}>删除此隧道</button>
                   </>}
                 </div>

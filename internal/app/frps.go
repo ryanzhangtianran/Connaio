@@ -151,14 +151,13 @@ func (s *ToolService) HostKey(host string, port int) (string, error) {
 // KeyPair is an SSH key pair kept in ~/.connaio for a tunnel.
 type KeyPair struct {
 	Private string `json:"private"` // OpenSSH private key text, for the tunnel's private-key
-	Public  string `json:"public"`  // authorized_keys line
 	Path    string `json:"path"`    // the private key's file; the public one is beside it with .pub
 }
 
 // KeyPair loads ~/.connaio/<name>_ed25519, generating it (ed25519, no passphrase) only when missing,
 // so a key already installed on a server is never replaced.
 func (s *ToolService) KeyPair(name string) (KeyPair, error) {
-	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
+	if name == "" || strings.ContainsAny(name, `/\`) {
 		return KeyPair{}, errors.New("先填写隧道名称")
 	}
 	home, err := os.UserHomeDir()
@@ -188,12 +187,7 @@ func (s *ToolService) KeyPair(name string) (KeyPair, error) {
 	} else if err != nil {
 		return KeyPair{}, err
 	}
-	signer, err := ssh.ParsePrivateKey(text)
-	if err != nil {
-		return KeyPair{}, fmt.Errorf("%s 无法解析：%w", path, err)
-	}
-	pub := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey()))) + " connaio-" + name
-	return KeyPair{Private: string(text), Public: pub, Path: path}, nil
+	return KeyPair{Private: string(text), Path: path}, nil
 }
 
 // SSHLogin is a password login, used once to put a key on a server.
