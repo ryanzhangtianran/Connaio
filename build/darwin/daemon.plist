@@ -12,7 +12,7 @@
 		<string>connaio-core</string>
 		<string>-d</string><string>/Library/Application Support/Connaio Core</string>
 		<string>-ext-ctl-unix</string><string>/Library/Application Support/Connaio Core/core.sock</string>
-		<string>-config</string><string>bWl4ZWQtcG9ydDogNzg5OQptb2RlOiBydWxlCnJ1bGVzOgogIC0gTUFUQ0gsRElSRUNUCg==</string>
+		<string>-config</string><string>bWl4ZWQtcG9ydDogNzg5MAptb2RlOiBydWxlCnJ1bGVzOgogIC0gTUFUQ0gsRElSRUNUCg==</string>
 	</array>
 	<key>EnvironmentVariables</key>
 	<dict><key>CONNAIO_SOCKET_GROUP</key><string>admin</string></dict>
