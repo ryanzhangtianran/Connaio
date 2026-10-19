@@ -140,7 +140,7 @@ func TestBuildWithoutProfile(t *testing.T) {
 	}
 	var cfg map[string]any
 	_ = yaml.Unmarshal(b, &cfg)
-	if cfg["mixed-port"] != 7899 || cfg["rules"].([]any)[0] != "MATCH,DIRECT" || cfg["proxy-groups"] != nil {
+	if cfg["mixed-port"] != 7890 || cfg["rules"].([]any)[0] != "MATCH,DIRECT" || cfg["proxy-groups"] != nil {
 		t.Fatalf("empty build: %v", cfg)
 	}
 }
@@ -235,6 +235,19 @@ func TestUserItems(t *testing.T) {
 	if err := s.AddTunnel(map[string]any{"name": "vps", "type": "ssh", "server": "h", "port": 22}); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.AddTunnel(map[string]any{"name": "old", "type": "ssh", "server": "h", "port": 22}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EditTunnel("old", map[string]any{"name": "vps", "type": "ssh"}); err == nil {
+		t.Fatal("rename onto an existing tunnel accepted")
+	}
+	if err := s.EditTunnel("old", map[string]any{"name": "new", "type": "ssh", "server": "h2", "port": 22}); err != nil {
+		t.Fatal(err)
+	}
+	if items, _ := s.UserItems(); len(items.Tunnels) != 2 || items.Tunnels[1]["name"] != "new" || items.Tunnels[1]["server"] != "h2" {
+		t.Fatalf("edited tunnel: %+v", items.Tunnels)
+	}
+	_ = s.RemoveTunnel("new")
 	if err := s.PrependRule("DOMAIN,a.com,自动"); err != nil {
 		t.Fatal(err)
 	}

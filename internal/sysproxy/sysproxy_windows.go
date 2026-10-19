@@ -73,7 +73,7 @@ func refresh() {
 	}
 }
 
-// Current is the Internet Settings proxy ("127.0.0.1:7899") and whether it is enabled.
+// Current is the Internet Settings proxy ("127.0.0.1:7890") and whether it is enabled.
 func Current() (string, bool) {
 	k, err := registry.OpenKey(registry.CURRENT_USER, key, registry.QUERY_VALUE)
 	if err != nil {

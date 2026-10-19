@@ -110,7 +110,7 @@ func run(cmds [][]string) error {
 	return nil
 }
 
-// Current is the HTTP proxy the first enabled service points at ("127.0.0.1:7899") and whether
+// Current is the HTTP proxy the first enabled service points at ("127.0.0.1:7890") and whether
 // it is on; "" when there is none.
 func Current() (string, bool) {
 	services, err := services()

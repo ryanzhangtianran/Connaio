@@ -13,7 +13,7 @@ import (
 )
 
 // startCore runs a core from CONNAIO_CORE on a free mixed-port (a running Connaio may hold
-// 7899), with override on top of the default config. Skips without CONNAIO_CORE.
+// 7890), with override on top of the default config. Skips without CONNAIO_CORE.
 func startCore(t *testing.T, override string) (*CoreService, *ProfileService, int) {
 	t.Helper()
 	if os.Getenv("CONNAIO_CORE") == "" {

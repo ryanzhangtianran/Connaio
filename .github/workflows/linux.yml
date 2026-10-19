@@ -67,7 +67,7 @@ jobs:
           echo
           # the config the GUI pushes with enhanced mode on: TUN capture, fake-ip DNS, processes always looked up (appDefaults)
           curl -sf --unix-socket "$sock" -X PUT 'http://x/configs?force=true' -H 'Content-Type: application/json' \
-            -d '{"payload":"mixed-port: 7899\nmode: rule\nfind-process-mode: always\ncapture: {mode: tun}\ndns: {enable: true, enhanced-mode: fake-ip, nameserver: [8.8.8.8]}\nrules:\n  - MATCH,DIRECT\n"}'
+            -d '{"payload":"mixed-port: 7890\nmode: rule\nfind-process-mode: always\ncapture: {mode: tun}\ndns: {enable: true, enhanced-mode: fake-ip, nameserver: [8.8.8.8]}\nrules:\n  - MATCH,DIRECT\n"}'
           sleep 3
           ip -brief link
           curl -s -o /dev/null -w "no proxy set, through TUN: %{http_code}\n" http://www.gstatic.com/generate_204

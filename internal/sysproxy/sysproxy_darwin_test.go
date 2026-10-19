@@ -6,9 +6,9 @@ import (
 )
 
 func TestCommands(t *testing.T) {
-	set := setCommands([]string{"Wi-Fi"}, 7899)
-	if !slices.Equal(set[0], []string{"-setwebproxy", "Wi-Fi", "127.0.0.1", "7899"}) ||
-		!slices.Equal(set[2], []string{"-setsocksfirewallproxy", "Wi-Fi", "127.0.0.1", "7899"}) ||
+	set := setCommands([]string{"Wi-Fi"}, 7890)
+	if !slices.Equal(set[0], []string{"-setwebproxy", "Wi-Fi", "127.0.0.1", "7890"}) ||
+		!slices.Equal(set[2], []string{"-setsocksfirewallproxy", "Wi-Fi", "127.0.0.1", "7890"}) ||
 		!slices.Equal(set[3], append([]string{"-setproxybypassdomains", "Wi-Fi"}, bypass...)) {
 		t.Fatalf("set commands: %v", set)
 	}
@@ -18,14 +18,14 @@ func TestCommands(t *testing.T) {
 }
 
 func TestPointsAt(t *testing.T) {
-	out := "Enabled: Yes\nServer: 127.0.0.1\nPort: 7899\nAuthenticated Proxy Enabled: 0\n"
-	if !pointsAt(out, 7899) || pointsAt(out, 7890) {
+	out := "Enabled: Yes\nServer: 127.0.0.1\nPort: 7890\nAuthenticated Proxy Enabled: 0\n"
+	if !pointsAt(out, 7890) || pointsAt(out, 7898) {
 		t.Fatal("port match")
 	}
-	if pointsAt("Enabled: No\nServer: 127.0.0.1\nPort: 7899\n", 7899) {
+	if pointsAt("Enabled: No\nServer: 127.0.0.1\nPort: 7890\n", 7890) {
 		t.Fatal("disabled proxy is not ours")
 	}
-	if pointsAt("Enabled: Yes\nServer: 127.0.0.1\nPort: 7892\n", 7899) {
+	if pointsAt("Enabled: Yes\nServer: 127.0.0.1\nPort: 7892\n", 7890) {
 		t.Fatal("another client's proxy is not ours")
 	}
 }

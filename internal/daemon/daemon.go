@@ -13,7 +13,7 @@ import (
 )
 
 // BootConfig is what the daemon runs while no GUI is attached: no TUN, nothing captured.
-const BootConfig = "mixed-port: 7899\nmode: rule\nrules:\n  - MATCH,DIRECT\n"
+const BootConfig = "mixed-port: 7890\nmode: rule\nrules:\n  - MATCH,DIRECT\n"
 
 func sum(b []byte) string {
 	h := sha256.Sum256(b)

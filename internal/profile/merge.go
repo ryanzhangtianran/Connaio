@@ -14,7 +14,7 @@ import (
 
 // appDefaults are what Connaio needs; a profile and the override may change them.
 var appDefaults = map[string]any{
-	"mixed-port":        7899,
+	"mixed-port":        7890,
 	"mode":              "rule",
 	"log-level":         "info",
 	"find-process-mode": "always", // the activity page ranks traffic by process

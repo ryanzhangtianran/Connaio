@@ -14,7 +14,7 @@ case $op in
 enable)
 	install -d -m 755 /var/lib/connaio "$dir"
 	# what it runs until the GUI hands it the real config (daemon.BootConfig)
-	[ -f "$dir/config.yaml" ] || printf 'mixed-port: 7899\nmode: rule\nrules:\n  - MATCH,DIRECT\n' >"$dir/config.yaml"
+	[ -f "$dir/config.yaml" ] || printf 'mixed-port: 7890\nmode: rule\nrules:\n  - MATCH,DIRECT\n' >"$dir/config.yaml"
 	systemctl enable --now "connaio-core@$uid.service"
 	;;
 disable)

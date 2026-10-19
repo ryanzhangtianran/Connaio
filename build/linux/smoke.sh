@@ -10,7 +10,7 @@ dbus-run-session -- xvfb-run -a sh -c '
 		sleep 1
 	done
 	echo
-	code=$(curl -s -o /dev/null -w "%{http_code}" -x http://127.0.0.1:7899 http://www.gstatic.com/generate_204)
+	code=$(curl -s -o /dev/null -w "%{http_code}" -x http://127.0.0.1:7890 http://www.gstatic.com/generate_204)
 	echo "through mixed-port: $code"
 	[ "$code" = 204 ] || ok=1
 	kill $pid
