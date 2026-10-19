@@ -22,6 +22,8 @@ function store<T>(initial: T) {
 }
 
 const logs = store<Log[]>([]);
+// session is the traffic since the app started, from the per-second ticks: read along with useHistory
+export const session = { up: 0, down: 0 };
 const history = store<Traffic[]>([]);
 
 let seq = 0;
@@ -38,7 +40,11 @@ export function start() {
       pending = [];
     }, FLUSH_MS);
   });
-  const offTraffic = on("traffic", (d) => history.set([...history.get().slice(1 - HISTORY), d]));
+  const offTraffic = on("traffic", (d) => {
+    session.up += d.up;
+    session.down += d.down;
+    history.set([...history.get().slice(1 - HISTORY), d]);
+  });
   return () => { offLog(); offTraffic(); clearTimeout(flush); flush = undefined; pending = []; };
 }
 

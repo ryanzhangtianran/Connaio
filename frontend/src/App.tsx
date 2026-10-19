@@ -14,15 +14,13 @@ import Devices from "./Devices";
 import { AboutPage, Dns, General } from "./Settings";
 import Profiles from "./Profiles";
 import ErrorBoundary from "./ErrorBoundary";
-import { icons } from "./icons";
+import { Icon } from "./icons";
 import { platform } from "./format";
 import { on, usePoll, useClickAway } from "./hooks";
 import { start as startStore } from "./store";
 
 // NavIcon is the page's line icon, grey or, for the page shown, the accent colour.
-const NavIcon = ({ page }: { page: string }) => (
-  <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: icons[page] ?? "" }} />
-);
+const NavIcon = ({ page }: { page: string }) => <Icon name={page} />;
 
 // WindowButtons stand in for the title bar Linux windows go without (frameless, see app.go); close
 // hides to the tray as the system one did.
@@ -103,7 +101,7 @@ export default function App() {
 
   // one list, from what you check most to what you touch least; only the page shown is mounted
   const pages: { key: string; title: string; page: React.ReactNode }[] = [
-    { key: "activity", title: "活动", page: <Activity status={status} activity={activity} /> },
+    { key: "activity", title: "活动", page: <Activity status={status} activity={activity} sysProxy={sysProxy} enhanced={enhanced} rooted={rooted} go={setCurrent} /> },
     { key: "proxies", title: "策略", page: <Proxies status={status} /> },
     { key: "tunnels", title: "反向", page: <Tunnels status={status} /> },
     { key: "vpn", title: "VPN", page: <Vpn status={status} /> },
@@ -127,7 +125,8 @@ export default function App() {
         ))}
       </nav>
       <main className="main">
-        <div className="topbar" onDoubleClick={(e) => platform === "linux" && e.target === e.currentTarget && Window.ToggleMaximise()}>
+        <div className="topbar" onDoubleClick={(e) => platform === "linux" && (e.target === e.currentTarget || (e.target as Element).classList.contains("page-title")) && Window.ToggleMaximise()}>
+          <h1 className="page-title">{pages.find((p) => p.key === current)?.title}</h1>
           <EventsButton />
           <button
             className="pill"

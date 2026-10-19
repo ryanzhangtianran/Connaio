@@ -18,8 +18,8 @@ func TestActivity(t *testing.T) {
 	s, _, port := startCore(t, "")
 
 	// keep one connection open through the mixed-port so there is something to summarize
-	ip, err := s.ExternalIP()
-	t.Logf("external ip %q err=%v", ip, err)
+	ip, err := s.ExternalInfo()
+	t.Logf("external ip %+v err=%v", ip, err)
 	go http.Get(fmt.Sprintf("http://127.0.0.1:%d", port)) // the core answers on mixed-port; harmless if it errors
 	time.Sleep(300 * time.Millisecond)
 

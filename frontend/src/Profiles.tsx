@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ProfileService, SettingsService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Profiles as ProfilesData } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import { sizeText, words } from "./format";
+import { ago, sizeText, words } from "./format";
 import { on } from "./hooks";
 
 const host = (url: string) => { try { return new URL(url).host; } catch { return url; } };
@@ -30,16 +30,6 @@ const overrideFields = [
   // lists the override extends or trims
   "prepend-rules", "append-rules", "prepend-proxies", "prepend-proxy-groups", "remove-proxies", "remove-proxy-groups", "rules",
 ];
-
-// ago is a short relative time, e.g. 刚刚, 5 分钟前, 3 天前.
-function ago(iso: string) {
-  const s = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (!(s >= 0)) return "—";
-  if (s < 60) return "刚刚";
-  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`;
-  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`;
-  return `${Math.floor(s / 86400)} 天前`;
-}
 
 // Profiles lists subscriptions and local configs (click to select, double-click to use), the
 // override merged on top, and where it is all stored.

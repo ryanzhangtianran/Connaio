@@ -374,6 +374,11 @@ func (s *ToolService) ExitIP(policy string) (IPInfo, error) {
 	}
 	defer done()
 	c.Timeout = 6 * time.Second
+	return lookupIP(c)
+}
+
+// lookupIP asks exitAPI through c where its requests come out, twice before giving up.
+func lookupIP(c *http.Client) (IPInfo, error) {
 	resp, err := c.Get(exitAPI)
 	if err != nil {
 		resp, err = c.Get(exitAPI)

@@ -47,3 +47,13 @@ export const errText = (e: unknown, fallback = "") => String(e).replace(/^\w*Err
 
 // nonNull drops the nulls Go's bindings allow in slices of maps.
 export const nonNull = <T,>(a: (T | null)[] | null | undefined): T[] => (a ?? []).filter((x): x is T => x != null);
+
+// ago is a short relative time, e.g. 刚刚, 5 分钟前, 3 天前.
+export function ago(iso: string) {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (!(s >= 0)) return "—";
+  if (s < 60) return "刚刚";
+  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`;
+  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`;
+  return `${Math.floor(s / 86400)} 天前`;
+}

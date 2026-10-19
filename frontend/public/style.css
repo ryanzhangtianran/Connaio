@@ -29,7 +29,7 @@
   --bad: #ff453a;
   --control-h: 28px;
   --gap: 12px; /* between floating cards, and from them (and the sidebar) to the window edge */
-  --chrome: calc(40px + 18px + var(--gap)); /* topbar + .page's top padding + the sidebar's bottom margin: a full-height page ends level with the sidebar */
+  --chrome: calc(52px + 14px + var(--gap)); /* topbar + .page's top padding + the sidebar's bottom margin: a full-height page ends level with the sidebar */
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
   --rounded: ui-rounded, "SF Pro Rounded", -apple-system, "PingFang SC", system-ui, sans-serif; /* numbers */
   color-scheme: light dark;
@@ -82,7 +82,8 @@ button { font: inherit; color: inherit; }
 
 /* main */
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.topbar { height: 40px; flex: none; display: flex; align-items: flex-start; gap: 8px; padding: var(--gap) var(--gap) 0 28px; /* pills at the left in line with the cards (.page), their tops level with the sidebar's */ --wails-draggable: drag; }
+.topbar { height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: var(--gap) var(--gap) 0 28px; /* the title in line with the cards (.page), the pills at the right */ --wails-draggable: drag; }
+.page-title { flex: 1; min-width: 0; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
 .pill {
   display: flex; align-items: center; gap: 6px; min-width: 96px; justify-content: center; padding: 3px 12px;
   border: 0; border-radius: 999px; background: var(--pill); font-size: 12px; font-weight: 500;
@@ -92,7 +93,7 @@ button { font: inherit; color: inherit; }
 .dot.on { background: var(--good); }
 .dot.warn { background: var(--warn); }
 .dot.part { background: var(--warn); } /* partial enhancement: orange, as on the tray icon */
-.menu.events-menu { left: 0; width: 380px; max-height: 420px; overflow: auto; padding: 12px 16px; border-radius: 14px; }
+.menu.events-menu { right: 0; width: 380px; max-height: 420px; overflow: auto; padding: 12px 16px; border-radius: 14px; }
 .events-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 13px; color: var(--text-2); }
 .events-head .link, .events-head .link:hover { display: inline; width: auto; border: 0; background: none; padding: 0; font-size: 12px; color: var(--accent); }
 .event-row { padding: 8px 0; user-select: text; -webkit-user-select: text; }
@@ -102,59 +103,43 @@ button { font: inherit; color: inherit; }
 .event-text { margin-top: 3px; font-size: 13px; line-height: 1.45; word-break: break-word; }
 .topbar .events { position: relative; --wails-draggable: no-drag; }
 .pill .dot { width: 6px; height: 6px; }
-.page { flex: 1; overflow: auto; padding: 18px 28px 28px; } /* a wider margin beside the sidebar than between cards */
+.page { flex: 1; overflow: auto; padding: 14px 28px 28px; } /* a wider margin beside the sidebar than between cards */
 /* full-height pages end level with the sidebar; the margin takes back .page's bottom padding, which would scroll them */
-.dash, .rules-page, .profiles-page, .logs-card { height: calc(100vh - var(--chrome)); margin-bottom: calc(var(--gap) - 28px); }
+.activity, .dash, .rules-page, .profiles-page, .logs-card { height: calc(100vh - var(--chrome)); margin-bottom: calc(var(--gap) - 28px); }
 .hint { margin-top: 10px; max-width: 640px; font-size: 12px; line-height: 1.5; color: var(--text-2); text-wrap: pretty; }
 
-/* header facts */
-.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 4px 0 20px; padding: 0 20px; } /* in line with the cards' columns and text */
-.fact { min-width: 0; }
-.fact .label { font-size: 12px; color: var(--text-2); }
-.fact .value { font-size: 15px; font-weight: 500; letter-spacing: 0; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu { position: absolute; z-index: 10; margin-top: 4px; padding: 4px; border-radius: 10px; background: var(--card); backdrop-filter: blur(30px); box-shadow: 0 8px 30px rgba(0,0,0,.18); border: 1px solid var(--line); }
 .menu button { display: flex; justify-content: space-between; gap: 16px; width: 100%; padding: 6px 12px; border: 0; border-radius: 6px; background: none; text-align: left; font-size: 13px; }
 .menu button:hover { background: var(--accent); color: #fff; }
 
 /* cards */
-/* activity fills the window: the top two rows share the spare height, the page scrolls only when too small */
-.activity { display: flex; flex-direction: column; }
-/* every card at a set height so rows line up and nothing scrolls at the minimum
-   window size (app.go): figures across the top, then the charts, then the lists, which scroll */
-.grid {
-  display: grid; gap: 16px; /* not --gap: that also places the macOS window buttons */
-  grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: auto 190px 340px;
-  grid-template-areas:
-    "lat lat lat conn conn conn total total total exit exit exit"
-    "up up up down down down hours hours hours hours hours hours"
-    "rank rank rank rank watch watch watch watch tools tools tools tools"; /* figures in quarters, lists in thirds */
-}
-.cell { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.cell > .card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.card-scroll { flex: 1; min-height: 0; overflow: auto; margin: 6px -14px 0 0; padding-right: 14px; } /* its scrollbar in the card's padding, clear of the text */
-.grid .card { padding: 16px 20px; }
-.grid > .card { display: flex; flex-direction: column; }
-.grid .stats { margin-top: auto; padding-top: 12px; }
-.split { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; padding-top: 14px; }
-.split .right { text-align: right; }
 .split-bar { display: flex; gap: 4px; height: 10px; margin-top: 8px; }
 .split-bar:empty { border-radius: 5px; background: var(--track); }
 .split-bar i { min-width: 6px; border-radius: 5px; }
 .card {
-  position: relative; overflow: hidden; border-radius: 18px; background: var(--card); border: 1px solid var(--card-line);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); padding: 16px 18px; min-width: 0;
+  position: relative; overflow: hidden; border-radius: 20px; background: var(--card); border: 1px solid var(--card-line);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 4px 16px rgba(0, 0, 0, 0.04); padding: 16px 18px; min-width: 0;
 }
+/* a card's heading: its icon, then the title in the text colour */
+.card-title { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.card-icon { width: 16px; height: 16px; flex: none; color: var(--text-2); }
+.btn-icon { width: 15px; height: 15px; flex: none; }
+.icon-btn:hover:not(:disabled) { color: var(--text); }
+.icon-btn:disabled { opacity: 0.5; }
+.icon-btn.spin .btn-icon { animation: spin .8s linear infinite; }
+/* a chip: a small rounded tag beside a title, green, red or blue for a state */
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: 999px; background: var(--track); color: var(--text-2); font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.chip .dot { width: 6px; height: 6px; }
+.chip.good { background: color-mix(in srgb, var(--good) 16%, transparent); color: color-mix(in srgb, var(--good) 75%, var(--text)); }
+.chip.bad { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+.chip.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: color-mix(in srgb, var(--warn) 80%, var(--text)); }
+.chip.accent { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.dot.err { background: var(--bad); }
 .card .label { font-size: 12px; color: var(--text-2); letter-spacing: 0.2px; display: flex; align-items: center; gap: 6px; }
 .card .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 20px; }
 .big { font-size: 30px; font-weight: 400; letter-spacing: -0.5px; line-height: 1.1; margin-top: 4px; font-variant-numeric: tabular-nums; }
-.big small, .mid small { font-size: 13px; font-weight: 500; margin-left: 3px; letter-spacing: 0; color: var(--text-2); }
-.mid { font-size: 18px; font-weight: 400; letter-spacing: -0.2px; font-variant-numeric: tabular-nums; }
-.big, .mid, .fact .value, .rank .bytes, .tile .foot { font-family: var(--rounded); }
-.stats { display: grid; grid-template-columns: repeat(3, 1fr); align-items: baseline; }
-.stats > div { padding: 0 14px; border-left: 1px solid var(--line); }
-.stats > div:first-child { padding-left: 0; border-left: 0; }
-.stats .label { margin-bottom: 4px; }
-.stats .mid { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.big small { font-size: 13px; font-weight: 500; margin-left: 3px; letter-spacing: 0; color: var(--text-2); }
+.big, .rank .bytes, .tile .foot { font-family: var(--rounded); }
 .muted { color: var(--text-2); }
 .error { color: var(--bad); white-space: pre-wrap; user-select: text; -webkit-user-select: text; }
 .btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 8px; padding: 0 14px; background: var(--card); font-size: 13px; white-space: nowrap; }
@@ -162,21 +147,18 @@ button { font: inherit; color: inherit; }
 .btn:disabled { opacity: 0.5; }
 .icon-btn { border: 0; background: none; padding: 0; color: var(--text-2); display: inline-flex; }
 
-.speed-card { min-height: 128px; display: flex; flex-direction: column; }
-.spark { position: relative; flex: 1; min-height: 44px; margin-top: 8px; } /* below the number, inside the card's padding */
+.spark { position: relative; flex: 1; min-height: 40px; margin: 6px -18px -16px; } /* edge to edge along the card's foot */
 .spark svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.spark-grid { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
-.spark-grid span { position: absolute; right: 0; bottom: 2px; font: 500 10px var(--rounded); color: var(--text-2); }
 .spark-cross { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
 .spark-dot { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; box-shadow: 0 0 0 2px var(--card); }
 .spark-tip {
-  position: absolute; top: calc(22% + 4px); padding: 2px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none;
+  position: absolute; top: 4px; padding: 2px 8px; border-radius: 6px; white-space: nowrap; pointer-events: none;
   background: var(--card); border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.08); font: 500 11px var(--rounded);
 }
 
 .seg { display: inline-flex; justify-self: start; padding: 2px; border-radius: 8px; background: var(--track); }
 .seg button { border: 0; border-radius: 6px; padding: 3px 16px; background: none; font-size: 12px; white-space: nowrap; }
-.seg button.on { background: var(--seg-on); color: #fff; font-weight: 500; }
+.seg button.on { background: var(--accent); color: #fff; font-weight: 500; }
 
 .rank { display: flex; flex-direction: column; gap: 10px; }
 .rank .row { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 10px; row-gap: 4px; min-height: 24px; }
@@ -414,12 +396,6 @@ tr.muted td.rule-actions { text-decoration: none; }
 .list-add .btn { height: 24px; font-size: 12px; border-radius: 6px; }
 .setting-control .ctl { width: 80px; } /* one column of equal-width controls */
 .setting-control .btn.ctl { height: 24px; font-size: 12px; border-radius: 6px; }
-.ranking { display: flex; flex-direction: column; min-height: 0; }
-/* four rows tall (24px rows, 10px gaps), scrolling a row at a time; laid out absolutely so a long
-   list doesn't add to the card's height: WebKit sizes the grid's fr rows from content */
-.rank-scroll { flex: 1; min-height: 0; margin-top: 12px; overflow: hidden; } /* eight rows, whole */
-
-.ranking .head { margin-bottom: 4px; }
 .client-icon { width: 18px; height: 18px; flex: none; }
 .client-icon.device { display: grid; place-items: center; border-radius: 6px; background: var(--track); color: var(--text-2); }
 .client-icon.device svg { width: 12px; height: 12px; }
@@ -470,8 +446,6 @@ tr.muted td.rule-actions { text-decoration: none; }
 .menu.picker-menu button { font-size: 12px; padding: 5px 10px; }
 .menu.picker-menu button.current { font-weight: 500; color: var(--accent); }
 .menu.picker-menu button.current:hover { color: #fff; }
-.tool-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; height: 100%; }
-.tools-card .btn { width: 72px; height: 24px; padding: 0; font-size: 12px; border-radius: 6px; } /* one width everywhere, so the column of buttons lines up */
 .tool-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 72px; align-items: center; gap: 10px; min-height: 40px; border-top: 1px solid var(--line); font-size: 12px; }
 .tool-title { color: var(--text); }
 .tool-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -482,16 +456,11 @@ tr.muted td.rule-actions { text-decoration: none; }
 .tool-log .diag-section + .diag-section { margin-top: 10px; }
 .ip-big { margin-top: 6px; font: 400 22px/1.2 var(--rounded); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ip-big.muted { font-size: 14px; line-height: 26.4px; } /* 查询中… and — are no address: the 22px line's height, not its size */
-.exit-stats { grid-template-columns: auto minmax(0, 1fr); } /* the place is short; the ISP takes the rest */
-.exit-stats > div { padding: 0 12px; }
-.exit-stats > div:first-child { padding-left: 0; }
-.exit-value { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .head-actions { display: flex; align-items: center; gap: 12px; }
 .link-btn { border: 0; background: none; padding: 0; font-size: 12px; color: var(--accent); cursor: pointer; }
 .link-btn:disabled { opacity: 0.5; }
 .link-btn.danger { color: var(--bad); }
 .leak-servers { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12px; text-align: right; }
-.exit-error { margin-top: 8px; color: var(--bad); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .watch-route { display: flex; flex-direction: column; gap: 3px; padding: 10px 0; border-top: 1px solid var(--line); }
 .watch-route:first-child { border-top: 0; padding-top: 0; }
 .watch-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
@@ -560,3 +529,150 @@ tr.muted td.rule-actions { text-decoration: none; }
 /* a table under form rows: its cells' padding would indent it past the inputs */
 .table-wrap.tight { margin-left: -8px; margin-right: -8px; }
 .card .label.section-label { margin: 18px 0 -8px; } /* a section inside a card: the row below keeps its own top margin */
+
+/* activity: a grid one window high, as the reference dashboard: the status and speeds, the switches,
+   four small cards, then the lists, which take the rest and scroll inside */
+.activity {
+  display: grid; gap: 14px; grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1.05fr) 64px minmax(0, 0.9fr) minmax(0, 1.15fr); /* the small cards a little lower than the rows around them */
+  grid-template-areas:
+    "hero hero hero hero hero hero up up up down down down"
+    "mode mode mode mode mode mode sys sys sys tun tun tun"
+    "lan lan lan health health health svc svc svc mem mem mem"
+    "list list list list list list side side side side side side"; /* halves, so every edge lines up with a row above */
+}
+.activity > .card { display: flex; flex-direction: column; min-height: 0; }
+.activity .head { min-height: 22px; }
+.activity .head-actions { gap: 8px; min-width: 0; }
+/* the status card: a wavy pale-blue field at the right holding the pause button, a scalloped disc */
+.hero > :not(.hero-wave) { position: relative; }
+.hero > .card-title { max-width: 66%; } /* the stats and the address's row (the button at its end) run across the field */
+.hero-wave { position: absolute; top: 0; right: 0; width: 34%; height: 100%; fill: color-mix(in srgb, var(--accent) 13%, transparent); pointer-events: none; }
+.hero-btn { position: relative; flex: none; width: 104px; height: 104px; margin: -14px 4% -14px auto; padding: 0; /* in the address's row, centred with it */ border: 0; background: none; color: #fff; transition: transform .2s; }
+.hero-btn:hover { transform: rotate(12deg) scale(1.04); }
+.hero-btn:active { transform: scale(.96); }
+.hero-cookie svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--accent); filter: drop-shadow(0 6px 14px color-mix(in srgb, var(--accent) 40%, transparent)); transition: fill .2s; }
+.hero-btn.paused .hero-cookie svg { fill: var(--warn); filter: drop-shadow(0 6px 14px color-mix(in srgb, var(--warn) 40%, transparent)); }
+.hero-glyph { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; }
+.hero-ip { display: flex; align-items: center; gap: 16px; margin: auto 0 28px; padding-top: 12px; min-width: 0; } /* auto here and above the stats: between the head and them, a little above the middle */
+.cc { position: relative; display: grid; place-items: center; flex: none; width: 50px; height: 50px; }
+.cc svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--track); }
+.cc b { position: relative; font: 600 14px var(--rounded); color: var(--text-2); }
+.hero-main { min-width: 0; }
+.head-actions .picker { flex: none; max-width: 220px; } /* a share of a box as wide as its contents is a sliver */
+.ip-huge { font: 700 31px/1.1 var(--rounded); letter-spacing: -0.3px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ip-huge.muted { font-size: 20px; font-weight: 500; }
+.chips { display: flex; align-items: center; gap: 8px; margin-top: 9px; min-width: 0; }
+.chips .chip { height: 22px; padding: 0 10px; font-size: 12px; }
+.hero-stats { display: flex; gap: 44px; margin-top: auto; padding-right: 8px; } /* packed at the left, the organisation last, running on as far as it needs */
+.hero-stats > div { flex: none; }
+.hero-stats > div:last-child { flex: 0 1 auto; }
+.hero-stats > div { min-width: 0; }
+.hero-stats .label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hero-stats .val { margin-top: 3px; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.hero-stats .val small { font-weight: 500; color: var(--text-2); }
+.speed-card .big { margin-top: 16px; }
+.speed-card .big + .muted { margin-top: 6px; }
+.activity .row-card { flex-direction: row; align-items: center; gap: 12px; padding: 0 16px; }
+.mode-seg { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-left: 8px; }
+.mode-seg button { display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; border: 0; border-radius: 12px; background: var(--track); font-size: 13px; font-weight: 500; transition: background .15s, color .15s; }
+.mode-seg button:hover:not(.on) { background: var(--active); }
+.mode-seg button.on { background: var(--accent); color: #fff; }
+.toggle-icon { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 11px; background: var(--track); transition: background .15s; }
+.toggle-icon.on { background: var(--accent); }
+.toggle-icon.part { background: var(--warn); }
+.toggle-icon:is(.on, .part) .card-icon { color: #fff; }
+.toggle-icon.small { width: 30px; height: 30px; border-radius: 9px; }
+.toggle-text { flex: 1; min-width: 0; }
+.toggle-title { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; }
+.toggle-text .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inset-row { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 8px 10px; border-radius: 12px; background: var(--track); }
+/* the sites: a logo on a light tile, a dot at its corner for whether it answered, the name over the time */
+.svc-grid { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 8px; margin-top: 10px; min-height: 0; }
+.svc { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 10px; border-radius: 14px; background: var(--track); }
+.svc-logo { position: relative; display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px; background: var(--card); color: var(--text); }
+.svc-logo .brand { width: 18px; height: 18px; }
+.svc-logo .dot { position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; box-shadow: 0 0 0 2px var(--card); }
+.svc-text { display: flex; flex-direction: column; min-width: 0; }
+.svc-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.svc-ms { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--text-2); white-space: nowrap; }
+.traffic-foot { margin-top: auto; }
+.legend { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--text-2); }
+.legend span { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.legend i { width: 7px; height: 7px; border-radius: 50%; }
+.legend b { color: var(--text); font-weight: 600; }
+/* the lists: tabs as pills in the head, the shown one blue, its pane scrolling under them */
+.tabs { display: flex; gap: 6px; min-width: 0; }
+.tabs button { display: flex; align-items: center; gap: 5px; height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--track); font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .15s, color .15s; }
+.tabs button:hover:not(.on) { background: var(--active); }
+.tabs button.on { background: var(--accent); color: #fff; }
+.tabs b { font: 600 13px var(--rounded); font-variant-numeric: tabular-nums; }
+.pane { flex: 1; min-height: 0; overflow: auto; margin: 10px -18px -16px; padding: 0 18px 16px; }
+.pane-empty { flex: 1; display: grid; place-items: center; }
+/* the ranking: today's hours at the left, the top entries beside them, scrolling past the first few */
+.rank-pane { display: flex; gap: 28px; }
+.rank-left { flex: 1.15; min-width: 0; display: flex; flex-direction: column; }
+.rank-pane .hours { margin-top: 34px; }
+.traffic-sum .big { margin-top: 0; font-size: 26px; }
+.traffic-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.traffic-range { display: flex; align-items: center; gap: 2px; }
+.traffic-range button:not(.link-btn) { border: 0; border-radius: 6px; padding: 2px 8px; background: none; font-size: 12px; color: var(--text-2); }
+.traffic-range button.on { background: var(--track); color: var(--text); font-weight: 600; }
+.traffic-range .link-btn { margin-left: 8px; }
+.traffic-sum .split-bar { height: 6px; margin-top: 10px; }
+.traffic-sum .split-bar i { border-radius: 3px; }
+.traffic-sum .legend { justify-content: flex-start; gap: 18px; margin-top: 8px; }
+.rank-pane .rank { flex: 1; min-width: 0; overflow: hidden; margin-top: 4px; gap: 13px; } /* sliced to the rows that fit, see RankPane */
+.group-tiles { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 58px; gap: 8px; align-content: start; }
+.gtile { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 12px 0 10px; border: 0; border-radius: 14px; background: var(--track); text-align: left; transition: background .15s; }
+.gtile:hover { background: var(--active); }
+.gtile .mono { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 11px; background: var(--card); font-size: 15px; font-weight: 600; color: var(--text-2); }
+.gtext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.g-name { font-size: 11px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-now { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-ms { flex: none; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.link-chip { border: 0; cursor: pointer; gap: 2px; padding-right: 4px; }
+.link-chip:hover { background: var(--active); color: var(--text); }
+.chip-icon { width: 13px; height: 13px; }
+/* the network checks: three compact rows under the head */
+.health-rows { flex: 1; display: flex; flex-direction: column; justify-content: center; margin-top: 4px; min-height: 0; }
+/* a check: its name over its detail (the full width, the card being narrow), the state or fix at the right */
+.health-card .tool-row { grid-template-columns: minmax(0, 1fr) 64px; grid-template-areas: "title action" "detail action"; row-gap: 1px; min-height: 0; padding: 7px 0; }
+.health-card .tool-title { grid-area: title; font-weight: 500; }
+.health-card .tool-detail { grid-area: detail; }
+.health-card .tool-action { grid-area: action; }
+.health-card .tool-row:first-child { border-top: 0; }
+.health-card .tool-row .btn { width: 64px; height: 22px; padding: 0; font-size: 12px; border-radius: 6px; }
+.diag-sheet .tool-log { min-height: 260px; max-height: 420px; }
+/* 进程监视 on the activity page: each route a tile, as the policy groups are */
+.route-tiles { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: min-content; gap: 8px; align-content: start; margin-top: 14px; }
+.route-tiles > .muted { grid-column: 1 / -1; }
+.route-tiles .watch-route { gap: 4px; padding: 10px 14px; border: 0; border-radius: 14px; background: var(--track); font-size: 12px; }
+.route-tiles .watch-route:first-child { padding-top: 10px; }
+.route-tiles .watch-chain { font-size: 13px; }
+.gtile .mono.flag { font-size: 22px; }
+.list-card .seg button { padding-inline: 11px; } /* two of them, the tabs and the count share a half-width head */
+.chips .picker.chip { height: 22px; max-width: 200px; gap: 4px; padding: 0 8px 0 10px; font-size: 12px; font-weight: 600; }
+.chips .picker.chip svg { color: currentColor; opacity: .7; }
+.chips .picker.chip:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.chips .icon-btn { flex: none; }
+/* the lists' head: more room under the tabs; with wider fonts (Linux) the count gives way, not the row */
+.list-card .pane { margin-top: 16px; }
+.list-card .tabs { flex: none; }
+.list-card .head-actions { flex: 0 1 auto; justify-content: flex-end; }
+.list-card .head-actions > * { flex: none; }
+.list-card .head-actions > .link-chip { flex: 0 1 auto; min-width: 0; }
+.link-chip { overflow: hidden; }
+/* Linux and Windows: the switch drawn, WebKit's native one (<input switch>, see Switch) being macOS's
+   alone; WebView2, Chromium, would show a plain checkbox */
+:is(.linux, .windows) input[switch] {
+  appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 36px; height: 20px; margin: 0;
+  border-radius: 10px; background: var(--active); transition: background .2s; cursor: pointer;
+}
+:is(.linux, .windows) input[switch]::before {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .2s;
+}
+:is(.linux, .windows) input[switch]:checked { background: var(--accent); }
+:is(.linux, .windows) input[switch]:checked::before { transform: translateX(16px); }
+:is(.linux, .windows) input[switch]:disabled { opacity: .5; cursor: default; }

@@ -131,6 +131,8 @@ type CoreService struct {
 	latMu sync.Mutex // Latency's cache, and its one-at-a-time measurement
 	lat   Latency
 	latAt time.Time
+
+	coreMem atomic.Int64 // the core's last report on its /memory stream, see Memory
 }
 
 // restarting counts GUI-initiated core restarts in progress (Restart, moving onto the daemon): the
@@ -143,6 +145,7 @@ func (s *CoreService) ServiceStartup(ctx context.Context, _ application.ServiceO
 		// comes up later (a restart, the crash recovery in streamTraffic) is picked up by them
 		go s.streamLogs(ctx)
 		go s.countTraffic(ctx)
+		go s.streamMemory(ctx)
 		var err error
 		if daemon.Installed() {
 			if err = s.core.Attach(ctx, daemon.Socket, daemon.LogPath); err != nil {

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/ryanzhangtianran/Connaio/internal/run"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -195,19 +194,56 @@ func (s *CoreService) exitOf(policy string) string {
 	return policy
 }
 
-// ExternalIP is the address the internet sees for traffic through the core's mixed-port.
-func (s *CoreService) ExternalIP() (string, error) {
+// ExternalInfo is where traffic through the core's rules comes out: the address, where it is and
+// whose network.
+func (s *CoreService) ExternalInfo() (IPInfo, error) {
 	port, err := mixedPort(s.core)
 	if err != nil {
-		return "", err
+		return IPInfo{}, err
 	}
-	resp, err := oneShotClient(port, 8*time.Second).Get("https://api.ipify.org")
+	return lookupIP(oneShotClient(port, 8*time.Second))
+}
+
+// Service is a well-known site reached through the rules: ms to its first response, 0 when none came.
+type Service struct {
+	Name string `json:"name"`
+	Ms   int    `json:"ms"`
+}
+
+var serviceURLs = []struct{ name, url string }{
+	{"Google", "https://www.google.com/generate_204"},
+	{"GitHub", "https://github.com"},
+	{"Claude", "https://claude.ai"},
+	{"ChatGPT", "https://chatgpt.com"},
+}
+
+// Services times a request to each of serviceURLs through the mixed-port, all at once; any answer,
+// a redirect or a refusal included, counts as reached. A site gets a second try: the first
+// connection through a node just after the core starts can stall with no answer.
+func (s *CoreService) Services() ([]Service, error) {
+	port, err := mixedPort(s.core)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	defer resp.Body.Close()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 64))
-	return strings.TrimSpace(string(b)), err
+	out := make([]Service, len(serviceURLs))
+	var wg sync.WaitGroup
+	for i, sv := range serviceURLs {
+		out[i].Name = sv.name
+		wg.Go(func() {
+			c := oneShotClient(port, 5*time.Second)
+			c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+			for range 2 {
+				start := time.Now()
+				if resp, err := c.Head(sv.url); err == nil {
+					resp.Body.Close()
+					out[i].Ms = ms(start)
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
+	return out, nil
 }
 
 func ms(start time.Time) int { return max(1, int(time.Since(start).Milliseconds())) }
