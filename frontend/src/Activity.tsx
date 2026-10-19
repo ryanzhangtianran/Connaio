@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Clipboard } from "@wailsio/runtime";
 import { CoreService, DeviceService, EnhancedService, SettingsService, SystemProxyService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Activity as ActivityData, Conn, DiagSection, Group, IPInfo, LanInfo, Latency, Memory, RepairItem, Service, Status, Usage } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
@@ -100,7 +100,11 @@ export function Picker({ value, options, onChange, label, className = "" }: { va
         <svg viewBox="0 0 10 6" width="10" height="6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
       </button>
       {at && (
-        <div className="menu picker-menu" style={{ top: at.bottom + 4, right: window.innerWidth - at.right, minWidth: at.width }}>
+        // it opens toward the side with room: from a picker in the left half (the floating monitor's) to the right
+        <div className="menu picker-menu" style={{
+          top: at.bottom + 4, minWidth: at.width, maxHeight: Math.min(280, window.innerHeight - at.bottom - 12),
+          ...(at.left < window.innerWidth / 2 ? { left: at.left } : { right: window.innerWidth - at.right }),
+        }}>
           {options.map((o) => <button key={o} className={o === value ? "current" : ""} onClick={() => onChange(o)}>{o}</button>)}
         </div>
       )}
@@ -439,21 +443,7 @@ function RankPane({ activity, by, proxyOnly }: { activity: ActivityData | null; 
   const pick = (s: { direct: number; proxy: number }) => (proxyOnly ? s.proxy : s.direct + s.proxy);
   const lists: (Usage[] | null | undefined)[] = [activity?.byProcess, activity?.byHost, activity?.byPolicy];
   // as many whole rows as the pane is tall: no scrollbar, no row cut in half
-  const box = useRef<HTMLDivElement>(null);
-  const [fit, setFit] = useState(6);
-  useEffect(() => {
-    const el = box.current!;
-    const measure = () => {
-      const row = el.firstElementChild as HTMLElement | null;
-      if (!row?.classList.contains("row")) return;
-      const gap = parseFloat(getComputedStyle(el).rowGap) || 0;
-      setFit(Math.max(1, Math.floor((el.clientHeight + gap) / (row.offsetHeight + gap))));
-    };
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  const rows = (lists[by] ?? []).filter((r) => pick(r) > 0).sort((a, b) => pick(b) - pick(a)).slice(0, fit);
+  const rows = (lists[by] ?? []).filter((r) => pick(r) > 0).sort((a, b) => pick(b) - pick(a)).slice(0, 30);
   const peak = Math.max(1, ...rows.map(pick));
   return (
     <div className="pane rank-pane">
@@ -461,7 +451,7 @@ function RankPane({ activity, by, proxyOnly }: { activity: ActivityData | null; 
         <TrafficSum activity={activity} />
         <HourChart values={(activity?.hours ?? []).map(pick)} />
       </div>
-      <div ref={box} className={`rank ${by === 0 ? "with-icons" : ""}`}>
+      <div className={`rank ${by === 0 ? "with-icons" : ""}`}>
         {rows.length === 0 ? <div className="muted small">今天还没有流量</div> : rows.map((r) => (
             <div key={r.name} className="row">
               {by === 0 && <ClientIcon path={r.icon} />}

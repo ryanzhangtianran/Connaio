@@ -90,10 +90,10 @@ func (s *ToolService) checkProxy() RepairItem {
 	if addr == ours {
 		who = "Connaio"
 	}
-	if listening(addr) {
-		item.Detail = addr + "，" + who + "正在监听"
+	if listening(addr) { // short: the activity page's card is narrow
+		item.Detail = addr + " · " + who
 	} else {
-		item.Found, item.Detail = true, addr+" 未被监听，"+who+"已退出"
+		item.Found, item.Detail = true, addr+" · 无人监听"
 	}
 	return item
 }

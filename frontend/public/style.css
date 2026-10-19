@@ -574,9 +574,10 @@ tr.muted td.rule-actions { text-decoration: none; }
 .speed-card .big { margin-top: 16px; }
 .speed-card .big + .muted { margin-top: 6px; }
 .activity .row-card { flex-direction: row; align-items: center; gap: 12px; padding: 0 16px; }
-.mode-seg { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-left: 8px; }
-.mode-seg button { display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; border: 0; border-radius: 12px; background: var(--track); font-size: 13px; font-weight: 500; transition: background .15s, color .15s; }
-.mode-seg button:hover:not(.on) { background: var(--active); }
+/* one track, the choice a blue block in it, as the policies page's mode switch */
+.mode-seg { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); margin-left: 8px; padding: 3px; border-radius: 12px; background: var(--track); }
+.mode-seg button { display: flex; align-items: center; justify-content: center; gap: 6px; height: 36px; border: 0; border-radius: 9px; background: none; font-size: 13px; font-weight: 500; transition: background .15s, color .15s; }
+.mode-seg button:hover:not(.on) { background: var(--hover); }
 .mode-seg button.on { background: var(--accent); color: #fff; }
 .toggle-icon { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 11px; background: var(--track); transition: background .15s; }
 .toggle-icon.on { background: var(--accent); }
@@ -602,9 +603,9 @@ tr.muted td.rule-actions { text-decoration: none; }
 .legend i { width: 7px; height: 7px; border-radius: 50%; }
 .legend b { color: var(--text); font-weight: 600; }
 /* the lists: tabs as pills in the head, the shown one blue, its pane scrolling under them */
-.tabs { display: flex; gap: 6px; min-width: 0; }
-.tabs button { display: flex; align-items: center; gap: 5px; height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--track); font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .15s, color .15s; }
-.tabs button:hover:not(.on) { background: var(--active); }
+.tabs { display: flex; min-width: 0; padding: 2px; border-radius: 10px; background: var(--track); }
+.tabs button { display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 14px; border: 0; border-radius: 8px; background: none; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .15s, color .15s; }
+.tabs button:hover:not(.on) { background: var(--hover); }
 .tabs button.on { background: var(--accent); color: #fff; }
 .tabs b { font: 600 13px var(--rounded); font-variant-numeric: tabular-nums; }
 .pane { flex: 1; min-height: 0; overflow: auto; margin: 10px -18px -16px; padding: 0 18px 16px; }
@@ -622,7 +623,10 @@ tr.muted td.rule-actions { text-decoration: none; }
 .traffic-sum .split-bar { height: 6px; margin-top: 10px; }
 .traffic-sum .split-bar i { border-radius: 3px; }
 .traffic-sum .legend { justify-content: flex-start; gap: 18px; margin-top: 8px; }
-.rank-pane .rank { flex: 1; min-width: 0; overflow: hidden; margin-top: 4px; gap: 13px; } /* sliced to the rows that fit, see RankPane */
+/* the ranking scrolls without a bar over the sizes; the row under the fold fades out instead of being cut */
+.rank-pane .rank { flex: 1; min-width: 0; overflow: auto; margin-top: 4px; padding-bottom: 24px; gap: 13px; scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); }
+.rank-pane .rank::-webkit-scrollbar { display: none; }
 .group-tiles { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 58px; gap: 8px; align-content: start; }
 .gtile { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 12px 0 10px; border: 0; border-radius: 14px; background: var(--track); text-align: left; transition: background .15s; }
 .gtile:hover { background: var(--active); }
