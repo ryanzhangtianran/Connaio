@@ -6,7 +6,7 @@ import { errText, platform, sizeText, words, validPort } from "./format";
 
 
 // Row is one setting: title and description, the control at the right; a list row lists its items below.
-function Row({ title, desc, list, children }: { title: string; desc?: string; list?: boolean; children: React.ReactNode }) {
+function Row({ title, desc, list, children }: { title: string; desc?: React.ReactNode; list?: boolean; children: React.ReactNode }) {
   return (
     <div className={list ? "setting-row list-row" : "setting-row"}>
       <div><div className="setting-title">{title}</div>{desc && <div className="muted small">{desc}</div>}</div>
@@ -131,14 +131,23 @@ function updateLabel(p: UpdateProgress | null) {
 
 // ListSetting edits a string list setting item by item: each one a row that can be removed, and an
 // input to add one; every change is saved right away.
-function ListSetting({ title, desc, path, placeholder }: { title: string; desc?: string; path: string; placeholder: string }) {
+// fix, when given, completes an entry before it is added (e.g. a bare IP into a CIDR), or refuses it
+// with null, and invalid says why.
+export function ListSetting({ title, desc, path, placeholder, fix = (v) => v, invalid = "格式无效" }: { title: string; desc?: string; path: string; placeholder: string; fix?: (v: string) => string | null; invalid?: string }) {
   const [list, setList] = useSetting<string[]>(path, []);
   const [item, setItem] = useState("");
+  const [error, setError] = useState(""); // in place of the description, so nothing below moves
   const items = list ?? [];
-  const add = () => { const v = item.trim(); if (v && !items.includes(v)) setList([...items, v]).then(() => setItem("")); };
+  const save = (next: string[]) => { setError(""); return setList(next).catch((e) => { setError(errText(e)); throw e; }); };
+  const add = () => {
+    if (!item.trim()) return;
+    const v = fix(item.trim());
+    if (v === null) return setError(invalid);
+    if (v && !items.includes(v)) save([...items, v]).then(() => setItem(""), () => {});
+  };
   return (
-    <Row list title={title} desc={desc}>
-      {items.map((v, i) => <ListItem key={v} onRemove={() => setList(items.filter((_, j) => j !== i))}><span className="list-value">{v}</span></ListItem>)}
+    <Row list title={title} desc={error ? <span className="error">{error}</span> : desc}>
+      {items.map((v, i) => <ListItem key={v} onRemove={() => save(items.filter((_, j) => j !== i)).catch(() => {})}><span className="list-value">{v}</span></ListItem>)}
       <div className="list-add">
         <input className="code-input" placeholder={placeholder} value={item} onChange={(e) => setItem(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
         <button className="btn" disabled={!item.trim()} onClick={add}>添加</button>

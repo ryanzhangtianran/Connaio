@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { EnhancedService, SettingsService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { ProcessChoice, Status } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import { Switch, useSetting } from "./Settings";
+import { ListSetting, Switch, useSetting } from "./Settings";
 import { usePoll } from "./hooks";
-import { words } from "./format";
+import { cidr, words } from "./format";
 
 const sources: Record<string, string> = { app: "正在运行", network: "有网络连接" };
 
@@ -68,6 +68,11 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
           <Switch on={mode === "tun"} disabled={off} onChange={(v) => run("enh", EnhancedService.SetFull(v))} />
         </div>
       </div>
+
+      <div className="grouped"><div className="card settings-card">
+        <div className="section-title">路由排除</div>
+        <ListSetting title="排除网段" desc="目标为以下网段的流量不经 TUN 转发，由系统路由处理；适用于增强模式与部分增强。" path="tun.route-exclude-address" placeholder="如 192.168.0.0/16" fix={cidr} invalid="网段格式无效，如 192.168.0.0/16 或 10.1.2.3" />
+      </div></div>
 
       <div className="group-title">部分增强</div>
       <div className="plist">

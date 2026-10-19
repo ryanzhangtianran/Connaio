@@ -406,8 +406,12 @@ tr.muted td.rule-actions { text-decoration: none; }
 .list-item .list-value.muted { flex: 1; }
 .list-remove { margin-left: auto; flex: none; width: 22px; height: 22px; border: 0; border-radius: 6px; background: none; color: var(--text-2); font-size: 15px; }
 .list-remove:hover { background: var(--hover); color: var(--bad); }
-.list-add { display: flex; gap: 6px; padding: 6px; background: var(--hover); }
-.list-add .code-input { flex: 1; min-width: 0; font: 12px var(--mono); }
+/* the frame is the field: the input has no box of its own, its text in line with the items above */
+.list-items { transition: border-color .15s; }
+.list-items:focus-within { border-color: var(--accent); }
+.list-add { display: flex; align-items: center; gap: 6px; padding: 4px; }
+.list-add .code-input { flex: 1; min-width: 0; padding-left: 8px; font: 12px var(--mono); border: 0; background: none; outline: none; }
+.list-add .btn { height: 24px; font-size: 12px; border-radius: 6px; }
 .setting-control .ctl { width: 80px; } /* one column of equal-width controls */
 .setting-control .btn.ctl { height: 24px; font-size: 12px; border-radius: 6px; }
 .ranking { display: flex; flex-direction: column; min-height: 0; }

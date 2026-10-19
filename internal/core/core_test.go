@@ -64,3 +64,16 @@ func TestCore(t *testing.T) {
 		t.Fatal("core still answering after Stop")
 	}
 }
+
+// A rejected config reads as the core's errors, unescaped, without the verdict line and its path.
+func TestProblems(t *testing.T) {
+	out := `time="2026-10-19T20:20:54+08:00" level=info msg="Geosite Matcher implementation: succinct"
+time="2026-10-19T20:20:54+08:00" level=error msg="netip.ParsePrefix(\"192/32\"): no '/'"
+configuration file /home/u/.config/Connaio/config.next.yaml test failed`
+	if got := problems(out); got != `netip.ParsePrefix("192/32"): no '/'` {
+		t.Errorf("got %q", got)
+	}
+	if got := problems("configuration file x test failed"); got != "configuration file x test failed" {
+		t.Errorf("verdict alone: %q", got)
+	}
+}

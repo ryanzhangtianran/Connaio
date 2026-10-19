@@ -13,6 +13,18 @@ export const words = {
 // validPort accepts 1..65535 as typed.
 export const validPort = (s: string) => /^\d+$/.test(s) && Number(s) >= 1 && Number(s) <= 65535;
 
+// cidr reads an address range as typed, a bare IP becoming a range of one; null when it is neither.
+// IPv6 is checked loosely: the core rejects what slips through.
+export function cidr(s: string): string | null {
+  const [ip, len, ...rest] = s.split("/");
+  const v6 = ip.includes(":");
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  if (rest.length || (v6 ? !/^[0-9a-f:.]+$/i.test(ip) : !v4 || v4.slice(1).some((o) => Number(o) > 255))) return null;
+  const max = v6 ? 128 : 32;
+  if (len === undefined) return `${ip}/${max}`;
+  return /^\d{1,3}$/.test(len) && Number(len) <= max ? s : null;
+}
+
 // [value, unit] for big-number displays, e.g. 813 KB/s
 export function speed(bytes: number): [string, string] {
   if (bytes < 1000) return [String(bytes), "B/s"];

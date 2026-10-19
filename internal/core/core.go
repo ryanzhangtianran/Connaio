@@ -259,11 +259,15 @@ func (c *Core) Reload(ctx context.Context, config []byte) error {
 	return c.Do(ctx, http.MethodPut, "/configs?force=true", map[string]string{"payload": string(config)}, nil)
 }
 
-// problems keeps the core's error/fatal lines and its verdict from `-t` output.
+// problems keeps the core's error/fatal lines from `-t` output, or its verdict when there are
+// none: "configuration file <path> test failed" only repeats them, with a path.
 func problems(out string) string {
 	keep := msgs(out, func(line string) bool {
-		return strings.Contains(line, "level=error") || strings.Contains(line, "level=fatal") || strings.Contains(line, "failed")
+		return strings.Contains(line, "level=error") || strings.Contains(line, "level=fatal")
 	})
+	if len(keep) == 0 {
+		keep = msgs(out, func(line string) bool { return strings.Contains(line, "failed") })
+	}
 	if len(keep) == 0 {
 		return strings.TrimSpace(out)
 	}
@@ -275,8 +279,11 @@ func msgs(text string, keep func(string) bool) []string {
 	var out []string
 	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
 		if keep(line) {
-			if _, msg, ok := strings.Cut(line, `msg="`); ok {
-				line = strings.TrimSuffix(msg, `"`)
+			if _, msg, ok := strings.Cut(line, `msg=`); ok {
+				line = strings.Trim(msg, `"`)
+				if u, err := strconv.Unquote(msg); err == nil { // logfmt quotes it: \" inside
+					line = u
+				}
 			}
 			out = append(out, line)
 		}
