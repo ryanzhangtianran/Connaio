@@ -58,7 +58,7 @@ function KeySelect({ value, genName, onChange }: { value: string; genName: strin
   return (
     <>
       <select value={current?.name ?? (other ? "\u0000" : "")} onChange={(e) => { const k = keys.find((x) => x.name === e.target.value); if (k) onChange(k.private, k.path); }}>
-        <option value="" disabled>{keys.length ? "选择 ~/.connaio 中的密钥" : "~/.connaio 中还没有密钥"}</option>
+        <option value="" disabled>{keys.length ? "选择密钥" : "暂无密钥，请先生成"}</option>
         {other && <option value={"\u0000"}>配置中原有的密钥</option>}
         {keys.map((k) => <option key={k.name} value={k.name}>{k.name}</option>)}
       </select>
