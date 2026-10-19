@@ -24,15 +24,6 @@ func (s *Store) PrependRule(rule string) error {
 	})
 }
 
-func (s *Store) writeOverride(doc *yaml.Node) error {
-	blockStyle(doc)
-	b, err := yaml.Marshal(doc)
-	if err != nil {
-		return err
-	}
-	return s.SetOverride(string(b))
-}
-
 // blockStyle writes every non-empty list and mapping one item per line: a flow-style
 // `prepend-proxies: [{name: VPN, ...}]` (as an edit once left it) is unreadable in the editor.
 func blockStyle(n *yaml.Node) {
@@ -92,7 +83,7 @@ func (s *Store) EditProxy(name string, patch map[string]any) error {
 			orderKeys(seq.Content[i])
 			return nil
 		}
-		patches := mapOf(root, "patch-proxies")
+		patches := child(root, "patch-proxies", yaml.MappingNode)
 		if patches.Kind != yaml.MappingNode {
 			return errors.New("覆写中的 patch-proxies 不是字典")
 		}
@@ -118,7 +109,7 @@ func (s *Store) AddProxy(proxy map[string]any, groups []string) error {
 		if err := appendItem(root, "prepend-proxies", proxy); err != nil {
 			return err
 		}
-		members := mapOf(root, "group-members")
+		members := child(root, "group-members", yaml.MappingNode)
 		for _, g := range groups {
 			if err := appendItem(members, g, name); err != nil {
 				return err
@@ -295,7 +286,12 @@ func (s *Store) editOverride(change func(root *yaml.Node) error) error {
 	if err := change(root); err != nil {
 		return err
 	}
-	return s.writeOverride(&doc)
+	blockStyle(&doc)
+	b, err := yaml.Marshal(&doc)
+	if err != nil {
+		return err
+	}
+	return s.SetOverride(string(b))
 }
 
 func valueOf(m *yaml.Node, key string) *yaml.Node {
@@ -323,8 +319,6 @@ func listOf(m *yaml.Node, key string) *yaml.Node {
 	}
 	return nil
 }
-
-func mapOf(m *yaml.Node, key string) *yaml.Node { return child(m, key, yaml.MappingNode) }
 
 func appendItem(m *yaml.Node, key string, item any) error {
 	seq := child(m, key, yaml.SequenceNode)
@@ -392,7 +386,7 @@ func (s *Store) SetPath(path []string, value any) error {
 	return s.editOverride(func(root *yaml.Node) error {
 		m := root
 		for _, key := range path[:len(path)-1] {
-			m = mapOf(m, key)
+			m = child(m, key, yaml.MappingNode)
 			if m.Kind != yaml.MappingNode {
 				return fmt.Errorf("覆写中的 %s 不是字典", key)
 			}

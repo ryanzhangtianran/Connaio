@@ -298,12 +298,12 @@ func dropRemoved(cfg map[string]any, removed map[string]bool) {
 		group["proxies"] = list
 	}
 	if rules, ok := cfg["rules"].([]any); ok {
-		cfg["rules"] = slices.DeleteFunc(slices.Clone(rules), func(r any) bool { s, _ := r.(string); return removed[ruleTarget(s)] })
+		cfg["rules"] = slices.DeleteFunc(slices.Clone(rules), func(r any) bool { s, _ := r.(string); return removed[RuleTarget(s)] })
 	}
 }
 
-// ruleTarget is the policy a rule sends traffic to: its last field, past options like no-resolve.
-func ruleTarget(rule string) string {
+// RuleTarget is the policy a rule sends traffic to: its last field, past options like no-resolve.
+func RuleTarget(rule string) string {
 	fields := strings.Split(rule, ",")
 	for len(fields) > 1 {
 		last := strings.TrimSpace(fields[len(fields)-1])

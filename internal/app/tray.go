@@ -64,7 +64,7 @@ type trayMenu struct {
 	partialItem  *application.MenuItem
 	qualityItem  *application.MenuItem
 	procItems    []*application.MenuItem
-	details      map[*application.MenuItem]string // right of the label: grey text, or a pill (see pill)
+	details      map[*application.MenuItem]string // right of the label: grey text, or a dot (see dot)
 	icons        map[*application.MenuItem]string // file whose Finder icon the item shows
 	groupItems   map[string]*application.MenuItem
 	memberItems  map[string]map[string]*application.MenuItem
@@ -300,9 +300,6 @@ func modeLabel(key string) string {
 	return ""
 }
 
-// pill is a coloured pill for the right of a menu item: color is accent, good, warn, bad or gray.
-func pill(color, text string) string { return "\x01" + color + "|" + text }
-
 // dot is a detail drawn as a coloured dot before grey text: a state.
 func dot(color, text string) string { return "\x02" + color + "|" + text }
 
@@ -329,7 +326,7 @@ func (t *trayMenu) toggleVPN(name string) {
 
 var vpnPills = map[string]string{"up": dot("good", "已连接"), "connecting": dot("warn", "连接中"), "down": dot("gray", "未连接")}
 
-// vpnStates reads every VPN's state off the lock: name -> 未连接 / 连接中 / 已连接 as a pill.
+// vpnStates reads every VPN's state off the lock: name -> 未连接 / 连接中 / 已连接 as a dot.
 func (t *trayMenu) vpnStates() map[string]string {
 	list, err := t.profiles.VPNs()
 	if err != nil {

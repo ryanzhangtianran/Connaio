@@ -129,7 +129,7 @@ func (s *SystemProxyService) guard() {
 	if err != nil {
 		return // core not up yet
 	}
-	if ok, err := sysproxy.IsSet(port); err == nil && ok {
+	if sysproxy.IsSet(port) {
 		s.port = port
 		return
 	}

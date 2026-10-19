@@ -141,7 +141,7 @@ func (s *EnhancedService) useDaemon() error {
 	defer restarting.Add(-1)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	_ = s.core.Stop() // frees the ports the daemon is about to take over
+	s.core.Stop() // frees the ports the daemon is about to take over
 	if err := s.core.Attach(ctx, daemon.Socket, daemon.LogPath); err != nil {
 		return errors.Join(err, s.core.Start(ctx)) // keep a working core either way
 	}

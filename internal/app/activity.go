@@ -84,10 +84,8 @@ func (s *CoreService) Activity() (Activity, error) {
 		}
 	}
 	a.Processes, a.Devices, a.Hosts = len(processes), len(devices), len(hosts)
-	if s.ledger != nil {
-		a.Today, a.Month = s.ledger.totals(time.Now())
-		a.Hours, a.ByProcess, a.ByHost, a.ByPolicy = s.ledger.today(time.Now())
-	}
+	a.Today, a.Month = s.ledger.totals(time.Now())
+	a.Hours, a.ByProcess, a.ByHost, a.ByPolicy = s.ledger.today(time.Now())
 	return a, nil
 }
 
@@ -423,19 +421,13 @@ const keepDays = 13 * 31
 
 // clear forgets every day's traffic and saves that; live connections go on counting from the bytes
 // already seen, so nothing before the clear comes back.
-func (l *ledger) clear() error {
+// ClearTraffic clears the traffic statistics: today's, this month's and every day kept.
+func (s *CoreService) ClearTraffic() error {
+	l := s.ledger
 	l.mu.Lock()
 	l.days, l.dirty = map[string]*Day{}, true
 	l.mu.Unlock()
 	return l.save()
-}
-
-// ClearTraffic clears the traffic statistics: today's, this month's and every day kept.
-func (s *CoreService) ClearTraffic() error {
-	if s.ledger == nil {
-		return nil
-	}
-	return s.ledger.clear()
 }
 
 func (l *ledger) save() error {

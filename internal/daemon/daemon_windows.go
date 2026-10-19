@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"bytes"
 	"cmp"
 	"errors"
 	"fmt"
@@ -76,15 +77,10 @@ func uninstallScript() string {
 
 // Install copies core into ProgramData and registers and starts the service, after one UAC prompt.
 func Install(core string) error {
-	stage, err := os.MkdirTemp("", "connaio-daemon-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(stage)
-	if err := os.WriteFile(filepath.Join(stage, "config.yaml"), []byte(BootConfig), 0o644); err != nil {
-		return err
-	}
-	return asAdmin(stage, installScript(core, stage))
+	return asAdmin(func(stage string) (string, error) {
+		err := os.WriteFile(filepath.Join(stage, "config.yaml"), []byte(BootConfig), 0o644)
+		return installScript(core, stage), err
+	})
 }
 
 // Stale reports whether the service runs another core binary than the one bundled with this app:
@@ -95,25 +91,30 @@ func Stale(bin string) bool {
 		_, err := os.Stat(Helper)
 		return err == nil
 	}
-	installed, err1 := fileSum(Helper)
-	bundled, err2 := fileSum(bin)
-	return err1 == nil && err2 == nil && installed != bundled
+	installed, err1 := os.ReadFile(Helper)
+	bundled, err2 := os.ReadFile(bin)
+	return err1 == nil && err2 == nil && !bytes.Equal(installed, bundled)
 }
 
 // Uninstall stops and removes the service and its binary; the data dir is kept.
 func Uninstall() error {
-	stage, err := os.MkdirTemp("", "connaio-daemon-")
+	return asAdmin(func(string) (string, error) { return uninstallScript(), nil })
+}
+
+// asAdmin runs a batch file elevated through the UAC prompt and waits for it. script writes what
+// the batch file needs into a temporary directory, stage, and returns its text.
+func asAdmin(script func(stage string) (string, error)) error {
+	stage, err := os.MkdirTemp("", "connaio-admin-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(stage)
-	return asAdmin(stage, uninstallScript())
-}
-
-// asAdmin runs script as a batch file elevated through the UAC prompt and waits for it.
-func asAdmin(stage, script string) error {
+	batch, err := script(stage)
+	if err != nil {
+		return err
+	}
 	path := filepath.Join(stage, "connaio.cmd")
-	if err := os.WriteFile(path, []byte(script), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(batch), 0o644); err != nil {
 		return err
 	}
 	ps := "$p = Start-Process cmd.exe -ArgumentList '/c','\"" + path + "\"' -Verb RunAs -Wait -PassThru; exit $p.ExitCode"
@@ -131,13 +132,5 @@ func asAdmin(stage, script string) error {
 
 // RunAsAdmin runs a batch script elevated through the UAC prompt, for network repairs.
 func RunAsAdmin(script, _ string) error {
-	stage, err := os.MkdirTemp("", "connaio-repair")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(stage)
-	return asAdmin(stage, script)
+	return asAdmin(func(string) (string, error) { return script, nil })
 }
-
-// InBundle says the daemon runs the app's own core; here it runs a copy, replaced by Install when Stale.
-const InBundle = false

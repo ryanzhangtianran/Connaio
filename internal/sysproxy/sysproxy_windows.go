@@ -36,18 +36,9 @@ func Clear() error {
 }
 
 // IsSet reports whether the proxy is on and points at 127.0.0.1:port.
-func IsSet(port int) (bool, error) {
-	k, err := registry.OpenKey(registry.CURRENT_USER, key, registry.QUERY_VALUE)
-	if err != nil {
-		return false, err
-	}
-	defer k.Close()
-	enabled, _, err := k.GetIntegerValue("ProxyEnable")
-	if err != nil {
-		return false, nil // never set
-	}
-	got, _, _ := k.GetStringValue("ProxyServer")
-	return enabled == 1 && got == server(port), nil
+func IsSet(port int) bool {
+	addr, on := Current()
+	return on && addr == server(port)
 }
 
 func server(port int) string { return "127.0.0.1:" + strconv.Itoa(port) }

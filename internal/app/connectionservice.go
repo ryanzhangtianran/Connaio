@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"net/http"
 	"net/url"
@@ -135,10 +136,6 @@ func (s *CoreService) fetchConnections() ([]Conn, error) {
 	conns := make([]Conn, 0, len(snap.Connections))
 	for _, c := range snap.Connections {
 		m := c.Metadata
-		host := m.Host
-		if host == "" {
-			host = m.DestIP
-		}
 		process := m.Process
 		if process == "" && m.ProcessPath != "" {
 			process = filepath.Base(m.ProcessPath)
@@ -159,7 +156,7 @@ func (s *CoreService) fetchConnections() ([]Conn, error) {
 		slices.Reverse(chain) // the core lists the exit first; show group → node
 		conn := Conn{
 			ID: c.ID, Network: m.Network, Inbound: m.Type, Process: process, Path: m.ProcessPath, System: system, Source: m.SourceIP, SrcPort: m.SourcePort, Ancestors: m.Ancestors, InName: m.InName,
-			Host: host, Port: m.DestPort, Rule: rule, Chain: strings.Join(chain, " → "),
+			Host: cmp.Or(m.Host, m.DestIP), Port: m.DestPort, Rule: rule, Chain: strings.Join(chain, " → "),
 			Upload: c.Upload, Download: c.Download, Start: c.Start.Format(time.RFC3339),
 		}
 		conn.App, conn.Icon = clientOf(conn)
@@ -184,9 +181,6 @@ func (s *CoreService) forgetConnections() {
 
 // Reload re-applies the current config (profile and override) to the core.
 func (s *CoreService) Reload() error {
-	if s.onReady == nil {
-		return nil
-	}
 	return s.onReady()
 }
 
@@ -206,7 +200,7 @@ func (s *CoreService) Restart() error {
 			return err
 		}
 	} else {
-		_ = s.core.Stop()
+		s.core.Stop()
 		if err := s.core.Start(ctx); err != nil {
 			s.setStatus(Status{Error: err.Error()})
 			return err
@@ -227,26 +221,22 @@ func (s *CoreService) CloseConnection(id string) error {
 
 // CloseHost closes every live connection to host, so they reconnect under a new rule.
 func (s *CoreService) CloseHost(host string) error {
-	conns, err := s.Connections()
-	if err != nil {
-		return err
-	}
-	for _, c := range conns {
-		if c.Host == host || strings.HasSuffix(c.Host, "."+host) {
-			_ = s.CloseConnection(c.ID)
-		}
-	}
-	return nil
+	return s.closeWhere(func(c Conn) bool { return c.Host == host || strings.HasSuffix(c.Host, "."+host) })
 }
 
 // CloseSource closes every live connection from a source IP, so a device picks up a new policy.
 func (s *CoreService) CloseSource(ip string) error {
+	return s.closeWhere(func(c Conn) bool { return c.Source == ip })
+}
+
+// closeWhere closes every live connection match picks.
+func (s *CoreService) closeWhere(match func(Conn) bool) error {
 	conns, err := s.Connections()
 	if err != nil {
 		return err
 	}
 	for _, c := range conns {
-		if c.Source == ip {
+		if match(c) {
 			_ = s.CloseConnection(c.ID)
 		}
 	}

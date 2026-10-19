@@ -286,7 +286,7 @@ func msgs(text string, keep func(string) bool) []string {
 
 // Stop ends the GUI's own child (it restores routes and listeners on SIGTERM), killing it after 5s.
 // An attached daemon keeps running.
-func (c *Core) Stop() error {
+func (c *Core) Stop() {
 	c.life.Lock()
 	defer c.life.Unlock()
 	c.mu.Lock()
@@ -296,7 +296,6 @@ func (c *Core) Stop() error {
 	if cmd != nil {
 		stop(cmd, exited)
 	}
-	return nil
 }
 
 // API is the connaio-core controller API level this GUI needs (its constant.ConnaioAPI).

@@ -4,10 +4,12 @@ import (
 	"cmp"
 	"context"
 	"errors"
+	"maps"
 	"net/http"
 	"slices"
-	"strings"
 	"time"
+
+	"github.com/ryanzhangtianran/Connaio/internal/profile"
 )
 
 // VPN is one VPN as the page sees it: the node, the rules that send traffic to it, and the subnet
@@ -65,19 +67,12 @@ func (s *ProfileService) VPNs() ([]VPN, error) {
 			}
 		}
 	}
-	if s.settings != nil {
-		drafts := s.settings.Get().VPNs
-		names := make([]string, 0, len(drafts))
-		for name := range drafts {
-			names = append(names, name)
-		}
-		slices.Sort(names)
-		for _, name := range names {
-			if !slices.ContainsFunc(active, func(v VPN) bool { return v.name() == name }) {
-				d := drafts[name]
-				d.Active, d.State = false, "down"
-				list = append(list, d)
-			}
+	drafts := s.settings.Get().VPNs
+	for _, name := range slices.Sorted(maps.Keys(drafts)) {
+		if !slices.ContainsFunc(active, func(v VPN) bool { return v.name() == name }) {
+			d := drafts[name]
+			d.Active, d.State = false, "down"
+			list = append(list, d)
 		}
 	}
 	return list, nil
@@ -99,7 +94,7 @@ func (s *ProfileService) activeVPNs() ([]VPN, error) {
 			v.Group = items.Groups[j]
 		}
 		for _, r := range items.Rules {
-			if t := ruleTarget(r); t == name || t == groupOf(name) {
+			if t := profile.RuleTarget(r); t == name || t == groupOf(name) {
 				v.Rules = append(v.Rules, r)
 			}
 		}
@@ -149,9 +144,6 @@ func (s *ProfileService) SetVPN(v VPN, replace string) error {
 
 // saveDraft keeps v as its draft, in place of the one named replace when renamed.
 func (s *ProfileService) saveDraft(v VPN, replace string) {
-	if s.settings == nil {
-		return
-	}
 	draft := v
 	draft.Active, draft.State, draft.Kicked = false, "", false
 	_ = s.settings.Update(func(st *Settings) {
@@ -227,10 +219,7 @@ func (s *ProfileService) DeleteVPN(name string) error {
 	if err := s.RemoveVPN(name); err != nil {
 		return err
 	}
-	if s.settings != nil {
-		return s.settings.Update(func(st *Settings) { delete(st.VPNs, name) })
-	}
-	return nil
+	return s.settings.Update(func(st *Settings) { delete(st.VPNs, name) })
 }
 
 // clearVPN removes the named VPN's node, group and rules from the override, if it is there.
@@ -257,18 +246,6 @@ func (s *ProfileService) clearVPN(name string) error {
 		}
 	}
 	return s.store.RemoveProxy(name)
-}
-
-// ruleTarget is the policy a rule line names: the third field, or the second for MATCH.
-func ruleTarget(rule string) string {
-	f := strings.Split(rule, ",")
-	if len(f) >= 3 {
-		return strings.TrimSpace(f[2])
-	}
-	if len(f) == 2 && strings.EqualFold(strings.TrimSpace(f[0]), "MATCH") {
-		return strings.TrimSpace(f[1])
-	}
-	return ""
 }
 
 // Network is what the core sees of the current network, for subnet group conditions.

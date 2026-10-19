@@ -3,7 +3,6 @@ package sysproxy
 import (
 	"fmt"
 	"os/exec"
-	"slices"
 	"strconv"
 	"strings"
 )
@@ -20,16 +19,9 @@ func Set(port int) error { return run(setCommands(port)) }
 func Clear() error { return run([][]string{{"set", schema, "mode", "'none'"}}) }
 
 // IsSet reports whether the system proxy is manual and its HTTP proxy is 127.0.0.1:port.
-func IsSet(port int) (bool, error) {
-	var got []string
-	for _, key := range [][]string{{schema, "mode"}, {schema + ".http", "host"}, {schema + ".http", "port"}} {
-		out, err := exec.Command("gsettings", append([]string{"get"}, key...)...).Output()
-		if err != nil {
-			return false, err
-		}
-		got = append(got, strings.TrimSpace(string(out)))
-	}
-	return slices.Equal(got, []string{"'manual'", "'127.0.0.1'", strconv.Itoa(port)}), nil
+func IsSet(port int) bool {
+	addr, on := Current()
+	return on && addr == "127.0.0.1:"+strconv.Itoa(port)
 }
 
 func setCommands(port int) [][]string {

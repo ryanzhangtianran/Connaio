@@ -36,7 +36,7 @@ type ProfileService struct {
 }
 
 func (s *ProfileService) build() ([]byte, error) {
-	enhanced := s.settings != nil && s.settings.Get().Enhanced && s.core.Daemon()
+	enhanced := s.settings.Get().Enhanced && s.core.Daemon()
 	return s.store.Build(enhanced)
 }
 
@@ -94,13 +94,7 @@ func (s *ProfileService) Add(name, link string) error {
 	if err != nil {
 		return err
 	}
-	defer s.changed()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if current, _ := s.store.List(); current == p.ID {
-		return s.applyLocked()
-	}
-	return nil
+	return s.added(p.ID)
 }
 
 // AddLocal stores pasted Clash YAML as a profile.
@@ -109,10 +103,15 @@ func (s *ProfileService) AddLocal(name, content string) error {
 	if err != nil {
 		return err
 	}
+	return s.added(p.ID)
+}
+
+// added announces a new profile, and applies it when it is the one in use (the first).
+func (s *ProfileService) added(id string) error {
 	defer s.changed()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if current, _ := s.store.List(); current == p.ID {
+	if current, _ := s.store.List(); current == id {
 		return s.applyLocked()
 	}
 	return nil
@@ -150,6 +149,12 @@ func (s *ProfileService) SetContent(id, content string) error {
 	if err := s.store.SetContent(id, content); err != nil {
 		return err
 	}
+	return s.applyOrRestore(id, old)
+}
+
+// applyOrRestore applies the config when profile id is the one in use, putting old back as its
+// content if the core rejects it. Callers hold s.mu.
+func (s *ProfileService) applyOrRestore(id, old string) error {
 	if current, _ := s.store.List(); current != id {
 		return nil
 	}
@@ -172,13 +177,7 @@ func (s *ProfileService) Update(id string) error {
 	defer s.changed()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if current, _ := s.store.List(); current != id {
-		return nil
-	}
-	if err := s.applyLocked(); err != nil {
-		return errors.Join(err, s.store.SetContent(id, old))
-	}
-	return nil
+	return s.applyOrRestore(id, old)
 }
 
 func (s *ProfileService) Remove(id string) error {
@@ -392,7 +391,7 @@ func (s *ProfileService) SetText(path, text string) error {
 // Value reads a dotted setting from the effective config (defaults, profile and override merged).
 // capture.* reads as if enhanced, so the chosen scope shows while enhanced mode is off too.
 func (s *ProfileService) Value(path string) (any, error) {
-	enhanced := s.settings != nil && s.settings.Get().Enhanced && s.core.Daemon() || strings.HasPrefix(path, "capture.")
+	enhanced := s.settings.Get().Enhanced && s.core.Daemon() || strings.HasPrefix(path, "capture.")
 	return s.store.Value(enhanced, strings.Split(path, "."))
 }
 

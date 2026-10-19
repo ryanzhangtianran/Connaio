@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -110,7 +111,7 @@ func emit(name string, data any) {
 // CoreService owns the connaio-core child process and exposes its API to the frontend.
 type CoreService struct {
 	core      *core.Core
-	ledger    *ledger                                     // today's and this month's traffic; nil in tests
+	ledger    *ledger                                     // today's and this month's traffic
 	onReady   func() error                                // pushes the GUI's config once a core answers
 	onTraffic func(Traffic)                               // menu bar speed
 	onMode    func(string)                                // menu bar mode radio
@@ -141,9 +142,7 @@ func (s *CoreService) ServiceStartup(ctx context.Context, _ application.ServiceO
 		// the streams retry on their own, so they run whatever the first start does: a core that
 		// comes up later (a restart, the crash recovery in streamTraffic) is picked up by them
 		go s.streamLogs(ctx)
-		if s.ledger != nil {
-			go s.countTraffic(ctx)
-		}
+		go s.countTraffic(ctx)
 		var err error
 		if daemon.Installed() {
 			if err = s.core.Attach(ctx, daemon.Socket, daemon.LogPath); err != nil {
@@ -154,7 +153,7 @@ func (s *CoreService) ServiceStartup(ctx context.Context, _ application.ServiceO
 		} else {
 			err = s.core.Start(ctx)
 		}
-		if err == nil && s.onReady != nil {
+		if err == nil {
 			err = s.onReady() // a daemon runs its boot config until the GUI hands it the real one
 		}
 		if err != nil {
@@ -215,15 +214,14 @@ func (s *CoreService) portWarning() string {
 var bindPort = regexp.MustCompile(`:(\d+): bind`)
 
 func (s *CoreService) ServiceShutdown() error {
-	if s.ledger != nil {
-		if err := s.ledger.save(); err != nil {
-			log.Printf("save traffic: %v", err)
-		}
+	if err := s.ledger.save(); err != nil {
+		log.Printf("save traffic: %v", err)
 	}
 	if s.core.Daemon() {
 		return s.core.Reload(context.Background(), []byte(daemon.BootConfig))
 	}
-	return s.core.Stop()
+	s.core.Stop()
+	return nil
 }
 
 func (s *CoreService) Status() Status {
@@ -404,7 +402,7 @@ func (s *CoreService) updateDaemon() {
 		}
 		return
 	}
-	if !daemon.InBundle {
+	if runtime.GOOS != "darwin" { // elsewhere the daemon runs a copy, replaced by Install when Stale
 		return
 	}
 	out, err := run.Command(bin, "-v").Output() // "Mihomo Meta <version> darwin arm64 with …"
@@ -460,12 +458,10 @@ func (s *CoreService) reconnected(ctx context.Context) {
 	if restarting.Load() > 0 {
 		return
 	}
-	if s.onReady != nil {
-		if err := s.onReady(); err != nil {
-			s.setStatus(Status{Error: err.Error()})
-			notify("error", "内核已重新连接，但载入配置失败：%v", err)
-			return
-		}
+	if err := s.onReady(); err != nil {
+		s.setStatus(Status{Error: err.Error()})
+		notify("error", "内核已重新连接，但载入配置失败：%v", err)
+		return
 	}
 	s.markRunning(ctx)
 	notify("info", "内核已重新连接")

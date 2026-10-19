@@ -566,3 +566,11 @@ func TestGUIProxiesAreWrittenNameTypeServerFirst(t *testing.T) {
 		t.Errorf("override:\n%s", text)
 	}
 }
+
+func TestRuleTarget(t *testing.T) {
+	for rule, want := range map[string]string{"EASYCONNECT,VPN,VPN 路由": "VPN 路由", "IP-CIDR,10.0.0.0/8,VPN,no-resolve": "VPN", "MATCH,DIRECT": "DIRECT", "DOMAIN": ""} {
+		if got := RuleTarget(rule); got != want {
+			t.Errorf("RuleTarget(%q) = %q, want %q", rule, got, want)
+		}
+	}
+}

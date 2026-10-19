@@ -64,16 +64,13 @@ func legacy() bool {
 	return err == nil
 }
 
-// InBundle says the daemon runs the core inside the app (SMAppService), not a copy: an app update
-// brings it a new core, which it picks up once restarted.
-const InBundle = true
-
 // Installed reports whether the daemon is set up: registered and allowed, or the older
 // LaunchDaemon still in place (Stale moves it over).
 func Installed() bool { return status() == enabled || legacy() }
 
 // Stale reports whether the older LaunchDaemon is still installed; Install moves it to the one run
-// from the app. The app's own core needs no reinstalling: see InBundle.
+// from the app. The app's own core needs no reinstalling: the daemon runs the core inside the app
+// (SMAppService), not a copy, so an app update brings it a new core, picked up once restarted.
 func Stale(string) bool { return legacy() }
 
 // Install registers the daemon in the app's bundle (build/darwin/daemon.plist) with launchd, after
@@ -81,7 +78,7 @@ func Stale(string) bool { return legacy() }
 // user to allow it in System Settings, which is opened for them; this waits up to two minutes.
 func Install(string) error {
 	if legacy() {
-		if err := asAdmin(legacyRemoval(), "Connaio 要把 root 内核换成随 App 更新的方式，以后更新不再需要输入密码。"); err != nil {
+		if err := RunAsAdmin(legacyRemoval(), "Connaio 要把 root 内核换成随 App 更新的方式，以后更新不再需要输入密码。"); err != nil {
 			return err
 		}
 	}
@@ -109,7 +106,7 @@ func Install(string) error {
 // data dir is kept.
 func Uninstall() error {
 	if legacy() {
-		if err := asAdmin(legacyRemoval(), "Connaio 需要移除 root 权限。"); err != nil {
+		if err := RunAsAdmin(legacyRemoval(), "Connaio 需要移除 root 权限。"); err != nil {
 			return err
 		}
 	}
@@ -132,8 +129,9 @@ func legacyRemoval() string {
 	return "launchctl bootout system/" + Label + " 2>/dev/null || true\nrm -f " + strings.Join(files, " ")
 }
 
-// asAdmin runs a shell script as root through the standard macOS administrator prompt.
-func asAdmin(script, prompt string) error {
+// RunAsAdmin runs a shell script as root through the standard macOS administrator prompt: the
+// daemon's own changes, and network repairs.
+func RunAsAdmin(script, prompt string) error {
 	msg := runAppleScript(fmt.Sprintf("do shell script %s with prompt %s with administrator privileges", appleQuote(script), appleQuote(prompt)))
 	switch {
 	case msg == "":
@@ -150,6 +148,3 @@ func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''
 func appleQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
 }
-
-// RunAsAdmin runs a shell script after the administrator prompt, for network repairs.
-func RunAsAdmin(script, prompt string) error { return asAdmin(script, prompt) }

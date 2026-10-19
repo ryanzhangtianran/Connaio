@@ -27,19 +27,14 @@ var speedMu sync.Mutex // one test at a time: they share the temporary rule's ho
 
 // viaProxy is an HTTP client whose requests to rawURL's host go through proxy (a node or group): a
 // temporary rule sends the host to it through the mixed-port; done removes the rule. Needs rule
-// mode, since global/direct mode skip rules.
+// mode (ruleModePort).
 func (s *ToolService) viaProxy(proxy, rawURL string) (*http.Client, func(), error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, nil, err
 	}
 	host := u.Hostname()
-	if mode, err := s.cs.Mode(); err != nil {
-		return nil, nil, err
-	} else if mode != "rule" {
-		return nil, nil, errors.New("需要「规则判定」模式，全局和直连模式不经过规则")
-	}
-	port, err := mixedPort(s.cs.core)
+	port, err := s.ruleModePort()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -52,6 +47,17 @@ func (s *ToolService) viaProxy(proxy, rawURL string) (*http.Client, func(), erro
 		return nil, nil, err
 	}
 	return oneShotClient(port, 0), func() { _ = s.cs.RemoveTempRule(id) }, nil
+}
+
+// ruleModePort is the core's mixed-port, for a test whose traffic a temporary rule steers: an error
+// outside rule mode, since global/direct mode skip rules.
+func (s *ToolService) ruleModePort() (int, error) {
+	if mode, err := s.cs.Mode(); err != nil {
+		return 0, err
+	} else if mode != "rule" {
+		return 0, errors.New("需要「规则判定」模式，全局和直连模式不经过规则")
+	}
+	return mixedPort(s.cs.core)
 }
 
 // SpeedTest measures download bandwidth through proxy for up to 10s.

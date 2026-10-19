@@ -59,9 +59,7 @@ func TestCore(t *testing.T) {
 	}
 	stop()
 
-	if err := c.Stop(); err != nil {
-		t.Fatal(err)
-	}
+	c.Stop()
 	if _, err := c.Version(ctx); err == nil {
 		t.Fatal("core still answering after Stop")
 	}

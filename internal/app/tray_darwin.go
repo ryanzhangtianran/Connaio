@@ -72,12 +72,12 @@ static void setTray(void *item, const void *icon, int iconLen, const char *badge
 }
 
 // DetailItemView draws a menu item that carries something on its right, as Surge's menu does: an
-// optional app icon, the title, then grey text (a group's node, a process's speed) or a coloured
-// pill (outbound mode, network quality) right-aligned up to a small gap before the submenu arrow.
+// optional app icon, the title, then grey text (a group's node, a process's speed), or a
+// coloured dot and text (a state, network quality), right-aligned up to a small gap before the submenu arrow.
 // NSMenu can't lay that out itself (a title's text stops short of the arrow by the key-equivalent
 // column), so these items are drawn whole; the rest of the menu stays native.
 @interface DetailItemView : NSView
-@property (copy) NSString *label, *detail; // detail: "text", "\x01color|text" for a pill, "\x02color|text" for a dot and text
+@property (copy) NSString *label, *detail; // detail: "text", or "\x02color|text" for a dot and text
 @property (retain) NSImage *icon;
 @property BOOL header; // a section title: small, grey, with room above
 @end
@@ -92,16 +92,14 @@ static const CGFloat kDotW = 13;      // a state dot and its gap before the text
 
 static NSFont *menuFont(void) { return [NSFont menuFontOfSize:0]; }
 static NSFont *monoFont(void) { return [NSFont monospacedDigitSystemFontOfSize:menuFont().pointSize - 1 weight:NSFontWeightRegular]; } // a node, a speed: a step below titles
-static NSFont *pillFont(void) { return [NSFont monospacedDigitSystemFontOfSize:10 weight:NSFontWeightMedium]; }
 
 @implementation DetailItemView
 - (BOOL)isFlipped { return YES; }
 - (BOOL)acceptsFirstMouse:(NSEvent *)e { return YES; }
 
-- (BOOL)pill { return [self.detail hasPrefix:@"\x01"]; }
 - (BOOL)dot { return [self.detail hasPrefix:@"\x02"]; }
-- (NSString *)pillText { return [[self.detail componentsSeparatedByString:@"|"] lastObject]; }
-- (NSColor *)pillColor {
+- (NSString *)dotText { return [[self.detail componentsSeparatedByString:@"|"] lastObject]; }
+- (NSColor *)dotColor {
 	NSString *c = [[self.detail substringFromIndex:1] componentsSeparatedByString:@"|"].firstObject;
 	NSDictionary *colors = @{@"accent": NSColor.systemBlueColor, @"good": NSColor.systemGreenColor,
 		@"warn": NSColor.systemOrangeColor, @"bad": NSColor.systemRedColor};
@@ -109,8 +107,7 @@ static NSFont *pillFont(void) { return [NSFont monospacedDigitSystemFontOfSize:1
 }
 - (CGFloat)detailWidth {
 	if (!self.detail.length) return 0;
-	if (self.pill) return MAX(ceil([self.pillText sizeWithAttributes:@{NSFontAttributeName: pillFont()}].width) + 10, 18);
-	if (self.dot) return ceil([self.pillText sizeWithAttributes:@{NSFontAttributeName: monoFont()}].width) + kDotW;
+	if (self.dot) return ceil([self.dotText sizeWithAttributes:@{NSFontAttributeName: monoFont()}].width) + kDotW;
 	return ceil([self.detail sizeWithAttributes:@{NSFontAttributeName: monoFont()}].width);
 }
 // titleX follows the native titles: AppKit shows the state column only while some item is checked
@@ -149,21 +146,13 @@ static NSFont *pillFont(void) { return [NSFont monospacedDigitSystemFontOfSize:1
 	[self.label drawAtPoint:NSMakePoint(x, (kItemH - ts.height) / 2) withAttributes:ta];
 
 	CGFloat right = NSMaxX(b) - kInset - 10; // every row's detail ends where the native shortcuts do; submenus show no arrow
-	if (self.detail.length && self.pill) {
-		CGFloat w = self.detailWidth, h = 16;
-		NSRect r = NSMakeRect(right - w, (kItemH - h) / 2, w, h);
-		[self.pillColor setFill];
-		[[NSBezierPath bezierPathWithRoundedRect:r xRadius:4 yRadius:4] fill];
-		NSDictionary *pa = @{NSFontAttributeName: pillFont(), NSForegroundColorAttributeName: NSColor.whiteColor};
-		NSSize ps = [self.pillText sizeWithAttributes:pa];
-		[self.pillText drawAtPoint:NSMakePoint(NSMidX(r) - ps.width / 2, NSMidY(r) - ps.height / 2) withAttributes:pa];
-	} else if (self.detail.length) {
-		NSString *text = self.dot ? self.pillText : self.detail;
+	if (self.detail.length) {
+		NSString *text = self.dot ? self.dotText : self.detail;
 		NSDictionary *da = @{NSFontAttributeName: monoFont(), NSForegroundColorAttributeName: dim};
 		NSSize ds = [text sizeWithAttributes:da];
 		[text drawAtPoint:NSMakePoint(right - ds.width, (kItemH - ds.height) / 2) withAttributes:da];
 		if (self.dot) { // the state as a coloured dot before the text
-			[(hi ? NSColor.selectedMenuItemTextColor : self.pillColor) setFill];
+			[(hi ? NSColor.selectedMenuItemTextColor : self.dotColor) setFill];
 			[[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(right - ds.width - kDotW, (kItemH - 7) / 2, 7, 7)] fill];
 		}
 	}
@@ -189,7 +178,7 @@ static void setSectionHeader(void *p) {
 	item.view = v;
 }
 
-// setMenuDecor draws an item with a right-side detail (grey text, or a "\x01color|text" pill)
+// setMenuDecor draws an item with a right-side detail (grey text, or a "\x02color|text" dot)
 // and the Finder icon of path, through DetailItemView; with neither it stays a native item.
 // Runs on the main thread.
 static void setMenuDecor(void *p, const char *label, const char *detail, const char *path) {

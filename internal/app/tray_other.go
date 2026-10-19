@@ -38,15 +38,7 @@ func trayPNG(data []byte, fill color.NRGBA) []byte {
 	if err != nil {
 		return data
 	}
-	var box image.Rectangle // the drawn part
-	b := img.Bounds()
-	for y := b.Min.Y; y < b.Max.Y; y++ {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			if _, _, _, alpha := img.At(x, y).RGBA(); alpha > 0 {
-				box = box.Union(image.Rect(x, y, x+1, y+1))
-			}
-		}
-	}
+	box := drawnBox(img, 0)
 	side := max(box.Dx(), box.Dy()) * 3 / 2 // the cat fills two thirds of the tile
 	r := float64(side) / 4                  // corner radius
 	out := image.NewNRGBA(image.Rect(0, 0, side, side))
@@ -77,6 +69,20 @@ func trayPNG(data []byte, fill color.NRGBA) []byte {
 	return buf.Bytes()
 }
 
+// drawnBox is the bounding box of img's pixels with alpha (0–0xffff) above minAlpha: the drawn part.
+func drawnBox(img image.Image, minAlpha uint32) image.Rectangle {
+	var box image.Rectangle
+	b := img.Bounds()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			if _, _, _, a := img.At(x, y).RGBA(); a > minAlpha {
+				box = box.Union(image.Rect(x, y, x+1, y+1))
+			}
+		}
+	}
+	return box
+}
+
 // mix is channel v a fraction a of the way to white.
 func mix(v uint8, a float64) uint8 { return uint8(float64(v) + (0xff-float64(v))*a) }
 
@@ -86,8 +92,7 @@ func mix(v uint8, a float64) uint8 { return uint8(float64(v) + (0xff-float64(v))
 var detailSep = map[bool]string{true: "\t", false: " · "}[runtime.GOOS == "windows"]
 
 // decorate folds each detail into its item's label ("Proxy · 香港", "网络质量 · 86 ms"), since
-// Linux and Windows menus show plain text: a pill keeps its text, a dot becomes ● or ○, the mode
-// badge becomes the mode's name, and icons are skipped.
+// Linux and Windows menus show plain text: a dot becomes ● or ○, and icons are skipped.
 func sectionHeaders([]*application.MenuItem) {} // titles are separators here (build)
 
 func decorate(details, _ map[*application.MenuItem]string) {
@@ -113,9 +118,6 @@ func dotColor(detail string) string {
 }
 
 func detailText(detail string) string {
-	if len(detail) > 1 && detail[0] == 1 { // a pill: "\x01color|text"
-		_, detail, _ = strings.Cut(detail[1:], "|")
-	}
 	if len(detail) > 1 && detail[0] == 2 { // a dot: "\x02color|text"; where the item can't show it in colour (markState), a solid or (grey) hollow one before the text
 		color, text, _ := strings.Cut(detail[1:], "|")
 		if !textDots {
@@ -126,11 +128,6 @@ func detailText(detail string) string {
 			mark = "○"
 		}
 		return mark + " " + text
-	}
-	for key, letter := range modeBadges {
-		if letter == detail {
-			return modeLabel(key)
-		}
 	}
 	return detail
 }

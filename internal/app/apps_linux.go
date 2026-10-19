@@ -257,15 +257,7 @@ func trimPNG(data []byte) []byte {
 	if err != nil {
 		return data
 	}
-	var box image.Rectangle
-	b := img.Bounds()
-	for y := b.Min.Y; y < b.Max.Y; y++ {
-		for x := b.Min.X; x < b.Max.X; x++ {
-			if _, _, _, a := img.At(x, y).RGBA(); a > 0x0800 { // ignore the faintest shadow
-				box = box.Union(image.Rect(x, y, x+1, y+1))
-			}
-		}
-	}
+	box, b := drawnBox(img, 0x0800), img.Bounds() // ignore the faintest shadow
 	side := max(box.Dx(), box.Dy())
 	if side == 0 || side >= b.Dx() && side >= b.Dy() {
 		return data

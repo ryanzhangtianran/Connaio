@@ -30,34 +30,38 @@ func Clear() error {
 
 // IsSet reports whether every enabled service still proxies to 127.0.0.1:port (another app may
 // have replaced it).
-func IsSet(port int) (bool, error) {
+func IsSet(port int) bool {
 	services, err := services()
 	if err != nil {
-		return false, err
+		return false
 	}
 	for _, s := range services {
 		for _, get := range []string{"-getwebproxy", "-getsecurewebproxy"} {
 			out, err := exec.Command("networksetup", get, s).Output()
-			if err != nil {
-				return false, err
-			}
-			if !pointsAt(string(out), port) {
-				return false, nil
+			if err != nil || !pointsAt(string(out), port) {
+				return false
 			}
 		}
 	}
-	return len(services) > 0, nil
+	return len(services) > 0
 }
 
-// pointsAt parses `networksetup -getwebproxy` output ("Enabled: Yes", "Server: ...", "Port: ...").
+// pointsAt says whether `networksetup -getwebproxy` output is an enabled proxy at 127.0.0.1:port.
 func pointsAt(out string, port int) bool {
+	addr, on := parseProxy(out)
+	return on && addr == "127.0.0.1:"+strconv.Itoa(port)
+}
+
+// parseProxy reads `networksetup -getwebproxy` output ("Enabled: Yes", "Server: ...", "Port: ...")
+// as the proxy's server:port and whether it is enabled.
+func parseProxy(out string) (string, bool) {
 	fields := map[string]string{}
 	for _, line := range strings.Split(out, "\n") {
 		if k, v, ok := strings.Cut(line, ":"); ok {
 			fields[strings.TrimSpace(k)] = strings.TrimSpace(v)
 		}
 	}
-	return fields["Enabled"] == "Yes" && fields["Server"] == "127.0.0.1" && fields["Port"] == strconv.Itoa(port)
+	return fields["Server"] + ":" + fields["Port"], fields["Enabled"] == "Yes"
 }
 
 // services lists enabled network services; the first line is a notice and "*" marks disabled ones.
@@ -121,11 +125,5 @@ func Current() (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	fields := map[string]string{}
-	for _, line := range strings.Split(string(out), "\n") {
-		if k, v, ok := strings.Cut(line, ":"); ok {
-			fields[strings.TrimSpace(k)] = strings.TrimSpace(v)
-		}
-	}
-	return fields["Server"] + ":" + fields["Port"], fields["Enabled"] == "Yes"
+	return parseProxy(string(out))
 }

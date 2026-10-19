@@ -202,12 +202,7 @@ var leakMu sync.Mutex // one test at a time: the direct side holds a temporary r
 func (s *ToolService) DNSLeakTest() (DNSLeak, error) {
 	leakMu.Lock()
 	defer leakMu.Unlock()
-	if mode, err := s.cs.Mode(); err != nil {
-		return DNSLeak{}, err
-	} else if mode != "rule" {
-		return DNSLeak{}, errors.New("需要「规则判定」模式：全局和直连模式不经过规则")
-	}
-	port, err := mixedPort(s.cs.core)
+	port, err := s.ruleModePort()
 	if err != nil {
 		return DNSLeak{}, err
 	}

@@ -42,7 +42,16 @@ func asRoot(op string) error {
 	if _, err := os.Stat(helper); err != nil {
 		return errors.New("增强模式需要用 .deb 安装的 Connaio")
 	}
-	out, err := exec.Command("pkexec", helper, op, uid).CombinedOutput()
+	return pkexec("授权失败", helper, op, uid)
+}
+
+// RunAsAdmin runs a shell script through pkexec, for network repairs.
+func RunAsAdmin(script, _ string) error { return pkexec("修复失败", "sh", "-c", script) }
+
+// pkexec runs args as root through pkexec; failed heads the error when it fails other than by the
+// prompt being dismissed.
+func pkexec(failed string, args ...string) error {
+	out, err := exec.Command("pkexec", args...).CombinedOutput()
 	var exit *exec.ExitError
 	switch {
 	case err == nil:
@@ -50,23 +59,6 @@ func asRoot(op string) error {
 	case errors.As(err, &exit) && (exit.ExitCode() == 126 || exit.ExitCode() == 127): // dismissed, or not authorised
 		return errors.New("已取消授权")
 	default:
-		return fmt.Errorf("授权失败：%s", cmp.Or(strings.TrimSpace(string(out)), err.Error()))
+		return fmt.Errorf("%s：%s", failed, cmp.Or(strings.TrimSpace(string(out)), err.Error()))
 	}
 }
-
-// RunAsAdmin runs a shell script through pkexec, for network repairs.
-func RunAsAdmin(script, _ string) error {
-	out, err := exec.Command("pkexec", "sh", "-c", script).CombinedOutput()
-	var exit *exec.ExitError
-	switch {
-	case err == nil:
-		return nil
-	case errors.As(err, &exit) && (exit.ExitCode() == 126 || exit.ExitCode() == 127):
-		return errors.New("已取消授权")
-	default:
-		return fmt.Errorf("修复失败：%s", cmp.Or(strings.TrimSpace(string(out)), err.Error()))
-	}
-}
-
-// InBundle says the daemon runs the app's own core; here it runs a copy, replaced by Install when Stale.
-const InBundle = false

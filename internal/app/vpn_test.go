@@ -51,20 +51,18 @@ func TestVPNRoundTrip(t *testing.T) {
 	if err := s.RemoveVPN("VPN"); err != nil {
 		t.Fatal(err)
 	}
+	if list, _ = s.VPNs(); len(list) != 1 || list[0].Active { // disconnected, kept as a draft
+		t.Errorf("after disconnect: %+v", list)
+	}
+	if err := s.DeleteVPN("VPN"); err != nil {
+		t.Fatal(err)
+	}
 	if list, _ = s.VPNs(); len(list) != 0 {
 		t.Errorf("still there: %+v", list)
 	}
 	items, _ = s.UserItems()
 	if len(items.Rules) != 1 || len(items.Proxies) != 0 {
 		t.Errorf("leftovers: %v %v", items.Rules, items.Proxies)
-	}
-}
-
-func TestRuleTarget(t *testing.T) {
-	for rule, want := range map[string]string{"EASYCONNECT,VPN,VPN 路由": "VPN 路由", "IP-CIDR,10.0.0.0/8,VPN,no-resolve": "VPN", "MATCH,DIRECT": "DIRECT", "DOMAIN": ""} {
-		if got := ruleTarget(rule); got != want {
-			t.Errorf("ruleTarget(%q) = %q, want %q", rule, got, want)
-		}
 	}
 }
 

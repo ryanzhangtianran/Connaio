@@ -2,22 +2,9 @@ package app
 
 import (
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/ryanzhangtianran/Connaio/internal/run"
 )
-
-func orphanCores(own int) []int {
-	out, _ := run.Command("pgrep", "-x", "-u", strconv.Itoa(os.Getuid()), "connaio-core").Output() // this user's only: the root daemon is not an orphan
-	var pids []int
-	for _, f := range strings.Fields(string(out)) {
-		if pid, err := strconv.Atoi(f); err == nil && pid != own {
-			pids = append(pids, pid)
-		}
-	}
-	return pids
-}
 
 func flushDNS() (string, error) {
 	if out, err := run.Command("resolvectl", "flush-caches").CombinedOutput(); err != nil {

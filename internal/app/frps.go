@@ -72,12 +72,7 @@ echo "==> frps 正在端口 %[1]d 上运行"
 // DeployFRPS logs in over SSH and installs frps with a fresh token, streaming progress lines.
 // ponytail: the host key is accepted on first use and only shown; pin it if this grows past setup.
 func (s *ToolService) DeployFRPS(d FrpsDeploy) (Frps, error) {
-	if d.Port == 0 {
-		d.Port = 22
-	}
-	if d.BindPort == 0 {
-		d.BindPort = 7000
-	}
+	d.Port, d.BindPort = cmp.Or(d.Port, 22), cmp.Or(d.BindPort, 7000)
 	auth, err := sshAuth(d.Password, d.Key)
 	if err != nil {
 		return Frps{}, err

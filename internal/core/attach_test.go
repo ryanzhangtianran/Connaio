@@ -62,9 +62,7 @@ func TestAttach(t *testing.T) {
 	if err := c.Do(ctx, "POST", "/upgrade", nil, nil); err == nil {
 		t.Fatal("core self-upgrade must be gone")
 	}
-	if err := c.Stop(); err != nil {
-		t.Fatal(err)
-	}
+	c.Stop()
 	if _, err := c.Version(ctx); err != nil {
 		t.Fatal("Stop must leave an attached daemon running")
 	}
