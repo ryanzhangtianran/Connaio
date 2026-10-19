@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { EasyConnectTunnel, Status, VPN } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import { nonNull } from "./format";
+import { nonNull, validPort } from "./format";
 import { usePoll } from "./hooks";
 import PasswordInput from "./PasswordInput";
 
@@ -9,7 +9,9 @@ import PasswordInput from "./PasswordInput";
 // route list (the EASYCONNECT rule), for every type the addresses listed here. Networks named
 // under 直连 get a subnet group in between, which picks DIRECT there and the node elsewhere.
 const defaultName = "VPN";
-const types: Record<string, string> = { easyconnect: "EasyConnect", wireguard: "WireGuard", openvpn: "OpenVPN", tailscale: "Tailscale" };
+// lan: another Connaio on the LAN that is connected to the VPN, used through its proxy port (an http
+// node marked connaio-lan), so one account is signed in once
+const types: Record<string, string> = { easyconnect: "EasyConnect", wireguard: "WireGuard", openvpn: "OpenVPN", tailscale: "Tailscale", lan: "局域网 Connaio" };
 const noServer = new Set(["openvpn", "tailscale"]); // the address comes from the file, or the control plane
 
 const stateLabel: Record<string, string> = { up: "已连接", connecting: "连接中", down: "未连接" };
@@ -116,8 +118,8 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
     const v = initial;
     if (!v) return;
     const p = v.proxy ?? {};
-    const f: Form = { type: String(p.type ?? "easyconnect") };
-    for (const [k, x] of Object.entries(p)) if (k !== "name" && k !== "type" && (typeof x === "string" || typeof x === "number" || typeof x === "boolean")) f[k] = String(x);
+    const f: Form = { type: p["connaio-lan"] ? "lan" : String(p.type ?? "easyconnect") };
+    for (const [k, x] of Object.entries(p)) if (k !== "name" && k !== "type" && k !== "connaio-lan" && (typeof x === "string" || typeof x === "number" || typeof x === "boolean")) f[k] = String(x);
     if (Array.isArray(p["allowed-ips"])) f["allowed-ips"] = p["allowed-ips"].join(", ");
     setForm(f);
     setAddrs(nonNull(v.rules).map(routeOf).filter((x): x is KV => !!x));
@@ -134,6 +136,7 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
       case "wireguard": return form.server?.trim() && form["private-key"]?.trim() && form["public-key"]?.trim() && form.ip?.trim();
       case "openvpn": return form["ovpn-config"]?.trim();
       case "tailscale": return true; // without an auth key the core logs a login link
+      case "lan": return form.server?.trim() && validPort(form.port ?? "");
     }
     return false;
   })();
@@ -160,6 +163,11 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
         proxy["ovpn-config"] = form["ovpn-config"];
         str("username"); str("password");
         break;
+      case "lan":
+        Object.assign(proxy, { type: "http", "connaio-lan": true });
+        delete proxy.udp;
+        str("server"); num("port", 7890);
+        break;
       case "tailscale":
         str("auth-key"); str("hostname"); str("control-url"); str("exit-node");
         if (form["accept-routes"] === "true") proxy["accept-routes"] = true;
@@ -180,7 +188,11 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
     setError("");
     p.catch((e) => setError(reason(e))).finally(() => setBusy(false));
   };
-  const save = () => run(ProfileService.SetVPN(build() as any, prevName).then(() => { setSaved(true); onDone(); }));
+  // save keeps the settings (a connected VPN takes them at once); connect puts a disconnected one
+  // in the config; reconnect drops a connected one's tunnel and logs in again
+  const save = () => run(ProfileService.SaveVPN(build() as any, prevName).then(onDone));
+  const connect = () => run(ProfileService.SetVPN(build() as any, prevName).then(() => { setSaved(true); onDone(); }));
+  const reconnect = () => run(ProfileService.ReconnectVPN(prevName || name).then(onDone));
   const disconnect = () => run(ProfileService.RemoveVPN(name).then(onDone));
   const remove = () => run(ProfileService.DeleteVPN(prevName || name).then(onDone));
   // probeGateway logs in with the form as it is, without saving: the core reports what the gateway handed out.
@@ -200,12 +212,15 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
         <div className="label">{initial ? "编辑 VPN" : "添加 VPN"}</div>
         <div className="form">
           <input style={{ width: 150 }} placeholder="名称" value={name} onChange={(e) => setName(e.target.value)} />
-          <select style={{ width: 150 }} value={form.type} disabled={saved} onChange={(e) => setForm({ ...empty, type: e.target.value, port: e.target.value === "easyconnect" ? "443" : "" })}>
+          <select style={{ width: 150 }} value={form.type} disabled={saved} onChange={(e) => setForm({ ...empty, type: e.target.value, port: { easyconnect: "443", lan: "7890" }[e.target.value] ?? "" })}>
             {Object.entries(types).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
-          {!noServer.has(form.type) && text("server", form.type === "easyconnect" ? "网关地址，如 vpn.example.edu.cn" : "服务器地址")}
-          {!noServer.has(form.type) && <input style={{ width: 80 }} placeholder={form.type === "easyconnect" ? "443" : "端口"} value={form.port ?? ""} onChange={set("port")} />}
+          {!noServer.has(form.type) && text("server", { easyconnect: "网关地址，如 vpn.example.edu.cn", lan: "另一台设备的局域网 IP，如 192.168.1.20" }[form.type] ?? "服务器地址")}
+          {!noServer.has(form.type) && <input style={{ width: 80 }} placeholder={{ easyconnect: "443", lan: "7890" }[form.type] ?? "端口"} value={form.port ?? ""} onChange={set("port")} />}
         </div>
+        {form.type === "lan" && <div className="muted small" style={{ margin: "4px 0 8px" }}>
+          用另一台已连接 VPN 的 Connaio 上网：那台设备在「设备」页打开「允许局域网设备连接」，端口填它的代理端口；下方「VPN 路由」填要经它访问的网段和域名。这样一个账号只在一处登录。
+        </div>}
         {form.type === "easyconnect" && <>
           <div className="form">{text("username", "用户名")}{secret("password", "密码")}</div>
           <div className="form">{secret("totp-secret", "TOTP 密钥，可选")}</div>
@@ -229,7 +244,8 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
         <div className="label section-label">{form.type === "easyconnect" ? "附加路由" : "VPN 路由"}</div>
         <KVRow kinds={routeKinds} items={addrs} onChange={setAddrs} />
         <div className="form">
-          <button className="btn primary" disabled={busy || !ready || !name.trim() || !status.running} onClick={save}>{saved ? "保存并重连" : "连接"}</button>
+          <button className="btn primary" disabled={busy || !ready || !name.trim() || !status.running} onClick={saved ? reconnect : connect}>{saved ? "重连" : "连接"}</button>
+          <button className="btn" disabled={busy || !ready || !name.trim()} onClick={save}>保存</button>
           {saved && <button className="btn" disabled={busy} onClick={disconnect}>断开</button>}
           {initial && <button className="btn" style={{ color: "var(--bad)" }} disabled={busy} onClick={remove}>删除</button>}
           <button className="btn" disabled={busy} onClick={onDone}>取消</button>
@@ -243,6 +259,7 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
           <div className="label" style={{ gap: 12, alignItems: "baseline", fontSize: 13 }}>状态
             <span className={stateClass[tunnel?.state ?? "down"]}>{stateLabel[tunnel?.state ?? "down"]}</span>
             {tunnel?.address && <span>隧道地址 {tunnel.address}</span>}
+            {tunnel?.kicked && <span className="error">账号可能在别处登录：网关反复结束会话，已停止自动重连。先断开其他设备上的这个账号，再点「重连」</span>}
             {routing?.dns?.length ? <span>DNS {routing.dns.join(", ")}</span> : null}
           </div>
           {routing && (routing.ip?.length || routing.domains?.length) ? (
@@ -301,7 +318,7 @@ export default function Vpn({ status }: { status: Status }) {
               <button className={`tile ${current?.proxy?.name === name ? "selected" : ""}`} onClick={() => setEditing(current?.proxy?.name === name ? null : v)}>
                 <span className="kind">{types[String(v.proxy?.type)] ?? ""}</span>
                 <span className="name">{name}</span>
-                <span className={`foot ${stateClass[state]}`}>{stateLabel[state]}</span>
+                <span className={`foot ${v.kicked ? "delay-bad" : stateClass[state]}`}>{v.kicked ? "别处登录，已暂停" : stateLabel[state]}</span>
               </button>
             </div>
           );

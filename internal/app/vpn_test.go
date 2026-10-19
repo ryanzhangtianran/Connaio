@@ -67,3 +67,39 @@ func TestRuleTarget(t *testing.T) {
 		}
 	}
 }
+
+// TestSaveVPN: saving a disconnected VPN connects nothing; a connected one takes the change. A LAN
+// Connaio (an http node marked connaio-lan) is a VPN; reconnecting one puts it back.
+func TestSaveVPN(t *testing.T) {
+	_, s, _ := startCore(t, "")
+	lan := VPN{
+		Proxy: map[string]any{"name": "宿舍", "type": "http", "server": "192.168.1.20", "port": 7890, "connaio-lan": true},
+		Rules: []string{"IP-CIDR,10.0.0.0/8,宿舍,no-resolve"},
+	}
+	if err := s.SaveVPN(lan, ""); err != nil {
+		t.Fatal(err)
+	}
+	if items, _ := s.UserItems(); len(items.Proxies) != 0 {
+		t.Fatalf("saving connected it: %v", items.Proxies)
+	}
+	if err := s.SetVPN(lan, ""); err != nil {
+		t.Fatal(err)
+	}
+	lan.Proxy["port"] = 7891
+	if err := s.SaveVPN(lan, "宿舍"); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := s.VPNs()
+	if len(list) != 1 || !list[0].Active || list[0].Proxy["port"] != 7891 {
+		t.Fatalf("a connected LAN VPN after saving: %+v", list)
+	}
+	if err := s.ReconnectVPN("宿舍"); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ = s.VPNs(); len(list) != 1 || !list[0].Active {
+		t.Fatalf("after reconnecting: %+v", list)
+	}
+	if err := s.ReconnectVPN("nope"); err == nil {
+		t.Fatal("reconnecting a VPN that isn't connected")
+	}
+}

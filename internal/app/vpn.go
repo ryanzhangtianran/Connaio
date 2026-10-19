@@ -1,11 +1,13 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 )
 
 // VPN is one VPN as the page sees it: the node, the rules that send traffic to it, and the subnet
@@ -20,12 +22,23 @@ type VPN struct {
 	Active bool `json:"active"`
 	// State is up, connecting or down: for EasyConnect the tunnel's, else whether it is active.
 	State string `json:"state"`
+	// Kicked says the EasyConnect login is paused: the gateway kept ending the session, the
+	// account probably signed in elsewhere; ReconnectVPN resumes it.
+	Kicked bool `json:"kicked"`
 }
 
 func (v VPN) name() string { n, _ := v.Proxy["name"].(string); return n }
 
-// vpnTypes are the node types the VPN page manages.
+// vpnTypes are the node types the VPN page manages; besides them, an http node marked connaio-lan:
+// another Connaio on the LAN that is connected to the VPN, used through its proxy port.
 var vpnTypes = []string{"easyconnect", "wireguard", "openvpn", "tailscale"}
+
+// isVPN says whether an override node is one of the VPN page's.
+func isVPN(p map[string]any) bool {
+	t, _ := p["type"].(string)
+	lan, _ := p["connaio-lan"].(bool)
+	return slices.Contains(vpnTypes, t) || lan
+}
 
 // groupOf names the subnet group that stands in for the node when networks bypass it.
 func groupOf(name string) string { return name + " 路由" }
@@ -47,7 +60,7 @@ func (s *ProfileService) VPNs() ([]VPN, error) {
 			list[i].State = "down"
 			for _, tn := range tunnels {
 				if tn.Name == list[i].name() {
-					list[i].State = tn.State
+					list[i].State, list[i].Kicked = tn.State, tn.Kicked
 				}
 			}
 		}
@@ -77,7 +90,7 @@ func (s *ProfileService) activeVPNs() ([]VPN, error) {
 	}
 	var list []VPN
 	for _, p := range items.Proxies {
-		if t, _ := p["type"].(string); !slices.Contains(vpnTypes, t) {
+		if !isVPN(p) {
 			continue
 		}
 		v := VPN{Proxy: p, Active: true}
@@ -109,19 +122,7 @@ func (s *ProfileService) SetVPN(v VPN, replace string) error {
 	if name != replace && slices.ContainsFunc(active, func(a VPN) bool { return a.name() == name }) {
 		return errors.New("已有名为 " + name + " 的 VPN")
 	}
-	if s.settings != nil {
-		draft := v
-		draft.Active = false
-		_ = s.settings.Update(func(st *Settings) {
-			if st.VPNs == nil {
-				st.VPNs = map[string]VPN{}
-			}
-			if replace != "" && replace != name {
-				delete(st.VPNs, replace)
-			}
-			st.VPNs[name] = draft
-		})
-	}
+	s.saveDraft(v, replace)
 	return s.edit(func() error {
 		for _, old := range []string{replace, name} {
 			if err := s.clearVPN(old); err != nil {
@@ -144,6 +145,68 @@ func (s *ProfileService) SetVPN(v VPN, replace string) error {
 		}
 		return nil
 	})
+}
+
+// saveDraft keeps v as its draft, in place of the one named replace when renamed.
+func (s *ProfileService) saveDraft(v VPN, replace string) {
+	if s.settings == nil {
+		return
+	}
+	draft := v
+	draft.Active, draft.State, draft.Kicked = false, "", false
+	_ = s.settings.Update(func(st *Settings) {
+		if st.VPNs == nil {
+			st.VPNs = map[string]VPN{}
+		}
+		if replace != "" && replace != v.name() {
+			delete(st.VPNs, replace)
+		}
+		st.VPNs[v.name()] = draft
+	})
+}
+
+// SaveVPN keeps v's settings without connecting: a connected VPN (named replace, or v's own name
+// for a new one) takes them at once, as SetVPN; a disconnected one only in its draft.
+func (s *ProfileService) SaveVPN(v VPN, replace string) error {
+	if v.name() == "" {
+		return errors.New("VPN 需要一个名字")
+	}
+	active, err := s.activeVPNs()
+	if err != nil {
+		return err
+	}
+	if slices.ContainsFunc(active, func(a VPN) bool { return a.name() == cmp.Or(replace, v.name()) }) {
+		return s.SetVPN(v, replace)
+	}
+	if v.name() != replace && slices.ContainsFunc(active, func(a VPN) bool { return a.name() == v.name() }) {
+		return errors.New("已有名为 " + v.name() + " 的 VPN")
+	}
+	s.saveDraft(v, replace)
+	return nil
+}
+
+// ReconnectVPN connects a connected VPN again: an EasyConnect one drops its tunnel and logs in
+// anew (also after a pause for being signed in elsewhere); the others leave the config and come
+// back, which rebuilds their outbound.
+func (s *ProfileService) ReconnectVPN(name string) error {
+	active, err := s.activeVPNs()
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(active, func(v VPN) bool { return v.name() == name })
+	if i < 0 {
+		return errors.New(name + " 未连接")
+	}
+	if active[i].Proxy["type"] == "easyconnect" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return s.core.Do(ctx, http.MethodPost, "/easyconnect/reconnect", map[string]string{"name": name}, nil)
+	}
+	v := active[i]
+	if err := s.RemoveVPN(name); err != nil {
+		return err
+	}
+	return s.SetVPN(v, "")
 }
 
 // RemoveVPN disconnects: the node, rules and group leave the override; the draft stays.

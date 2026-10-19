@@ -45,6 +45,7 @@ type EasyConnectTunnel struct {
 	Name    string              `json:"name"`
 	State   string              `json:"state"` // up, connecting, down
 	Error   string              `json:"error"`
+	Kicked  bool                `json:"kicked"` // paused: the gateway kept ending the session, the account probably signed in elsewhere
 	Address string              `json:"address"`
 	Routing *EasyConnectRouting `json:"routing"`
 }

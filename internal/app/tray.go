@@ -338,6 +338,9 @@ func (t *trayMenu) vpnStates() map[string]string {
 	states := map[string]string{}
 	for _, v := range list {
 		states[v.name()] = vpnPills[v.State]
+		if v.Kicked {
+			states[v.name()] = dot("bad", "别处登录，已暂停") // reconnected from the VPN page
+		}
 	}
 	return states
 }
