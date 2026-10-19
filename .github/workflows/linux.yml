@@ -5,7 +5,6 @@ name: linux
 
 on:
   push:
-    branches: [main, linux]
     tags: ['v*']
   workflow_dispatch:
 

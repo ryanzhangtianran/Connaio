@@ -4,7 +4,6 @@ name: windows
 
 on:
   push:
-    branches: [main, windows]
     tags: ['v*']
   workflow_dispatch:
 

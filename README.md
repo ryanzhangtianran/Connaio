@@ -76,7 +76,7 @@ wails3 task windows:package        # Windows：bin/Connaio-<版本>-windows-amd6
 
 `build/preview/render.sh` 用演示数据在无界面 Chrome 中渲染活动页，更新上面的预览图（先构建前端）。
 
-推送 `v*` 标签时，GitHub Actions 在三个平台上构建并把安装包附到对应的 Release。
+推送 `v*` 标签时，GitHub Actions 在三个平台上构建并把安装包附到对应的 Release；平时要检查某个平台，手动运行：`gh workflow run linux.yml`（或 `windows.yml`、`macos.yml`）。
 
 ### 结构
 
