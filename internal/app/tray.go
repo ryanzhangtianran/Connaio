@@ -544,8 +544,8 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, 
 		return sub, item
 	}
 
-	m.Add("显示主窗口").SetAccelerator("CmdOrCtrl+M").OnClick(func(*application.Context) { t.show() })
-	m.Add("显示进程监视").OnClick(func(*application.Context) { t.monitor() })
+	t.details[m.Add("显示主窗口").SetAccelerator("CmdOrCtrl+M").OnClick(func(*application.Context) { t.show() })] = "" // no detail; on Linux a blank where the others have their dot (markState)
+	t.details[m.Add("显示进程监视").OnClick(func(*application.Context) { t.monitor() })] = ""
 	var headers []*application.MenuItem
 	header := func(title string) {
 		if runtime.GOOS != "darwin" { // elsewhere a title is a plain disabled item, read as a greyed-out option
@@ -642,7 +642,7 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, 
 	}
 	open(sub, "打开 VPN…", "vpn")
 	m.AddSeparator()
-	m.Add("退出").SetAccelerator("CmdOrCtrl+Q").OnClick(func(*application.Context) { t.app.Quit() })
+	t.details[m.Add("退出").SetAccelerator("CmdOrCtrl+Q").OnClick(func(*application.Context) { t.app.Quit() })] = ""
 	m.Update()
 	sectionHeaders(headers)
 	t.showRows()

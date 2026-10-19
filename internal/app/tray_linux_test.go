@@ -51,3 +51,20 @@ func TestCheckLinux(t *testing.T) {
 		t.Fatalf("unticked: %q", item.Label())
 	}
 }
+
+func TestDotPNGLinux(t *testing.T) {
+	img, err := png.Decode(bytes.NewReader(dotPNG("good")))
+	if err != nil || img.Bounds().Dx() != 16 {
+		t.Fatalf("decode: %v %v", err, img.Bounds())
+	}
+	if r, g, _, a := img.At(8, 8).RGBA(); a == 0 || g < r {
+		t.Errorf("centre should be the solid green: %v", img.At(8, 8))
+	}
+	if _, _, _, a := img.At(0, 0).RGBA(); a != 0 {
+		t.Errorf("corner should be clear: %v", img.At(0, 0))
+	}
+	blank, _ := png.Decode(bytes.NewReader(dotPNG("")))
+	if _, _, _, a := blank.At(8, 8).RGBA(); a != 0 {
+		t.Errorf("the blank should be clear: %v", blank.At(8, 8))
+	}
+}

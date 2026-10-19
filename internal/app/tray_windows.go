@@ -47,3 +47,9 @@ func menuRebuilt(tray *application.SystemTray, menu *application.Menu) {
 		w32.SetMenuInfo(w32.HMENU(h.Uint()), &info)
 	})
 }
+
+// textDots: a Windows menu has no room left for an icon (its check column is gone, menuRebuilt), so
+// a state's dot is ● or ○ in the text.
+const textDots = true
+
+func markState(*application.MenuItem, string) {}

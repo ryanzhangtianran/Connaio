@@ -92,6 +92,7 @@ func sectionHeaders([]*application.MenuItem) {} // titles are separators here (b
 
 func decorate(details, _ map[*application.MenuItem]string) {
 	for item, detail := range details {
+		markState(item, dotColor(detail))
 		base, _, _ := strings.Cut(item.Label(), detailSep)
 		if text := detailText(detail); text != "" {
 			base += detailSep + text
@@ -102,12 +103,24 @@ func decorate(details, _ map[*application.MenuItem]string) {
 	}
 }
 
+// dotColor is a dot detail's colour (dot), or "".
+func dotColor(detail string) string {
+	if len(detail) > 1 && detail[0] == 2 {
+		color, _, _ := strings.Cut(detail[1:], "|")
+		return color
+	}
+	return ""
+}
+
 func detailText(detail string) string {
 	if len(detail) > 1 && detail[0] == 1 { // a pill: "\x01color|text"
 		_, detail, _ = strings.Cut(detail[1:], "|")
 	}
-	if len(detail) > 1 && detail[0] == 2 { // a dot: "\x02color|text", a solid or (grey) hollow one before the text
+	if len(detail) > 1 && detail[0] == 2 { // a dot: "\x02color|text"; where the item can't show it in colour (markState), a solid or (grey) hollow one before the text
 		color, text, _ := strings.Cut(detail[1:], "|")
+		if !textDots {
+			return text
+		}
 		mark := "●"
 		if color == "gray" {
 			mark = "○"
