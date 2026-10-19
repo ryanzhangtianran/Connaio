@@ -75,7 +75,7 @@ export default function ProxyDialog({ groups, editing, onClose }: { groups: stri
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const dirty = useDirty([v, type, extra, join]);
-  useEffect(() => { CoreService.ProxyNames().then((n) => setNames(n ?? [])); }, []);
+  useEffect(() => { CoreService.ProxyNames().then((n) => setNames((n ?? []).filter((x) => x !== "DIRECT"))); }, []); // DIRECT is 不使用
 
   const fields = protocols[type].fields;
   const val = (f: Field) => v[f.key] ?? f.def ?? (f.kind === "bool" ? false : "");

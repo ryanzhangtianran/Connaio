@@ -43,7 +43,7 @@ export function General() {
   const [busy, setBusy] = useState("");
   const [login, setLogin] = useState(false);
   const [traySpeed, setTraySpeed] = useState(true);
-  const [port, setPort] = useSetting<number>("mixed-port", 7899);
+  const [port, setPort] = useSetting<number>("mixed-port", 7890);
   const [portText, setPortText] = useState("");
   const [logLevel, setLogLevel] = useSetting<string>("log-level", "info");
   const [version, setVersion] = useState("");

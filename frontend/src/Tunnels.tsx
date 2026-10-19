@@ -15,11 +15,12 @@ export const localRule = (tunnel: string) => `IN-NAME,${tunnel},DIRECT`;
 
 export default function Tunnels({ status }: { status: Status }) {
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
-  const [mine, setMine] = useState<string[]>([]);
+  const [mine, setMine] = useState<Record<string, any>[]>([]);
   const [dialog, setDialog] = useState(false);
+  const [editing, setEditing] = useState<Record<string, any> | null>(null);
   const [open, setOpen] = useState("");
 
-  const loadMine = () => ProfileService.UserItems().then((u) => setMine(nonNull(u.tunnels).map((t) => String(t.name))));
+  const loadMine = () => ProfileService.UserItems().then((u) => setMine(nonNull(u.tunnels)));
   const poll = () => CoreService.ReverseTunnels().then((t) => setTunnels(t ?? []));
   const load = () => Promise.all([poll(), loadMine()]);
   useEffect(() => { if (status.running) loadMine(); }, [status.running]);
@@ -56,7 +57,10 @@ export default function Tunnels({ status }: { status: Status }) {
                       {f.error && <span className="error small">{f.error}</span>}
                     </div>
                   ))}
-                  {mine.includes(t.name) && <button className="danger" onClick={() => { remove(t.name); setOpen(""); }}>删除此隧道</button>}
+                  {mine.some((m) => m.name === t.name) && <>
+                    <button onClick={() => { setEditing(mine.find((m) => m.name === t.name)!); setOpen(""); }}>编辑此隧道</button>
+                    <button className="danger" onClick={() => { remove(t.name); setOpen(""); }}>删除此隧道</button>
+                  </>}
                 </div>
               )}
             </div>
@@ -66,6 +70,7 @@ export default function Tunnels({ status }: { status: Status }) {
       </div>
 
       {dialog && <TunnelDialog onClose={() => { setDialog(false); load(); }} />}
+      {editing && <TunnelDialog editing={editing} onClose={() => { setEditing(null); load(); }} />}
     </>
   );
 }

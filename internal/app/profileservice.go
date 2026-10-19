@@ -320,6 +320,10 @@ func (s *ProfileService) AddTunnel(tunnel map[string]any) error {
 	return s.edit(func() error { return s.store.AddTunnel(tunnel) })
 }
 
+func (s *ProfileService) EditTunnel(name string, tunnel map[string]any) error {
+	return s.edit(func() error { return s.store.EditTunnel(name, tunnel) })
+}
+
 func (s *ProfileService) RemoveTunnel(name string) error {
 	return s.edit(func() error { return s.store.RemoveTunnel(name) })
 }

@@ -3,11 +3,16 @@ package app
 import (
 	"bufio"
 	"cmp"
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -141,4 +146,97 @@ func (s *ToolService) HostKey(host string, port int) (string, error) {
 		return "", fmt.Errorf("无法读取服务器公钥：%w", err)
 	}
 	return strings.TrimSpace(string(ssh.MarshalAuthorizedKey(got))), nil
+}
+
+// KeyPair is an SSH key pair kept in ~/.connaio for a tunnel.
+type KeyPair struct {
+	Private string `json:"private"` // OpenSSH private key text, for the tunnel's private-key
+	Public  string `json:"public"`  // authorized_keys line
+	Path    string `json:"path"`    // the private key's file; the public one is beside it with .pub
+}
+
+// KeyPair loads ~/.connaio/<name>_ed25519, generating it (ed25519, no passphrase) only when missing,
+// so a key already installed on a server is never replaced.
+func (s *ToolService) KeyPair(name string) (KeyPair, error) {
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
+		return KeyPair{}, errors.New("先填写隧道名称")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return KeyPair{}, err
+	}
+	path := filepath.Join(home, ".connaio", name+"_ed25519")
+	text, err := os.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		_, key, _ := ed25519.GenerateKey(nil)
+		block, err := ssh.MarshalPrivateKey(key, "connaio-"+name)
+		if err != nil {
+			return KeyPair{}, err
+		}
+		text = pem.EncodeToMemory(block)
+		signer, _ := ssh.NewSignerFromKey(key)
+		pub := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey()))) + " connaio-" + name + "\n"
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			return KeyPair{}, err
+		}
+		if err := os.WriteFile(path, text, 0o600); err != nil {
+			return KeyPair{}, err
+		}
+		if err := os.WriteFile(path+".pub", []byte(pub), 0o644); err != nil {
+			return KeyPair{}, err
+		}
+	} else if err != nil {
+		return KeyPair{}, err
+	}
+	signer, err := ssh.ParsePrivateKey(text)
+	if err != nil {
+		return KeyPair{}, fmt.Errorf("%s 无法解析：%w", path, err)
+	}
+	pub := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey()))) + " connaio-" + name
+	return KeyPair{Private: string(text), Public: pub, Path: path}, nil
+}
+
+// SSHLogin is a password login, used once to put a key on a server.
+type SSHLogin struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+	HostKey  string `json:"hostKey,omitempty"` // "type base64"; checked when given
+}
+
+// installKeyScript appends the key line read from stdin to ~/.ssh/authorized_keys unless its
+// type and key are already there, like ssh-copy-id.
+const installKeyScript = `umask 077; read -r k; set -- $k; mkdir -p ~/.ssh && touch ~/.ssh/authorized_keys && { grep -qF "$1 $2" ~/.ssh/authorized_keys || echo "$k" >> ~/.ssh/authorized_keys; }`
+
+// InstallKey logs in with the password and authorizes privateKey's public half for that user.
+func (s *ToolService) InstallKey(l SSHLogin, privateKey string) error {
+	signer, err := ssh.ParsePrivateKey([]byte(privateKey))
+	if err != nil {
+		return fmt.Errorf("私钥无法解析：%w", err)
+	}
+	hostKey := ssh.InsecureIgnoreHostKey() // ponytail: trust on first use, as DeployFRPS
+	if l.HostKey != "" {
+		k, _, _, _, err := ssh.ParseAuthorizedKey([]byte(l.HostKey))
+		if err != nil {
+			return fmt.Errorf("服务器公钥无法解析：%w", err)
+		}
+		hostKey = ssh.FixedHostKey(k)
+	}
+	cfg := &ssh.ClientConfig{User: l.User, Auth: []ssh.AuthMethod{ssh.Password(l.Password)}, HostKeyCallback: hostKey, Timeout: 15 * time.Second}
+	client, err := ssh.Dial("tcp", net.JoinHostPort(l.Host, strconv.Itoa(cmp.Or(l.Port, 22))), cfg)
+	if err != nil {
+		return fmt.Errorf("SSH 连接失败：%w", err)
+	}
+	defer client.Close()
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+	session.Stdin = strings.NewReader(string(ssh.MarshalAuthorizedKey(signer.PublicKey())))
+	if out, err := session.CombinedOutput("sh -c '" + installKeyScript + "'"); err != nil {
+		return fmt.Errorf("安装公钥失败：%s", cmp.Or(strings.TrimSpace(string(out)), err.Error()))
+	}
+	return nil
 }

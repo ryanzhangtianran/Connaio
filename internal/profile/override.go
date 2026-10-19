@@ -191,6 +191,31 @@ func (s *Store) AddTunnel(tunnel map[string]any) error {
 	})
 }
 
+// EditTunnel replaces the GUI-added tunnel named name with tunnel, in place; it may rename it.
+func (s *Store) EditTunnel(name string, tunnel map[string]any) error {
+	newName, _ := tunnel["name"].(string)
+	if newName == "" {
+		return errors.New("隧道名称不能为空")
+	}
+	return s.editOverride(func(root *yaml.Node) error {
+		seq := listOf(root, "reverse-tunnels")
+		i := findNamed(seq, name)
+		if i < 0 {
+			return fmt.Errorf("没有名为 %s 的隧道", name)
+		}
+		if j := findNamed(seq, newName); j >= 0 && j != i {
+			return fmt.Errorf("已存在名为 %s 的隧道", newName)
+		}
+		var n yaml.Node
+		if err := n.Encode(tunnel); err != nil {
+			return err
+		}
+		orderKeys(&n)
+		seq.Content[i] = &n
+		return nil
+	})
+}
+
 func (s *Store) RemoveTunnel(name string) error {
 	return s.editOverride(func(root *yaml.Node) error {
 		removeNamed(root, "reverse-tunnels", name)
