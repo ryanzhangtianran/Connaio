@@ -9,7 +9,7 @@ const LOG_LINES = 500;
 const HISTORY = 60; // seconds of traffic kept for the sparklines
 const FLUSH_MS = 250; // log lines are batched this often
 
-export type Log = LogLine & { id: number };
+type Log = LogLine & { id: number };
 
 function store<T>(initial: T) {
   let value = initial;

@@ -101,11 +101,9 @@ button { font: inherit; color: inherit; }
 .event-row.error .event-meta .dot { background: var(--bad); } .event-row.warning .event-meta .dot { background: var(--warn); }
 .event-text { margin-top: 3px; font-size: 13px; line-height: 1.45; word-break: break-word; }
 .topbar .events { position: relative; --wails-draggable: no-drag; }
-.pill.small { min-width: 0; color: var(--text-2); }
 .pill .dot { width: 6px; height: 6px; }
 .page { flex: 1; overflow: auto; padding: 18px 28px 28px; } /* a wider margin beside the sidebar than between cards */
 .hint { margin-top: 10px; max-width: 640px; font-size: 12px; line-height: 1.5; color: var(--text-2); text-wrap: pretty; }
-.hint b { color: var(--text); font-weight: 600; }
 
 /* header facts */
 .facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 4px 0 20px; padding: 0 20px; } /* in line with the cards' columns and text */
@@ -177,13 +175,11 @@ button { font: inherit; color: inherit; }
 .seg { display: inline-flex; justify-self: start; padding: 2px; border-radius: 8px; background: var(--track); }
 .seg button { border: 0; border-radius: 6px; padding: 3px 16px; background: none; font-size: 12px; white-space: nowrap; }
 .seg button.on { background: var(--seg-on); color: #fff; font-weight: 500; }
-.seg.wide { display: flex; margin: 12px 0 8px; }
-.seg.wide button { flex: 1; padding-inline: 8px; }
 
 .rank { display: flex; flex-direction: column; gap: 10px; }
 .rank .row { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 10px; row-gap: 4px; min-height: 24px; }
-.rank.with-icons .row:not(.child) { grid-template-columns: 18px 1fr auto; }
-.rank.with-icons .row:not(.child) .client-icon { grid-row: span 2; } /* icon centred on name and bar */
+.rank.with-icons .row { grid-template-columns: 18px 1fr auto; }
+.rank.with-icons .row .client-icon { grid-row: span 2; } /* icon centred on name and bar */
 .rank .name { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank .bytes { font-size: 13px; font-variant-numeric: tabular-nums; }
 .rank .bar { grid-column: 1 / -1; height: 3px; border-radius: 2px; background: var(--track); overflow: hidden; }
@@ -242,7 +238,6 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .tile-title { font-weight: 600; font-size: 13px; }
 .tile-title.proxies { color: #c026d3; }
 .tile-title.groups { color: #0ea5e9; }
-.tile-title.remote { color: #6366f1; }
 .btn.small-btn, .table .btn { height: 24px; padding: 0 10px; font-size: 12px; border-radius: 6px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, 164px); gap: 12px; }
 .tile-wrap { position: relative; }
@@ -331,7 +326,6 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .grouped .setting-row { padding: 12px 16px; background: var(--card); }
 .grouped .section-title + .setting-row, .grouped .settings-card > .setting-row:first-child { border-top: 0; border-top-left-radius: 12px; border-top-right-radius: 12px; }
 .grouped .settings-card > .setting-row:last-child { border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
-.grouped .card:not(.settings-card) { margin-top: 16px; }
 
 /* profiles: grouped lists with a toolbar, as in the settings sheet */
 .group-title { margin: 18px 4px 8px; font-weight: 600; }
@@ -448,14 +442,12 @@ tr.muted td.rule-actions { text-decoration: none; }
 .diag-controls select { flex: 1; height: 24px; font-size: 12px; }
 .diag-tests { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; } /* one row; labels never change width */
 .diag-tests .btn { width: 100%; height: 24px; padding: 0 6px; font-size: 12px; border-radius: 6px; }
-.diag-log { min-height: 200px; max-height: 320px; background: var(--card); padding: 12px 16px !important; font-size: 12px !important; }
+.diag-log { min-height: 220px; max-height: 320px; background: var(--card); padding: 12px 16px !important; font-size: 12px !important; }
 .diag-log .diag-title { font-size: 12px; }
 .diag-sheet .sheet-foot { padding: 8px 12px; }
 .diag-sheet .sheet-foot .btn { min-width: 64px; height: 24px; font-size: 12px; border-radius: 6px; }
 .diag-tests .btn.running:disabled { opacity: 1; color: var(--accent); border-color: var(--accent); }
-.diag-controls select { flex: 1; }
-.diag-log { min-height: 220px; }
-.rank.with-icons .row:not(.child) .bar { grid-column: 2 / 4; }
+.rank.with-icons .row .bar { grid-column: 2 / 4; }
 /* activity tools: exit IP, process monitor, diagnosis and repair */
 .picker {
   display: inline-flex; align-items: center; gap: 8px; max-width: 60%; height: 24px; padding: 0 10px;
@@ -478,7 +470,6 @@ tr.muted td.rule-actions { text-decoration: none; }
 .tool-log .diag-title { font-size: 12px; color: var(--text); }
 .tool-log .diag-title.bad { color: var(--bad); }
 .tool-log .diag-section + .diag-section { margin-top: 10px; }
-.tools-card .setting-row { gap: 8px; padding: 8px 0; font-size: 12px; }
 .ip-big { margin-top: 6px; font: 400 22px/1.2 var(--rounded); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ip-big.muted { font-size: 14px; line-height: 26.4px; } /* 查询中… and — are no address: the 22px line's height, not its size */
 .exit-stats { grid-template-columns: auto minmax(0, 1fr); } /* the place is short; the ISP takes the rest */

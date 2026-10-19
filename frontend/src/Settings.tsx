@@ -2,14 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { CoreService, EnhancedService, ProfileService, SettingsService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { About, DNSLeak, LeakServer, Update, UpdateProgress } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { on } from "./hooks";
-import { platform, sizeText, words, validPort } from "./format";
+import { errText, platform, sizeText, words, validPort } from "./format";
 
 
-function Row({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
+// Row is one setting: title and description, the control at the right; a list row lists its items below.
+function Row({ title, desc, list, children }: { title: string; desc?: string; list?: boolean; children: React.ReactNode }) {
   return (
-    <div className="setting-row">
+    <div className={list ? "setting-row list-row" : "setting-row"}>
       <div><div className="setting-title">{title}</div>{desc && <div className="muted small">{desc}</div>}</div>
-      <div className="setting-control">{children}</div>
+      <div className={list ? "list-items" : "setting-control"}>{children}</div>
     </div>
   );
 }
@@ -136,13 +137,13 @@ function ListSetting({ title, desc, path, placeholder }: { title: string; desc?:
   const items = list ?? [];
   const add = () => { const v = item.trim(); if (v && !items.includes(v)) setList([...items, v]).then(() => setItem("")); };
   return (
-    <ListBlock title={title} desc={desc}>
+    <Row list title={title} desc={desc}>
       {items.map((v, i) => <ListItem key={v} onRemove={() => setList(items.filter((_, j) => j !== i))}><span className="list-value">{v}</span></ListItem>)}
       <div className="list-add">
         <input className="code-input" placeholder={placeholder} value={item} onChange={(e) => setItem(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
         <button className="btn" disabled={!item.trim()} onClick={add}>添加</button>
       </div>
-    </ListBlock>
+    </Row>
   );
 }
 
@@ -159,7 +160,7 @@ function PolicySetting() {
     setPolicy({ ...(policy ?? {}), [d]: sv.length === 1 ? sv[0] : sv }).then(() => { setDomain(""); setServers(""); });
   };
   return (
-    <ListBlock title="分域名服务器" desc="指定域名用指定的服务器解析。">
+    <Row list title="分域名服务器" desc="指定域名用指定的服务器解析。">
       {entries.map(([d, v]) => (
         <ListItem key={d} onRemove={() => setPolicy(Object.fromEntries(entries.filter(([k]) => k !== d)))}>
           <span className="list-value">{d}</span><span className="list-value muted">{list(v).join(", ")}</span>
@@ -170,16 +171,7 @@ function PolicySetting() {
         <input className="code-input" placeholder="服务器，多个用逗号分隔" value={servers} onChange={(e) => setServers(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
         <button className="btn" disabled={!domain.trim() || !servers.trim()} onClick={add}>添加</button>
       </div>
-    </ListBlock>
-  );
-}
-
-function ListBlock({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
-  return (
-    <div className="setting-row list-row">
-      <div><div className="setting-title">{title}</div>{desc && <div className="muted small">{desc}</div>}</div>
-      <div className="list-items">{children}</div>
-    </div>
+    </Row>
   );
 }
 
@@ -215,7 +207,7 @@ function LeakTest() {
   const [error, setError] = useState("");
   const run = () => {
     setBusy(true); setError(""); setResult(null);
-    ToolService.DNSLeakTest().then(setResult).catch((e) => setError(String(e).replace(/^\w*Error:\s*/, "") || "检测失败，详情见事件")).finally(() => setBusy(false));
+    ToolService.DNSLeakTest().then(setResult).catch((e) => setError(errText(e, "检测失败，详情见事件"))).finally(() => setBusy(false));
   };
   const leaked = new Set((result?.leaked ?? []).map((s) => s.ip));
   const desc = busy ? "约需 20 秒" : error ? error : !result ? "按规则访问测试域名，看哪些 DNS 服务器解析了它；需要「规则判定」模式"

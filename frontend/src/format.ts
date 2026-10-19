@@ -29,5 +29,9 @@ export function size(bytes: number): [string, string] {
 
 export const sizeText = (bytes: number) => size(bytes).join(" ");
 
+// errText is a failed call's text without its "RuntimeError: " prefix (MarshalError in app.go), or
+// fallback when there is none.
+export const errText = (e: unknown, fallback = "") => String(e).replace(/^\w*Error:\s*/, "") || fallback;
+
 // nonNull drops the nulls Go's bindings allow in slices of maps.
 export const nonNull = <T,>(a: (T | null)[] | null | undefined): T[] => (a ?? []).filter((x): x is T => x != null);

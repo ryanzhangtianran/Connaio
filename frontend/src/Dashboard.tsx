@@ -12,7 +12,7 @@ function method(c: Conn) {
 }
 // client names a connection's client as the activity page does: the app it counts towards, 隧道 <name>
 // for one a reverse tunnel brought in
-export const client = (c: Conn) => c.app || (c.inbound === "Inner" ? "Connaio" : c.process || c.source || "未知");
+const client = (c: Conn) => c.app || (c.inbound === "Inner" ? "Connaio" : c.process || c.source || "未知");
 
 function Detail({ c, onRule, onClose }: { c: Conn; onRule: () => void; onClose: () => void }) {
   const rows: [string, string][] = [

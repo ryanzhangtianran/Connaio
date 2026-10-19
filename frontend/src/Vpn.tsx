@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { EasyConnectTunnel, Status, VPN } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import { nonNull, validPort } from "./format";
+import { errText, nonNull, validPort } from "./format";
 import { usePoll } from "./hooks";
 import PasswordInput from "./PasswordInput";
 
@@ -64,8 +64,6 @@ const routeOf = (rule: string): KV | null => { const f = rule.split(",").map((x)
 // condOf is the subnet group's key for a bypass entry, and bypassOf reads it back.
 const condOf = (b: KV) => (b.t === "CIDR" ? b.v : b.t.startsWith("TYPE:") ? b.t : `${b.t}:${b.v}`);
 const bypassOf = (key: string): KV => { const [t, ...rest] = key.split(":"); return key.startsWith("TYPE:") ? { t: key, v: "" } : ["SSID", "BSSID", "ROUTER"].includes(t) ? { t, v: rest.join(":") } : { t: "CIDR", v: key }; };
-// reason is an error's text without the runtime's "RuntimeError:" prefix.
-const reason = (e: unknown) => ((e as Error)?.message ?? String(e)).replace(/^RuntimeError:\s*/, "");
 
 // KVRow is a kind selector and a value with a + button, as the rows above it, and a table of what
 // was added, each row with a 删除.
@@ -102,30 +100,28 @@ function KVRow({ kinds, items, onChange, fill }: { kinds: Kind[]; items: KV[]; o
   );
 }
 
+// formOf fills the editor from a VPN as build writes it.
+function formOf(v: VPN): { form: Form; addrs: KV[]; bypass: KV[] } {
+  const p = v.proxy ?? {};
+  const form: Form = { type: p["connaio-lan"] ? "lan" : String(p.type ?? "easyconnect") };
+  for (const [k, x] of Object.entries(p)) if (k !== "name" && k !== "type" && k !== "connaio-lan" && (typeof x === "string" || typeof x === "number" || typeof x === "boolean")) form[k] = String(x);
+  if (Array.isArray(p["allowed-ips"])) form["allowed-ips"] = p["allowed-ips"].join(", ");
+  return { form, addrs: nonNull(v.rules).map(routeOf).filter((x): x is KV => !!x), bypass: Object.keys(v.group?.rules ?? {}).map(bypassOf) };
+}
+
 // VpnEditor edits one VPN (initial null: a new one) and connects, disconnects or deletes it.
 function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initial: VPN | null; tunnel: EasyConnectTunnel | null; onDone: () => void }) {
   const prevName = String(initial?.proxy?.name ?? "");
-  const [form, setForm] = useState<Form>(empty);
-  const [addrs, setAddrs] = useState<KV[]>([]);
-  const [bypass, setBypass] = useState<KV[]>([]);
+  const init = initial && formOf(initial);
+  const [form, setForm] = useState<Form>(init?.form ?? empty);
+  const [addrs, setAddrs] = useState<KV[]>(init?.addrs ?? []);
+  const [bypass, setBypass] = useState<KV[]>(init?.bypass ?? []);
   const [name, setName] = useState(prevName || defaultName);
   const [saved, setSaved] = useState(!!initial?.active);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [probe, setProbe] = useState<string[]>([]);
   const [probing, setProbing] = useState(false);
-
-  useEffect(() => {
-    const v = initial;
-    if (!v) return;
-    const p = v.proxy ?? {};
-    const f: Form = { type: p["connaio-lan"] ? "lan" : String(p.type ?? "easyconnect") };
-    for (const [k, x] of Object.entries(p)) if (k !== "name" && k !== "type" && k !== "connaio-lan" && (typeof x === "string" || typeof x === "number" || typeof x === "boolean")) f[k] = String(x);
-    if (Array.isArray(p["allowed-ips"])) f["allowed-ips"] = p["allowed-ips"].join(", ");
-    setForm(f);
-    setAddrs(nonNull(v.rules).map(routeOf).filter((x): x is KV => !!x));
-    setBypass(Object.keys(v.group?.rules ?? {}).map(bypassOf));
-  }, [initial]);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
   const text = (k: string, placeholder: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => <input className="grow" placeholder={placeholder} value={form[k] ?? ""} onChange={set(k)} {...extra} />;
@@ -187,7 +183,7 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
   const run = (p: Promise<unknown>) => {
     setBusy(true);
     setError("");
-    p.catch((e) => setError(reason(e))).finally(() => setBusy(false));
+    p.catch((e) => setError(errText(e))).finally(() => setBusy(false));
   };
   // save keeps the settings (a connected VPN takes them at once); connect puts a disconnected one
   // in the config; reconnect drops a connected one's tunnel and logs in again
@@ -200,7 +196,7 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
   const probeGateway = () => {
     setProbing(true);
     setProbe(["登录中…"]);
-    ToolService.VPNProbe(build().proxy).then((l) => setProbe(nonNull(l))).catch((e) => setProbe([reason(e)])).finally(() => setProbing(false));
+    ToolService.VPNProbe(build().proxy).then((l) => setProbe(nonNull(l))).catch((e) => setProbe([errText(e)])).finally(() => setProbing(false));
   };
   // currentNetwork is the subnet-group condition for the network this machine is on now.
   const currentNetwork = () => CoreService.CurrentNetwork().then((n): KV | null => (n.ssid ? { t: "SSID", v: n.ssid } : n.router ? { t: "ROUTER", v: n.router } : null));
@@ -208,78 +204,76 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
   const routing = tunnel?.routing;
 
   return (
-    <>
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="label">{initial ? "编辑 VPN" : "添加 VPN"}</div>
-        <div className="form">
-          <input style={{ width: 150 }} placeholder="名称" value={name} onChange={(e) => setName(e.target.value)} />
-          <select style={{ width: 150 }} value={form.type} disabled={saved} onChange={(e) => setForm({ ...empty, type: e.target.value, port: defaultPort[e.target.value] ?? "" })}>
-            {Object.entries(types).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-          {!noServer.has(form.type) && text("server", { easyconnect: "网关地址，如 vpn.example.edu.cn", lan: "另一台设备的局域网 IP，如 192.168.1.20" }[form.type] ?? "服务器地址")}
-          {!noServer.has(form.type) && <input style={{ width: 80 }} placeholder={defaultPort[form.type] ?? "端口"} value={form.port ?? ""} onChange={set("port")} />}
-        </div>
-        {form.type === "lan" && <div className="muted small" style={{ margin: "4px 0 8px" }}>
-          用另一台已连接 VPN 的 Connaio 上网：那台设备在「设备」页打开「允许局域网设备连接」，端口填它的代理端口；下方「VPN 路由」填要经它访问的网段和域名。这样一个账号只在一处登录。
-        </div>}
-        {form.type === "easyconnect" && <>
-          <div className="form">{text("username", "用户名")}{secret("password", "密码")}</div>
-          <div className="form">{secret("totp-secret", "TOTP 密钥，可选")}</div>
-        </>}
-        {form.type === "wireguard" && <>
-          <div className="form">{secret("private-key", "本机私钥")}{text("public-key", "对端公钥")}</div>
-          <div className="form">{secret("pre-shared-key", "预共享密钥，可选")}{text("ip", "本机地址，如 10.0.0.2")}{text("mtu", "MTU，可选", { style: { width: 80, flex: "none" } })}</div>
-          <div className="form">{text("allowed-ips", "对端网段（allowed-ips），逗号分隔，如 10.0.0.0/8")}</div>
-        </>}
-        {form.type === "openvpn" && <>
-          <div className="form"><textarea className="grow" rows={5} placeholder="粘贴 .ovpn 文件内容（含 remote、<ca>、<cert>、<key>）" value={form["ovpn-config"] ?? ""} onChange={set("ovpn-config")} /></div>
-          <div className="form">{text("username", "用户名，可选")}{secret("password", "密码，可选")}</div>
-        </>}
-        {form.type === "tailscale" && <>
-          <div className="form">{secret("auth-key", "Auth key（可选，留空时登录链接见日志）")}{text("hostname", "本机在 tailnet 中的名称（可选）")}</div>
-          <div className="form">{text("control-url", "控制服务器，Headscale 时填，可选")}{text("exit-node", "出口节点，可选")}
-            <label className="radio"><input type="checkbox" checked={form["accept-routes"] === "true"} onChange={(e) => setForm({ ...form, "accept-routes": String(e.target.checked) })} /> 接受子网路由</label></div>
-        </>}
-        <div className="label section-label">直连网络</div>
-        <KVRow kinds={bypassKinds} items={bypass} onChange={setBypass} fill={{ label: "当前网络", get: currentNetwork }} />
-        <div className="label section-label">{form.type === "easyconnect" ? "附加路由" : "VPN 路由"}</div>
-        <KVRow kinds={routeKinds} items={addrs} onChange={setAddrs} />
-        <div className="form">
-          <button className="btn primary" disabled={busy || !ready || !name.trim() || !status.running} onClick={saved ? reconnect : connect}>{saved ? "重连" : "连接"}</button>
-          <button className="btn" disabled={busy || !ready || !name.trim()} onClick={save}>保存</button>
-          {saved && <button className="btn" disabled={busy} onClick={disconnect}>断开</button>}
-          {initial && <button className="btn" style={{ color: "var(--bad)" }} disabled={busy} onClick={remove}>删除</button>}
-          <button className="btn" disabled={busy} onClick={onDone}>取消</button>
-          {form.type === "easyconnect" && tunnel?.state !== "up" && <button className="btn" disabled={probing || !ready || !status.running || tunnel?.state === "connecting"} onClick={probeGateway}>{probing ? "登录中…" : "测试登录"}</button>}
-          {probe.length > 0 && <span className={`small ${/失败|错误|refused|rejected/i.test(probe[0]) ? "error" : "muted"}`} style={{ alignSelf: "center" }}>{probe.join("；")}</span>}
-        </div>
-        {error && <div className="error small" style={{ marginTop: 8 }}>{error}</div>}
-
-      {saved && form.type === "easyconnect" && (
-        <div style={{ marginTop: 14 }}>
-          <div className="label" style={{ gap: 12, alignItems: "baseline", fontSize: 13 }}>状态
-            <span className={stateClass[tunnel?.state ?? "down"]}>{stateLabel[tunnel?.state ?? "down"]}</span>
-            {tunnel?.address && <span>隧道地址 {tunnel.address}</span>}
-            {tunnel?.kicked && <span className="error">账号可能在别处登录：网关反复结束会话，已停止自动重连。先断开其他设备上的这个账号，再点「重连」</span>}
-            {routing?.dns?.length ? <span>DNS {routing.dns.join(", ")}</span> : null}
-          </div>
-          {routing && (routing.ip?.length || routing.domains?.length) ? (
-                <div className="table-wrap tight">
-                  <table className="table">
-                    <thead><tr><th>网关下发的网段</th><th>端口</th><th>协议</th></tr></thead>
-                    <tbody>
-                      {nonNull(routing.ip).map((r, i) => (
-                        <tr key={i}><td>{r.from === r.to ? r.from : `${r.from} ~ ${r.to}`}</td><td>{r.portMin === r.portMax ? r.portMin : `${r.portMin}-${r.portMax}`}</td><td>{r.protocol}</td></tr>
-                      ))}
-                      {nonNull(routing.domains).map((d) => <tr key={d}><td>{d}</td><td /><td>域名</td></tr>)}
-                    </tbody>
-                  </table>
-                </div>
-          ) : null}
-        </div>
-      )}
+    <div className="card" style={{ marginTop: 16 }}>
+      <div className="label">{initial ? "编辑 VPN" : "添加 VPN"}</div>
+      <div className="form">
+        <input style={{ width: 150 }} placeholder="名称" value={name} onChange={(e) => setName(e.target.value)} />
+        <select style={{ width: 150 }} value={form.type} disabled={saved} onChange={(e) => setForm({ ...empty, type: e.target.value, port: defaultPort[e.target.value] ?? "" })}>
+          {Object.entries(types).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        {!noServer.has(form.type) && text("server", { easyconnect: "网关地址，如 vpn.example.edu.cn", lan: "另一台设备的局域网 IP，如 192.168.1.20" }[form.type] ?? "服务器地址")}
+        {!noServer.has(form.type) && <input style={{ width: 80 }} placeholder={defaultPort[form.type] ?? "端口"} value={form.port ?? ""} onChange={set("port")} />}
       </div>
-    </>
+      {form.type === "lan" && <div className="muted small" style={{ margin: "4px 0 8px" }}>
+        用另一台已连接 VPN 的 Connaio 上网：那台设备在「设备」页打开「允许局域网设备连接」，端口填它的代理端口；下方「VPN 路由」填要经它访问的网段和域名。这样一个账号只在一处登录。
+      </div>}
+      {form.type === "easyconnect" && <>
+        <div className="form">{text("username", "用户名")}{secret("password", "密码")}</div>
+        <div className="form">{secret("totp-secret", "TOTP 密钥，可选")}</div>
+      </>}
+      {form.type === "wireguard" && <>
+        <div className="form">{secret("private-key", "本机私钥")}{text("public-key", "对端公钥")}</div>
+        <div className="form">{secret("pre-shared-key", "预共享密钥，可选")}{text("ip", "本机地址，如 10.0.0.2")}{text("mtu", "MTU，可选", { style: { width: 80, flex: "none" } })}</div>
+        <div className="form">{text("allowed-ips", "对端网段（allowed-ips），逗号分隔，如 10.0.0.0/8")}</div>
+      </>}
+      {form.type === "openvpn" && <>
+        <div className="form"><textarea className="grow" rows={5} placeholder="粘贴 .ovpn 文件内容（含 remote、<ca>、<cert>、<key>）" value={form["ovpn-config"] ?? ""} onChange={set("ovpn-config")} /></div>
+        <div className="form">{text("username", "用户名，可选")}{secret("password", "密码，可选")}</div>
+      </>}
+      {form.type === "tailscale" && <>
+        <div className="form">{secret("auth-key", "Auth key（可选，留空时登录链接见日志）")}{text("hostname", "本机在 tailnet 中的名称（可选）")}</div>
+        <div className="form">{text("control-url", "控制服务器，Headscale 时填，可选")}{text("exit-node", "出口节点，可选")}
+          <label className="radio"><input type="checkbox" checked={form["accept-routes"] === "true"} onChange={(e) => setForm({ ...form, "accept-routes": String(e.target.checked) })} /> 接受子网路由</label></div>
+      </>}
+      <div className="label section-label">直连网络</div>
+      <KVRow kinds={bypassKinds} items={bypass} onChange={setBypass} fill={{ label: "当前网络", get: currentNetwork }} />
+      <div className="label section-label">{form.type === "easyconnect" ? "附加路由" : "VPN 路由"}</div>
+      <KVRow kinds={routeKinds} items={addrs} onChange={setAddrs} />
+      <div className="form">
+        <button className="btn primary" disabled={busy || !ready || !name.trim() || !status.running} onClick={saved ? reconnect : connect}>{saved ? "重连" : "连接"}</button>
+        <button className="btn" disabled={busy || !ready || !name.trim()} onClick={save}>保存</button>
+        {saved && <button className="btn" disabled={busy} onClick={disconnect}>断开</button>}
+        {initial && <button className="btn" style={{ color: "var(--bad)" }} disabled={busy} onClick={remove}>删除</button>}
+        <button className="btn" disabled={busy} onClick={onDone}>取消</button>
+        {form.type === "easyconnect" && tunnel?.state !== "up" && <button className="btn" disabled={probing || !ready || !status.running || tunnel?.state === "connecting"} onClick={probeGateway}>{probing ? "登录中…" : "测试登录"}</button>}
+        {probe.length > 0 && <span className={`small ${/失败|错误|refused|rejected/i.test(probe[0]) ? "error" : "muted"}`} style={{ alignSelf: "center" }}>{probe.join("；")}</span>}
+      </div>
+      {error && <div className="error small" style={{ marginTop: 8 }}>{error}</div>}
+
+    {saved && form.type === "easyconnect" && (
+      <div style={{ marginTop: 14 }}>
+        <div className="label" style={{ gap: 12, alignItems: "baseline", fontSize: 13 }}>状态
+          <span className={stateClass[tunnel?.state ?? "down"]}>{stateLabel[tunnel?.state ?? "down"]}</span>
+          {tunnel?.address && <span>隧道地址 {tunnel.address}</span>}
+          {tunnel?.kicked && <span className="error">账号可能在别处登录：网关反复结束会话，已停止自动重连。先断开其他设备上的这个账号，再点「重连」</span>}
+          {routing?.dns?.length ? <span>DNS {routing.dns.join(", ")}</span> : null}
+        </div>
+        {routing && (routing.ip?.length || routing.domains?.length) ? (
+              <div className="table-wrap tight">
+                <table className="table">
+                  <thead><tr><th>网关下发的网段</th><th>端口</th><th>协议</th></tr></thead>
+                  <tbody>
+                    {nonNull(routing.ip).map((r, i) => (
+                      <tr key={i}><td>{r.from === r.to ? r.from : `${r.from} ~ ${r.to}`}</td><td>{r.portMin === r.portMax ? r.portMin : `${r.portMin}-${r.portMax}`}</td><td>{r.protocol}</td></tr>
+                    ))}
+                    {nonNull(routing.domains).map((d) => <tr key={d}><td>{d}</td><td /><td>域名</td></tr>)}
+                  </tbody>
+                </table>
+              </div>
+        ) : null}
+      </div>
+    )}
+    </div>
   );
 }
 
@@ -303,7 +297,7 @@ export default function Vpn({ status }: { status: Status }) {
   const test = () => {
     setTesting(true);
     setResult([]);
-    ToolService.VPNTest(target.trim()).then((l) => setResult(nonNull(l))).catch((e) => setResult([reason(e)])).finally(() => setTesting(false));
+    ToolService.VPNTest(target.trim()).then((l) => setResult(nonNull(l))).catch((e) => setResult([errText(e)])).finally(() => setTesting(false));
   };
 
   return (
@@ -315,13 +309,11 @@ export default function Vpn({ status }: { status: Status }) {
           const name = String(v.proxy?.name ?? "");
           const state = v.state;
           return (
-            <div key={name} className="tile-wrap">
-              <button className={`tile ${current?.proxy?.name === name ? "selected" : ""}`} onClick={() => setEditing(current?.proxy?.name === name ? null : v)}>
-                <span className="kind">{types[v.proxy?.["connaio-lan"] ? "lan" : String(v.proxy?.type)] ?? ""}</span>
-                <span className="name">{name}</span>
-                <span className={`foot ${v.kicked ? "delay-bad" : stateClass[state]}`}>{v.kicked ? "别处登录，已暂停" : stateLabel[state]}</span>
-              </button>
-            </div>
+            <button key={name} className={`tile ${current?.proxy?.name === name ? "selected" : ""}`} onClick={() => setEditing(current?.proxy?.name === name ? null : v)}>
+              <span className="kind">{types[v.proxy?.["connaio-lan"] ? "lan" : String(v.proxy?.type)] ?? ""}</span>
+              <span className="name">{name}</span>
+              <span className={`foot ${v.kicked ? "delay-bad" : stateClass[state]}`}>{v.kicked ? "别处登录，已暂停" : stateLabel[state]}</span>
+            </button>
           );
         })}
         <button className="tile add" onClick={() => setEditing("new")} title="添加 VPN">＋</button>

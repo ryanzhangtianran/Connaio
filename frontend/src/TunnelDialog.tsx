@@ -1,4 +1,4 @@
-import { validPort } from "./format";
+import { errText, validPort } from "./format";
 import { useEffect, useState } from "react";
 import PasswordInput from "./PasswordInput";
 import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
@@ -9,7 +9,7 @@ import { on, useDirty } from "./hooks";
 type Row = Record<string, string>;
 
 // splitAddr is "host:port" at its last colon; joinAddr puts it back.
-export const splitAddr = (s = "") => { const i = s.lastIndexOf(":"); return i < 0 ? [s, ""] : [s.slice(0, i), s.slice(i + 1)]; };
+const splitAddr = (s = "") => { const i = s.lastIndexOf(":"); return i < 0 ? [s, ""] : [s.slice(0, i), s.slice(i + 1)]; };
 const joinAddr = (host: string, port: string) => `${host}:${port}`;
 
 // Rows edits a list of forwards: a column per key, or two for a "host:port" key in addr (its IP, its
@@ -182,7 +182,7 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
       ? { type: "frp", host: v.serverAddr ?? "", port: num(v.serverPort) ?? 7000 }
       : { type: "ssh", host: v.server ?? "", port: num(v.port) ?? 22, user: v.username, password: auth === "password" ? v.password : "", key: auth === "key" ? v.key : "", hostKey: v.hostKey })
       .then((t) => setTest({ ok: true, text: t + (v.dialer ? "（直接连接测试，未经跳板代理）" : "") }))
-      .catch((e) => setTest({ ok: false, text: String(e).replace(/^\w*Error:\s*/, "") }));
+      .catch((e) => setTest({ ok: false, text: errText(e) }));
   };
   useEffect(() => { CoreService.ProxyNames().then((n) => setNames((n ?? []).filter((x) => x !== "DIRECT"))); }, []); // DIRECT is 直连
   const installKey = () => {

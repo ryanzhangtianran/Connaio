@@ -34,24 +34,6 @@ const WindowButtons = () => (
   </div>
 );
 
-type Page = { key: string; title: string };
-// one list, from what you check most to what you touch least
-const pages: Page[] = [
-  { key: "activity", title: "活动" },
-  { key: "proxies", title: "策略" },
-  { key: "tunnels", title: "反向" },
-  { key: "vpn", title: "VPN" },
-  { key: "devices", title: "设备" },
-  { key: "rules", title: "规则" },
-  { key: "processes", title: "增强" },
-  { key: "profiles", title: "配置" },
-  { key: "dns", title: "DNS" },
-  { key: "dashboard", title: "连接" },
-  { key: "logs", title: "日志" },
-  { key: "general", title: "通用" },
-  { key: "about", title: "关于" },
-];
-
 const levelNames: Record<string, string> = { info: "状态", warning: "警告", error: "错误" };
 
 // EventsButton lists what the app has to tell (core started, proxy restored, failed actions…).
@@ -119,6 +101,23 @@ export default function App() {
   usePoll(() => CoreService.Status().then(setStatus), 1000, !status.running && !status.error);
   usePoll(() => CoreService.Activity().then(setActivity), 1000, status.running && current === "activity");
 
+  // one list, from what you check most to what you touch least; only the page shown is mounted
+  const pages: { key: string; title: string; page: React.ReactNode }[] = [
+    { key: "activity", title: "活动", page: <Activity status={status} activity={activity} /> },
+    { key: "proxies", title: "策略", page: <Proxies status={status} /> },
+    { key: "tunnels", title: "反向", page: <Tunnels status={status} /> },
+    { key: "vpn", title: "VPN", page: <Vpn status={status} /> },
+    { key: "devices", title: "设备", page: <Devices status={status} /> },
+    { key: "rules", title: "规则", page: <Rules status={status} /> },
+    { key: "processes", title: "增强", page: <Processes status={status} mode={enhanced} rooted={rooted} /> },
+    { key: "profiles", title: "配置", page: <div className="grouped profiles-page"><Profiles /></div> },
+    { key: "dns", title: "DNS", page: <div className="grouped"><Dns /></div> },
+    { key: "dashboard", title: "连接", page: <Dashboard status={status} /> },
+    { key: "logs", title: "日志", page: <Logs /> },
+    { key: "general", title: "通用", page: <div className="grouped"><General /></div> },
+    { key: "about", title: "关于", page: <div className="grouped"><AboutPage /></div> },
+  ];
+
   return (
     <div className="app">
       <ErrorBoundary>
@@ -155,19 +154,7 @@ export default function App() {
         </div>
         <div className="page">
           <ErrorBoundary key={current} onReset={() => setCurrent("activity")}>
-          {current === "activity" && <Activity status={status} activity={activity} />}
-          {current === "processes" && <Processes status={status} mode={enhanced} rooted={rooted} />}
-          {current === "proxies" && <Proxies status={status} />}
-          {current === "dashboard" && <Dashboard status={status} />}
-          {current === "logs" && <Logs />}
-          {current === "rules" && <Rules status={status} />}
-          {current === "tunnels" && <Tunnels status={status} />}
-          {current === "vpn" && <Vpn status={status} />}
-          {current === "general" && <div className="grouped"><General /></div>}
-          {current === "dns" && <div className="grouped"><Dns /></div>}
-          {current === "profiles" && <div className="grouped profiles-page"><Profiles /></div>}
-          {current === "about" && <div className="grouped"><AboutPage /></div>}
-          {current === "devices" && <Devices status={status} />}
+          {pages.find((p) => p.key === current)?.page}
           </ErrorBoundary>
         </div>
       </main>

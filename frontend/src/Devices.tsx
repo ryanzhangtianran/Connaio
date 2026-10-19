@@ -40,10 +40,6 @@ export default function Devices({ status }: { status: Status }) {
   usePoll(load, 2000, status.running);
   useEffect(() => { if (status.running) CoreService.Policies().then((p) => setPolicies(p ?? [])); }, [status.running]);
 
-  const allowLan = (on: boolean) => {
-    DeviceService.SetAllowLan(on).then(load);
-  };
-
   return (
     <>
       <div className="group-title">局域网访问</div>
@@ -57,7 +53,7 @@ export default function Devices({ status }: { status: Status }) {
                 : "局域网内的手机、电脑等可以通过本机代理上网"}
             </div>
           </div>
-          <Switch on={!!lan?.allowLan} disabled={!status.running} onChange={allowLan} />
+          <Switch on={!!lan?.allowLan} disabled={!status.running} onChange={(on) => DeviceService.SetAllowLan(on).then(load)} />
         </div>
       </div>
 

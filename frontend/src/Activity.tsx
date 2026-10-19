@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CoreService, ProfileService, SettingsService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Activity as ActivityData, Conn, DiagSection, IPInfo, Latency, RepairItem, Status, Usage } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { nodesOf } from "./Proxies";
-import { platform, size, sizeText, speed } from "./format";
+import { errText, platform, size, sizeText, speed } from "./format";
 import { DiagLog } from "./ProxyDiagnose";
 import { on, usePoll, useCachedURL, useClickAway } from "./hooks";
 import { useHistory } from "./store";
@@ -114,8 +114,6 @@ function TotalCard({ activity }: { activity: ActivityData | null }) {
   );
 }
 
-const errText = (e: unknown) => String(e).replace(/^\w*Error:\s*/, "") || "失败，详情见事件";
-
 // NetTools is the network repair (its checks run on open, each with its fix) and the diagnosis (on
 // demand, each step shown as it finishes); every action sits in the head, beside the title.
 function NetTools() {
@@ -133,7 +131,7 @@ function NetTools() {
   }, []);
   const fix = (id: string) => {
     setBusy(id);
-    ToolService.Repair(id).then((m) => setNotes((n) => ({ ...n, [id]: m }))).catch((e) => setNotes((n) => ({ ...n, [id]: errText(e) }))).finally(() => { setBusy(""); load(); });
+    ToolService.Repair(id).then((m) => setNotes((n) => ({ ...n, [id]: m }))).catch((e) => setNotes((n) => ({ ...n, [id]: errText(e, "失败，详情见事件") }))).finally(() => { setBusy(""); load(); });
   };
   const diagnose = () => {
     setSections([]);
@@ -234,7 +232,7 @@ function ExitIP() {
     if (!policy) return;
     if (fresh) delete exitIPs[policy];
     setBusy(true); setError(""); setInfo(null);
-    exitIP(policy).then(setInfo).catch((e) => setError(errText(e))).finally(() => setBusy(false));
+    exitIP(policy).then(setInfo).catch((e) => setError(errText(e, "失败，详情见事件"))).finally(() => setBusy(false));
   };
   useEffect(() => check(false), [policy]);
   return (
@@ -393,13 +391,11 @@ function Ranking({ activity }: { activity: ActivityData }) {
         <div className="rank-scroll">
           <div className={`rank ${tab === 0 ? "with-icons" : ""}`}>
             {rows.map((r) => (
-              <div key={r.name}>
-                <div className="row">
-                  {tab === 0 && <ClientIcon path={r.icon} />}
-                  <span className="name" title={r.name}>{r.name}</span>
-                  <span className="bytes">{sizeText(pick(r))}</span>
-                  <span className="bar"><i style={{ width: `${(pick(r) / peak) * 100}%` }} /></span>
-                </div>
+              <div key={r.name} className="row">
+                {tab === 0 && <ClientIcon path={r.icon} />}
+                <span className="name" title={r.name}>{r.name}</span>
+                <span className="bytes">{sizeText(pick(r))}</span>
+                <span className="bar"><i style={{ width: `${(pick(r) / peak) * 100}%` }} /></span>
               </div>
             ))}
           </div>
@@ -438,9 +434,7 @@ export default function Activity({ status, activity }: { status: Status; activit
 
   if (!status.running) {
     return (
-      <>
-        <div className="card"><div className="muted">{status.error ? "内核未运行" : "内核启动中…"}</div></div>
-      </>
+      <div className="card"><div className="muted">{status.error ? "内核未运行" : "内核启动中…"}</div></div>
     );
   }
 
