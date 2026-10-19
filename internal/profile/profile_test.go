@@ -652,3 +652,27 @@ func TestTidyOverride(t *testing.T) {
 		t.Fatalf("the user's own key went:\n%s", text)
 	}
 }
+
+// An override proxy or group with a profile item's name replaces it: the core refuses a name twice.
+func TestMergeReplacesSameName(t *testing.T) {
+	profile := map[string]any{
+		"proxies":      []any{map[string]any{"name": "VPN", "server": "old"}, map[string]any{"name": "B"}},
+		"proxy-groups": []any{map[string]any{"name": "G", "proxies": []any{"B"}}},
+		"rules":        []any{"MATCH,DIRECT"},
+	}
+	override := map[string]any{
+		"prepend-proxies":     []any{map[string]any{"name": "VPN", "server": "new"}},
+		"append-proxy-groups": []any{map[string]any{"name": "G", "proxies": []any{"VPN"}}},
+		"prepend-rules":       []any{"MATCH,DIRECT"},
+	}
+	cfg := Merge(profile, override)
+	if ps := cfg["proxies"].([]any); len(ps) != 2 || ps[0].(map[string]any)["server"] != "new" {
+		t.Fatalf("proxies %v", ps)
+	}
+	if gs := cfg["proxy-groups"].([]any); len(gs) != 1 || gs[0].(map[string]any)["proxies"].([]any)[0] != "VPN" {
+		t.Fatalf("groups %v", gs)
+	}
+	if rs := cfg["rules"].([]any); len(rs) != 2 { // rules have no name: both kept
+		t.Fatalf("rules %v", rs)
+	}
+}

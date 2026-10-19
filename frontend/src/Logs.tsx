@@ -11,7 +11,7 @@ export default function Logs() {
   const q = filter.toLowerCase();
   const shown = lines.filter((l) => levels.indexOf(l.type) >= min && (!q || l.payload.toLowerCase().includes(q)));
   return (
-    <div className="card">
+    <div className="card logs-card">
       <div className="head">
         <div className="seg">
           {levels.slice(1).map((l) => <button key={l} className={l === level ? "on" : ""} onClick={() => setLevel(l)}>{l}</button>)}

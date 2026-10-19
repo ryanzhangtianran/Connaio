@@ -120,6 +120,7 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
   const [skip, setSkip] = useState<string[]>(init?.skip ?? []);
   const [name, setName] = useState(prevName || defaultName);
   const [saved, setSaved] = useState(!!initial?.active);
+  const fromProfile = !!initial?.profile; // the subscription's: 保存 puts a copy of it in the override
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [probe, setProbe] = useState<string[]>([]);
@@ -225,6 +226,7 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
         {!noServer.has(form.type) && text("server", { easyconnect: "网关地址，如 vpn.example.edu.cn", lan: "另一台设备的局域网 IP，如 192.168.1.20" }[form.type] ?? "服务器地址")}
         {!noServer.has(form.type) && <input style={{ width: 80 }} placeholder={defaultPort[form.type] ?? "端口"} value={form.port ?? ""} onChange={set("port")} />}
       </div>
+      {fromProfile && <div className="muted small" style={{ margin: "4px 0 8px" }}>此 VPN 来自订阅，断开或删除需在订阅中进行；保存后以本页设置为准。</div>}
       {form.type === "lan" && <div className="muted small" style={{ margin: "4px 0 8px" }}>
         用另一台已连接 VPN 的 Connaio 上网：那台设备在「设备」页打开「允许局域网设备连接」，端口填它的代理端口；下方「VPN 路由」填要经它访问的网段和域名。这样一个账号只在一处登录。
       </div>}
@@ -253,8 +255,8 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
       <div className="form">
         <button className="btn primary" disabled={busy || !ready || !name.trim() || !status.running} onClick={tunnel?.kicked || tunnel?.kicks ? () => setAskKick(true) : login}>{saved ? "重连" : "连接"}</button>
         <button className="btn" disabled={busy || !ready || !name.trim()} onClick={save}>保存</button>
-        {saved && <button className="btn" disabled={busy} onClick={disconnect}>断开</button>}
-        {initial && <button className="btn" style={{ color: "var(--bad)" }} disabled={busy} onClick={remove}>删除</button>}
+        {saved && !fromProfile && <button className="btn" disabled={busy} onClick={disconnect}>断开</button>}
+        {initial && !fromProfile && <button className="btn" style={{ color: "var(--bad)" }} disabled={busy} onClick={remove}>删除</button>}
         <button className="btn" disabled={busy} onClick={onDone}>取消</button>
         {form.type === "easyconnect" && tunnel?.state !== "up" && <button className="btn" disabled={probing || !ready || !status.running || tunnel?.state === "connecting"} onClick={probeGateway}>{probing ? "登录中…" : "测试登录"}</button>}
         {probe.length > 0 && <span className={`small ${/失败|错误|refused|rejected/i.test(probe[0]) ? "error" : "muted"}`} style={{ alignSelf: "center" }}>{probe.join("；")}</span>}

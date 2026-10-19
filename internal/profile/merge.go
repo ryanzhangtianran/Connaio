@@ -227,13 +227,19 @@ func Merge(profile, override map[string]any) map[string]any {
 	cfg = merge(cfg, override)
 	for _, key := range []string{"rules", "proxies", "proxy-groups"} {
 		list, _ := cfg[key].([]any)
-		if pre, ok := extend["prepend-"+key].([]any); ok {
-			list = append(slices.Clone(pre), list...)
+		// an override item replaces the profile's of the same name, which the core would refuse twice
+		pre, _ := extend["prepend-"+key].([]any)
+		post, _ := extend["append-"+key].([]any)
+		ours := map[string]bool{}
+		for _, x := range append(slices.Clone(pre), post...) {
+			ours[groupName(x)] = true
 		}
-		if post, ok := extend["append-"+key].([]any); ok {
-			list = append(list, post...)
+		delete(ours, "") // rules have no name
+		if len(ours) > 0 {
+			list = slices.DeleteFunc(slices.Clone(list), func(x any) bool { return ours[groupName(x)] })
 		}
-		if list != nil {
+		list = append(append(slices.Clone(pre), list...), post...)
+		if len(list) > 0 {
 			cfg[key] = list
 		}
 	}

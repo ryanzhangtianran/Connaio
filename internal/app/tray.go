@@ -313,6 +313,10 @@ func (t *trayMenu) toggleVPN(name string) {
 	if i < 0 {
 		return
 	}
+	if list[i].Profile {
+		notify("error", "VPN：%s 来自订阅，无法在此断开", name)
+		return
+	}
 	if list[i].Active {
 		err = t.profiles.RemoveVPN(name)
 	} else {

@@ -29,7 +29,7 @@
   --bad: #ff453a;
   --control-h: 28px;
   --gap: 12px; /* between floating cards, and from them (and the sidebar) to the window edge */
-  --chrome: calc(40px + 6px + var(--gap)); /* topbar + page padding */
+  --chrome: calc(40px + 18px + var(--gap)); /* topbar + .page's top padding + the sidebar's bottom margin: a full-height page ends level with the sidebar */
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
   --rounded: ui-rounded, "SF Pro Rounded", -apple-system, "PingFang SC", system-ui, sans-serif; /* numbers */
   color-scheme: light dark;
@@ -103,6 +103,8 @@ button { font: inherit; color: inherit; }
 .topbar .events { position: relative; --wails-draggable: no-drag; }
 .pill .dot { width: 6px; height: 6px; }
 .page { flex: 1; overflow: auto; padding: 18px 28px 28px; } /* a wider margin beside the sidebar than between cards */
+/* full-height pages end level with the sidebar; the margin takes back .page's bottom padding, which would scroll them */
+.dash, .rules-page, .profiles-page, .logs-card { height: calc(100vh - var(--chrome)); margin-bottom: calc(var(--gap) - 28px); }
 .hint { margin-top: 10px; max-width: 640px; font-size: 12px; line-height: 1.5; color: var(--text-2); text-wrap: pretty; }
 
 /* header facts */
@@ -212,7 +214,8 @@ select { font: inherit; color: var(--text); background: var(--card); border: 1px
 .radio { display: block; margin: 4px 0; }
 /* long lines scroll sideways; the rows sit in one box as wide as the longest line (at least the
    card), so every row's rule reaches as far */
-.logs { margin-top: 10px; font: 12px/1.5 var(--mono); user-select: text; -webkit-user-select: text; max-height: calc(100vh - 220px); overflow: auto; }
+.logs-card { display: flex; flex-direction: column; }
+.logs { flex: 1; min-height: 0; margin-top: 10px; font: 12px/1.5 var(--mono); user-select: text; -webkit-user-select: text; overflow: auto; }
 .log-rows { width: max-content; min-width: 100%; }
 .log { display: flex; padding: 2px 0; border-bottom: 1px solid var(--line); white-space: pre; }
 .log .time { flex: none; width: 76px; }
@@ -276,7 +279,7 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .sidebar { overflow-y: auto; } /* short windows scroll the settings group into view */
 
 /* dashboard */
-.dash { display: flex; flex-direction: column; height: calc(100vh - var(--chrome)); }
+.dash { display: flex; flex-direction: column; }
 .dash-top { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .dash-side .seg { display: flex; margin-bottom: 8px; }
 .dash-side .seg button { flex: 1; padding-inline: 0; }
@@ -427,12 +430,12 @@ tr.muted td.rule-actions { text-decoration: none; }
 .hours-axis { position: absolute; left: 0; right: 0; bottom: 0; display: flex; font: 500 10px var(--rounded); color: var(--text-2); }
 .hours-axis span { flex: 1; } /* 12AM 6AM 12PM 6PM at hours 0, 6, 12, 18 */
 /* rules: the page fills the window and the table scrolls inside its card, header pinned */
-.rules-page { display: flex; flex-direction: column; height: calc(100vh - var(--chrome)); }
+.rules-page { display: flex; flex-direction: column; }
 .rules-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .rules-card .table-wrap { flex: 1; min-height: 0; }
 .rules-card .table th { position: sticky; top: 0; z-index: 1; background: var(--card); }
 /* profiles: one window high; the override editor takes the height the other groups leave and scrolls inside */
-.profiles-page { display: flex; flex-direction: column; height: calc(100vh - var(--chrome)); }
+.profiles-page { display: flex; flex-direction: column; }
 .profiles-page .plist-rows { max-height: 40vh; overflow: auto; } /* a long profile list scrolls in place instead of squeezing the override */
 .profiles-page .override-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .profiles-page .override-card textarea.override { flex: 1; min-height: 0; resize: none; overflow: auto; }

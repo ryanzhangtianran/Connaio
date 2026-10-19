@@ -3,6 +3,8 @@ package app
 import (
 	"reflect"
 	"testing"
+
+	"github.com/ryanzhangtianran/Connaio/internal/profile"
 )
 
 // The VPN page's state goes into the override as a node, rules and a subnet group, and comes back
@@ -99,5 +101,24 @@ func TestSaveVPN(t *testing.T) {
 	}
 	if err := s.ReconnectVPN("nope"); err == nil {
 		t.Fatal("reconnecting a VPN that isn't connected")
+	}
+}
+
+// A VPN node the profile brings is listed as connected and the profile's, without a core.
+func TestProfileVPN(t *testing.T) {
+	store, _ := profile.Open(t.TempDir())
+	if _, err := store.AddLocal("sub", []byte("proxies:\n  - {name: Campus, type: wireguard, server: 1.2.3.4, port: 51820}\n  - {name: B, type: ss, server: 1.2.3.4, port: 1, cipher: none, password: x}\nrules:\n  - IP-CIDR,10.0.0.0/8,Campus\n")); err != nil {
+		t.Fatal(err)
+	}
+	s := &ProfileService{store: store, settings: loadSettings(t.TempDir())}
+	list, err := s.activeVPNs()
+	if err != nil || len(list) != 1 || list[0].name() != "Campus" || !list[0].Profile || !list[0].Active {
+		t.Fatalf("%v %+v", err, list)
+	}
+	if err := store.AddProxy(map[string]any{"name": "Campus", "type": "wireguard", "server": "5.6.7.8"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ = s.activeVPNs(); len(list) != 1 || list[0].Profile || list[0].Proxy["server"] != "5.6.7.8" {
+		t.Fatalf("the override copy should replace it: %+v", list)
 	}
 }

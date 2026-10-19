@@ -29,6 +29,9 @@ type VPN struct {
 	Kicked bool `json:"kicked"`
 	// Kicks is how often the gateway ended the session in the last 10 minutes.
 	Kicks int `json:"kicks"`
+	// Profile says the node comes from the profile, not the override: 断开 and 删除 are the
+	// subscription's to do; 保存 puts an override copy in its place.
+	Profile bool `json:"profile"`
 }
 
 func (v VPN) name() string { n, _ := v.Proxy["name"].(string); return n }
@@ -101,6 +104,19 @@ func (s *ProfileService) activeVPNs() ([]VPN, error) {
 			}
 		}
 		list = append(list, v)
+	}
+	// the profile's VPN nodes too: a subscription can carry one; its rules stay where the profile has them
+	proxies, err := s.store.Value(false, []string{"proxies"})
+	if err != nil {
+		return nil, err
+	}
+	ps, _ := proxies.([]any)
+	for _, x := range ps {
+		p, _ := x.(map[string]any)
+		if p == nil || !isVPN(p) || slices.ContainsFunc(list, func(v VPN) bool { return v.name() == p["name"] }) {
+			continue
+		}
+		list = append(list, VPN{Proxy: maps.Clone(p), Active: true, Profile: true})
 	}
 	return list, nil
 }
@@ -208,7 +224,7 @@ func (s *ProfileService) ReconnectVPN(name string) error {
 	if err := s.RemoveVPN(name); err != nil {
 		return err
 	}
-	return s.SetVPN(v, "")
+	return s.SetVPN(v, name) // a profile's VPN is still there: replaced, not taken
 }
 
 // RemoveVPN disconnects: the node, rules and group leave the override; the draft stays.
@@ -234,7 +250,7 @@ func (s *ProfileService) clearVPN(name string) error {
 		return err
 	}
 	i := slices.IndexFunc(active, func(v VPN) bool { return v.name() == name })
-	if i < 0 {
+	if i < 0 || active[i].Profile { // the profile's stays; an override copy replaces it at Merge
 		return nil
 	}
 	for _, r := range active[i].Rules {
