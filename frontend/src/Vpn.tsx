@@ -280,9 +280,10 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
                 <table className="table">
                   <thead><tr><th style={{ width: 1 }}>走 VPN</th><th>网关下发的网段</th><th>端口</th><th>协议</th></tr></thead>
                   <tbody>
-                    {nonNull(routing.ip).map((r, i) => (
-                      <tr key={i}>{routeBox(r.from === r.to ? r.from : `${r.from}-${r.to}`)}<td>{r.from === r.to ? r.from : `${r.from} ~ ${r.to}`}</td><td>{r.portMin === r.portMax ? r.portMin : `${r.portMin}-${r.portMax}`}</td><td>{r.protocol}</td></tr>
-                    ))}
+                    {nonNull(routing.ip).map((r, i) => {
+                      const k = r.from === r.to ? r.from : `${r.from}-${r.to}`; // the core's Range.Key
+                      return <tr key={i}>{routeBox(k)}<td>{k.replace("-", " ~ ")}</td><td>{r.portMin === r.portMax ? r.portMin : `${r.portMin}-${r.portMax}`}</td><td>{r.protocol}</td></tr>;
+                    })}
                     {nonNull(routing.domains).map((d) => <tr key={d}>{routeBox(d)}<td>{d}</td><td /><td>域名</td></tr>)}
                   </tbody>
                 </table>
