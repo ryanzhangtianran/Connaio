@@ -335,10 +335,30 @@ func (s *CoreService) TestProxy(name string) (int, error) {
 }
 
 func (s *CoreService) testProxy(ctx context.Context, name string) (int, error) {
+	var p struct {
+		Type string `json:"type"`
+	}
+	_ = s.core.Do(ctx, http.MethodGet, "/proxies/"+url.PathEscape(name), nil, &p)
+	return s.delay(ctx, name, testURLFor(p.Type))
+}
+
+// vpnTestURL is what a VPN node is measured against in place of testURL: behind a campus gateway
+// in mainland China gstatic never answers, while a mainland 204 page answers on either side.
+const vpnTestURL = "http://connect.rom.miui.com/generate_204"
+
+// testURLFor picks the test URL for a node of the core's type.
+func testURLFor(coreType string) string {
+	if slices.Contains([]string{"EasyConnect", "WireGuard", "OpenVPN", "Tailscale"}, coreType) {
+		return vpnTestURL
+	}
+	return testURL
+}
+
+func (s *CoreService) delay(ctx context.Context, name, u string) (int, error) {
 	var d struct {
 		Delay int `json:"delay"`
 	}
-	q := url.Values{"url": {"https://www.gstatic.com/generate_204"}, "timeout": {"5000"}}
+	q := url.Values{"url": {u}, "timeout": {"5000"}}
 	err := s.core.Do(ctx, http.MethodGet, "/proxies/"+url.PathEscape(name)+"/delay?"+q.Encode(), nil, &d)
 	return d.Delay, err
 }
@@ -348,25 +368,38 @@ func (s *CoreService) Select(group, proxy string) error {
 }
 
 // TestGroup measures every member of group and returns name -> delay in ms (missing = failed).
-// A member that fails is measured again on its own, twice, 3s apart: just after the app starts,
-// while the core rebuilds the TUN under the config it was just given, every test can fail at once,
-// and the page's tiles would stay blank until clicked.
+// VPN members are measured again on their own against vpnTestURL. A member that fails is measured
+// again on its own, twice, 3s apart: just after the app starts, while the core rebuilds the TUN
+// under the config it was just given, every test can fail at once, and the page's tiles would stay
+// blank until clicked.
 func (s *CoreService) TestGroup(group string) (map[string]int, error) {
-	q := url.Values{"url": {"https://www.gstatic.com/generate_204"}, "timeout": {"5000"}}
+	q := url.Values{"url": {testURL}, "timeout": {"5000"}}
 	delays := map[string]int{}
 	ctx := context.Background()
 	if err := s.core.Do(ctx, http.MethodGet, "/group/"+url.PathEscape(group)+"/delay?"+q.Encode(), nil, &delays); err != nil {
 		return delays, err
 	}
-	var g struct {
-		All []string `json:"all"`
+	var resp struct {
+		Proxies map[string]struct {
+			Type string   `json:"type"`
+			All  []string `json:"all"`
+		} `json:"proxies"`
 	}
-	if s.core.Do(ctx, http.MethodGet, "/proxies/"+url.PathEscape(group), nil, &g) != nil {
+	if s.core.Do(ctx, http.MethodGet, "/proxies", nil, &resp) != nil {
 		return delays, nil
+	}
+	all := resp.Proxies[group].All
+	for _, m := range all {
+		if u := testURLFor(resp.Proxies[m].Type); u != testURL {
+			delete(delays, m)
+			if d, err := s.delay(ctx, m, u); err == nil && d > 0 {
+				delays[m] = d
+			}
+		}
 	}
 	for range 2 {
 		var failed []string
-		for _, m := range g.All {
+		for _, m := range all {
 			if _, ok := delays[m]; !ok && m != "REJECT" && m != "REJECT-DROP" {
 				failed = append(failed, m)
 			}
