@@ -6,7 +6,12 @@ vars:
   BIN_DIR: "bin"
   # connaio-core checkout, built into the app bundle next to the GUI binary
   CORE_DIR: '{{.CORE_DIR | default "../connaio-core"}}'
-  PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
+  # the app's version is its latest git tag
+  VERSION:
+    sh: git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' | grep . || echo 0.0.0
+  # the mihomo release connaio-core is based on (common:build:core adds its commit on macOS)
+  CORE_VERSION:
+    sh: git -C "{{.CORE_DIR}}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' | grep . || echo unknown
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
   # Target OS for build/package/run. Defaults to the host OS, and is overridden
   # by `wails3 build GOOS=...` (or the GOOS env var) for cross-compilation. The
@@ -39,28 +44,3 @@ tasks:
     summary: Runs the application in development mode
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
-
-  setup:docker:
-    summary: Builds Docker image for cross-compilation (~800MB download)
-    cmds:
-      - task: common:setup:docker
-
-  build:server:
-    summary: Builds the application in server mode (no GUI, HTTP server only)
-    cmds:
-      - task: common:build:server
-
-  run:server:
-    summary: Runs the application in server mode
-    cmds:
-      - task: common:run:server
-
-  build:docker:
-    summary: Builds a Docker image for server mode deployment
-    cmds:
-      - task: common:build:docker
-
-  run:docker:
-    summary: Builds and runs the Docker image
-    cmds:
-      - task: common:run:docker

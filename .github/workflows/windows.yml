@@ -21,27 +21,11 @@ jobs:
         with:
           path: Connaio
           fetch-depth: 0 # the latest tag is the package version
-      - uses: actions/checkout@v4
-        with:
-          repository: ryanzhangtianran/connaio-core
-          ref: reverse-tunnels
-          path: connaio-core
-          fetch-depth: 0 # its latest tag is the mihomo version it reports
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: Connaio/go.mod
-          cache-dependency-path: |
-            Connaio/go.sum
-            connaio-core/go.sum
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Install wails3 and NSIS
+      - uses: ./Connaio/.github/actions/setup
+      - name: Install NSIS
         run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
           choco install nsis -y --no-progress
           echo "C:\\Program Files (x86)\\NSIS" >> "$GITHUB_PATH" # a native path: wails3 looks makensis up through the Windows PATH
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Build the installer
         working-directory: Connaio

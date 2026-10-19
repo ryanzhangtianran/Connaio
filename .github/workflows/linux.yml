@@ -19,27 +19,13 @@ jobs:
         with:
           path: Connaio
           fetch-depth: 0 # the latest tag is the package version
-      - uses: actions/checkout@v4
-        with:
-          repository: ryanzhangtianran/connaio-core
-          ref: reverse-tunnels
-          path: connaio-core
-          fetch-depth: 0 # its latest tag is the mihomo version it reports
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: Connaio/go.mod
-          cache-dependency-path: |
-            Connaio/go.sum
-            connaio-core/go.sum
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Install GTK 3, WebKit2GTK 4.1 and wails3
+      - name: Install GTK 3 and WebKit2GTK 4.1
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev xvfb dbus
-          # the CLI links the GUI stack too, GTK 4 unless told otherwise; 22.04 only has GTK 3
-          go install -tags gtk3 github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
+      - uses: ./Connaio/.github/actions/setup
+        with:
+          wails-tags: gtk3 # the CLI links the GUI stack too, GTK 4 unless told otherwise; 22.04 only has GTK 3
 
       - name: Build the .deb
         working-directory: Connaio

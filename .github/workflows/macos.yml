@@ -18,25 +18,7 @@ jobs:
         with:
           path: Connaio
           fetch-depth: 0 # the latest tag is the package version
-      - uses: actions/checkout@v4
-        with:
-          repository: ryanzhangtianran/connaio-core
-          ref: reverse-tunnels
-          path: connaio-core
-          fetch-depth: 0 # its latest tag is the mihomo version it reports
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: Connaio/go.mod
-          cache-dependency-path: |
-            Connaio/go.sum
-            connaio-core/go.sum
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Install wails3
-        run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - uses: ./Connaio/.github/actions/setup
 
       - name: Import the signing certificate
         # an Apple Development identity (.p12, base64) signs the app and its core under one team, so

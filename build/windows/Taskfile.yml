@@ -22,28 +22,16 @@ tasks:
     cmds:
       - task: generate:syso
       - go build {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}.exe"
-      - task: build:core
+      - task: common:build:core
+        vars:
+          GOOS: windows
+          ARCH: '{{.ARCH | default "amd64"}}'
       - task: fetch:wintun
     vars:
-      VERSION:
-        sh: git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo 0.0.0
       BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s -H windowsgui -X github.com/ryanzhangtianran/Connaio/internal/app.appVersion={{.VERSION}}"{{end}}'
     env:
       GOOS: windows
       CGO_ENABLED: 0
-      GOARCH: '{{.ARCH | default "amd64"}}'
-
-  build:core:
-    summary: Builds connaio-core.exe from CORE_DIR into BIN_DIR
-    internal: true
-    cmds:
-      # the core reports constant.Version, a 1.10.0 placeholder unless set here, as mihomo's Makefile does
-      - CGO_ENABLED=0 go -C "{{.CORE_DIR}}" build -tags with_gvisor -trimpath -ldflags="-w -s -X github.com/metacubex/mihomo/constant.Version={{.CORE_VERSION}}" -o "{{.ROOT_DIR}}/{{.BIN_DIR}}/connaio-core.exe" .
-    vars:
-      CORE_VERSION:
-        sh: git -C "{{.CORE_DIR}}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo unknown # the mihomo release it is based on
-    env:
-      GOOS: windows
       GOARCH: '{{.ARCH | default "amd64"}}'
 
   fetch:wintun:
@@ -71,9 +59,6 @@ tasks:
     cmds:
       - sed "s/__VERSION__/{{.VERSION}}/g" windows/info.json > windows/info.gen.json # the version is the git tag
       - wails3 generate syso -arch {{.ARCH | default "amd64"}} -icon windows/icon.ico -manifest windows/wails.exe.manifest -info windows/info.gen.json -out ../wails_windows_{{.ARCH | default "amd64"}}.syso
-    vars:
-      VERSION:
-        sh: git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo 0.0.0
 
   package:
     summary: Packages a production build as an NSIS installer, bin/Connaio-<version>-windows-amd64.exe (needs makensis)
@@ -87,8 +72,6 @@ tasks:
       - makensis -DINFO_PRODUCTVERSION={{.VERSION}} -DARG_WAILS_AMD64_BINARY="{{.BIN}}{{.APP_NAME}}.exe" -DARG_CORE_BINARY="{{.BIN}}connaio-core.exe" -DARG_WINTUN="{{.BIN}}wintun.dll" project.nsi
     vars:
       BIN: '{{if eq OS "windows"}}{{.ROOT_DIR}}\{{.BIN_DIR}}\{{else}}{{.ROOT_DIR}}/{{.BIN_DIR}}/{{end}}'
-      VERSION:
-        sh: git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo 0.0.0
 
   run:
     cmds:

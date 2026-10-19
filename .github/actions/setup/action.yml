@@ -1,0 +1,33 @@
+# What every build job sets up after checking Connaio out to Connaio/: connaio-core next to it,
+# Go, Node and wails3 (wails3 task builds connaio-core from ../connaio-core).
+name: setup
+description: Check out connaio-core and install Go, Node and wails3
+
+inputs:
+  wails-tags:
+    description: build tags for wails3 itself (gtk3 on Ubuntu 22.04, whose GUI stack it links)
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        repository: ryanzhangtianran/connaio-core
+        ref: reverse-tunnels
+        path: connaio-core
+        fetch-depth: 0 # its latest tag is the mihomo version it reports
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: Connaio/go.mod
+        cache-dependency-path: |
+          Connaio/go.sum
+          connaio-core/go.sum
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 24
+    - name: Install wails3
+      shell: bash
+      run: |
+        go install -tags "${{ inputs.wails-tags }}" github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
