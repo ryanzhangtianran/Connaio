@@ -216,6 +216,29 @@ func (s *Store) EditTunnel(name string, tunnel map[string]any) error {
 	})
 }
 
+// SetTunnelDisabled stops a tunnel or starts it again: `disabled: true` on its entry, or no
+// disabled key. The core lists a disabled tunnel as stopped and doesn't run it.
+func (s *Store) SetTunnelDisabled(name string, disabled bool) error {
+	return s.editOverride(func(root *yaml.Node) error {
+		seq := listOf(root, "reverse-tunnels")
+		i := findNamed(seq, name)
+		if i < 0 {
+			return fmt.Errorf("没有名为 %s 的隧道", name)
+		}
+		m := seq.Content[i]
+		for j := 0; j+1 < len(m.Content); j += 2 {
+			if m.Content[j].Value == "disabled" {
+				m.Content = append(m.Content[:j], m.Content[j+2:]...)
+				break
+			}
+		}
+		if disabled {
+			m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "disabled"}, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"})
+		}
+		return nil
+	})
+}
+
 func (s *Store) RemoveTunnel(name string) error {
 	return s.editOverride(func(root *yaml.Node) error {
 		removeNamed(root, "reverse-tunnels", name)

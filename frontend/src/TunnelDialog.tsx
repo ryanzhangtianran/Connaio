@@ -193,7 +193,7 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
   const field = input(v, setV);
 
   const build = (): Record<string, any> => {
-    const base = clean({ name: v.name, type: kind, "dialer-proxy": v.dialer });
+    const base = clean({ name: v.name, type: kind, "dialer-proxy": v.dialer, disabled: editing?.disabled || undefined }); // editing keeps a stopped tunnel stopped
     if (kind === "frp") {
       return {
         ...base,

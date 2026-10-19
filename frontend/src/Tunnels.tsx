@@ -5,8 +5,8 @@ import TunnelDialog from "./TunnelDialog";
 import { nonNull } from "./format";
 import { usePoll } from "./hooks";
 
-const stateLabel: Record<string, string> = { running: "运行中", connecting: "连接中", retrying: "重试中" };
-const stateClass: Record<string, string> = { running: "delay-good", connecting: "delay-warn", retrying: "delay-bad" };
+const stateLabel: Record<string, string> = { running: "运行中", connecting: "连接中", retrying: "重试中", stopped: "已停止" };
+const stateClass: Record<string, string> = { running: "delay-good", connecting: "delay-warn", retrying: "delay-bad", stopped: "muted" };
 const kindLabel: Record<string, string> = { frp: "FRP", ssh: "SSH" };
 
 // localRule takes what comes in through a tunnel straight to its local target (here Connaio's own
@@ -59,6 +59,8 @@ export default function Tunnels({ status }: { status: Status }) {
                     </div>
                   ))}
                   {own && <>
+                    {/* a stopped tunnel stays in the config, disabled, until started again */}
+                    <button onClick={() => { ProfileService.SetTunnelDisabled(t.name, t.state !== "stopped"); setOpen(""); }}>{t.state === "stopped" ? "开始连接" : "停止连接"}</button>
                     <button onClick={() => { setEditing(own); setOpen(""); }}>编辑此隧道</button>
                     <button className="danger" onClick={() => { remove(t.name); setOpen(""); }}>删除此隧道</button>
                   </>}

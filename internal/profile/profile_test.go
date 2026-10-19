@@ -247,6 +247,22 @@ func TestUserItems(t *testing.T) {
 	if items, _ := s.UserItems(); len(items.Tunnels) != 2 || items.Tunnels[1]["name"] != "new" || items.Tunnels[1]["server"] != "h2" {
 		t.Fatalf("edited tunnel: %+v", items.Tunnels)
 	}
+	if err := s.SetTunnelDisabled("new", true); err != nil {
+		t.Fatal(err)
+	}
+	if items, _ := s.UserItems(); items.Tunnels[1]["disabled"] != true || items.Tunnels[1]["server"] != "h2" {
+		t.Fatalf("stopped tunnel: %+v", items.Tunnels[1])
+	}
+	_ = s.SetTunnelDisabled("new", true) // twice: still one key
+	if err := s.SetTunnelDisabled("new", false); err != nil {
+		t.Fatal(err)
+	}
+	if items, _ := s.UserItems(); items.Tunnels[1]["disabled"] != nil {
+		t.Fatalf("started again, disabled kept: %+v", items.Tunnels[1])
+	}
+	if err := s.SetTunnelDisabled("nope", true); err == nil {
+		t.Fatal("stopping a tunnel that isn't there accepted")
+	}
 	_ = s.RemoveTunnel("new")
 	if err := s.PrependRule("DOMAIN,a.com,自动"); err != nil {
 		t.Fatal(err)
