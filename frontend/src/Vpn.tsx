@@ -260,7 +260,7 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
         {probe.length > 0 && <span className={`small ${/失败|错误|refused|rejected/i.test(probe[0]) ? "error" : "muted"}`} style={{ alignSelf: "center" }}>{probe.join("；")}</span>}
       </div>
       {askKick && <div className="form delay-warn small" style={{ alignItems: "center" }}>
-        这个账号最近被别处登录打断过：现在连接会把对方挤下线，对方再连又会挤掉这里。
+        该账号近期在其他设备登录过。继续连接将使其他设备的会话下线。
         <button className="btn small-btn" disabled={busy} onClick={login}>仍然连接</button>
         <button className="btn small-btn" onClick={() => setAskKick(false)}>取消</button>
       </div>}
@@ -271,8 +271,8 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
         <div className="label" style={{ gap: 12, alignItems: "baseline", fontSize: 13 }}>状态
           <span className={stateClass[tunnel?.state ?? "down"]}>{stateLabel[tunnel?.state ?? "down"]}</span>
           {tunnel?.address && <span>隧道地址 {tunnel.address}</span>}
-          {!tunnel?.kicked && tunnel?.kicks ? <span className="delay-warn">网关在 {new Date(tunnel.lastKick).toLocaleTimeString("zh-CN", { hour12: false })} 结束了会话，10 分钟内 {tunnel.kicks} 次：可能有人用这个账号在别处登录，满 3 次暂停自动重连</span> : null}
-          {tunnel?.kicked && <span className="error">账号可能在别处登录：网关反复结束会话，已停止自动重连。先断开其他设备上的这个账号，再点「重连」</span>}
+          {!tunnel?.kicked && tunnel?.kicks ? <span className="delay-warn">网关于 {new Date(tunnel.lastKick).toLocaleTimeString("zh-CN", { hour12: false })} 结束会话（10 分钟内 {tunnel.kicks} 次），该账号可能已在其他设备登录；累计 3 次后将暂停自动重连。</span> : null}
+          {tunnel?.kicked && <span className="error">该账号可能已在其他设备登录，自动重连已暂停。请先在其他设备上退出，再点击「重连」。</span>}
           {routing?.dns?.length ? <span>DNS {routing.dns.join(", ")}</span> : null}
         </div>
         {routing && (routing.ip?.length || routing.domains?.length) ? (<>
