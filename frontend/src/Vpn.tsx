@@ -1,12 +1,13 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Browser } from "@wailsio/runtime";
 import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { EasyConnectTunnel, Status, VPN } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { errText, nonNull, validPort } from "./format";
 import { usePoll } from "./hooks";
 import PasswordInput from "./PasswordInput";
 
-// A VPN is one node plus the rules that send traffic into it: for EasyConnect the gateway's own
-// route list (the EASYCONNECT rule), for every type the addresses listed here. Networks named
+// A VPN is one node plus the rules that send traffic into it: the addresses listed here, picked
+// by hand or from what the gateway (EasyConnect) or the tailnet (Tailscale) offers. Networks named
 // under 直连 get a subnet group in between, which picks DIRECT there and the node elsewhere.
 const defaultName = "VPN";
 // lan: another Connaio on the LAN that is connected to the VPN, used through its proxy port (an http
@@ -15,8 +16,8 @@ const types: Record<string, string> = { easyconnect: "EasyConnect", wireguard: "
 const defaultPort: Record<string, string> = { easyconnect: "443", lan: "7890" };
 const noServer = new Set(["openvpn", "tailscale"]); // the address comes from the file, or the control plane
 
-const stateLabel: Record<string, string> = { up: "已连接", connecting: "连接中", down: "未连接" };
-const stateClass: Record<string, string> = { up: "delay-good", connecting: "delay-warn", down: "delay-bad" };
+const stateLabel: Record<string, string> = { up: "已连接", connecting: "连接中", login: "待登录", down: "未连接" };
+const stateClass: Record<string, string> = { up: "delay-good", connecting: "delay-warn", login: "delay-warn", down: "delay-bad" };
 
 type Form = Record<string, string>;
 const empty: Form = { type: "easyconnect", port: "443" };
@@ -101,23 +102,77 @@ function KVRow({ kinds, items, onChange, fill }: { kinds: Kind[]; items: KV[]; o
 }
 
 // formOf fills the editor from a VPN as build writes it.
-function formOf(v: VPN): { form: Form; addrs: KV[]; bypass: KV[]; skip: string[] } {
+function formOf(v: VPN): { form: Form; addrs: KV[]; bypass: KV[] } {
   const p = v.proxy ?? {};
   const form: Form = { type: p["connaio-lan"] ? "lan" : String(p.type ?? "easyconnect") };
   for (const [k, x] of Object.entries(p)) if (k !== "name" && k !== "type" && k !== "connaio-lan" && (typeof x === "string" || typeof x === "number" || typeof x === "boolean")) form[k] = String(x);
   if (Array.isArray(p["allowed-ips"])) form["allowed-ips"] = p["allowed-ips"].join(", ");
-  return { form, addrs: nonNull(v.rules).map(routeOf).filter((x): x is KV => !!x), bypass: Object.keys(v.group?.rules ?? {}).map(bypassOf), skip: nonNull(p["skip-routes"] as string[]) };
+  return { form, addrs: nonNull(v.rules).map(routeOf).filter((x): x is KV => !!x), bypass: Object.keys(v.group?.rules ?? {}).map(bypassOf) };
 }
 
+const protocolLabel: Record<string, string> = { all: "全部", tcp: "TCP", udp: "UDP", icmp: "ICMP" };
+
+const ipNum = (a: string) => a.split(".").reduce((n, x) => n * 256 + Number(x), 0);
+const ipStr = (n: number) => [24, 16, 8, 0].map((s) => Math.floor(n / 2 ** s) % 256).join(".");
+
+// cidrsOf is an IPv4 range as the fewest CIDRs that cover it. A gateway lists networks without their
+// network and broadcast addresses (10.0.0.1 ~ 10.255.255.254), so x.1 ~ y.254 counts as the whole
+// networks, 10.0.0.0/8; an IPv6 or odd range is kept as its ends.
+export function cidrsOf(from: string, to: string): string[] {
+  if (from.includes(":")) return from === to ? [`${from}/128`] : [from, to].map((a) => `${a}/128`);
+  let lo = ipNum(from), hi = ipNum(to);
+  if (lo !== hi && lo % 256 === 1 && hi % 256 === 254) { lo -= 1; hi += 1; }
+  const out: string[] = [];
+  while (lo <= hi) {
+    let bits = 32;
+    while (bits > 0 && lo % 2 ** (33 - bits) === 0 && lo + 2 ** (33 - bits) - 1 <= hi) bits--; // the largest aligned block that fits
+    out.push(`${ipStr(lo)}/${bits}`);
+    lo += 2 ** (32 - bits);
+  }
+  return out;
+}
+
+// RouteRow is one route offered to pick: the VPN routes (rules) it stands for, and its columns.
+type RouteRow = { key: string; routes: KV[]; cells: React.ReactNode[] };
+
+// RoutePicker lists what a gateway or a tailnet offers, each row ticked when its routes are all among
+// the VPN's (addrs); ticking adds them there, as rules of their own, unticking takes them out.
+function RoutePicker({ head, rows, addrs, setAddrs, onPick }: { head: string[]; rows: RouteRow[]; addrs: KV[]; setAddrs: (a: KV[]) => void; onPick?: () => void }) {
+  const has = (r: KV) => addrs.some((a) => a.t === r.t && a.v === r.v);
+  const set = (row: RouteRow, on: boolean) => {
+    if (on) { setAddrs([...addrs, ...row.routes.filter((r) => !has(r))]); onPick?.(); }
+    else setAddrs(addrs.filter((a) => !row.routes.some((r) => r.t === a.t && r.v === a.v)));
+  };
+  return (
+    <div className="table-wrap tight vpn-routes">
+      <table className="table">
+        <colgroup><col style={{ width: 52 }} /><col />{head.slice(1).map((h) => <col key={h} style={{ width: 120 }} />)}</colgroup>
+        <thead><tr><th>选用</th>{head.map((h) => <th key={h}>{h}</th>)}</tr></thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.key}>
+              <td><input type="checkbox" checked={row.routes.every(has)} onChange={(e) => set(row, e.target.checked)} /></td>
+              {row.cells.map((c, i) => <td key={i}>{c}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Fact is one labelled value of a VPN's state: 状态, 隧道地址, DNS.
+const Fact = ({ label, children }: { label: string; children: React.ReactNode }) => <span className="vpn-fact"><span className="muted">{label}</span>{children}</span>;
+
 // VpnEditor edits one VPN (initial null: a new one) and connects, disconnects or deletes it.
-function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initial: VPN | null; tunnel: EasyConnectTunnel | null; onDone: () => void }) {
+// live is the VPN as last listed (its state now), onConnected says a Tailscale one was just connected,
+// so the list opens its login link when it comes.
+function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { status: Status; initial: VPN | null; live: VPN | null; tunnel: EasyConnectTunnel | null; onDone: () => void; onConnected: (name: string) => void }) {
   const prevName = String(initial?.proxy?.name ?? "");
   const init = initial && formOf(initial);
   const [form, setForm] = useState<Form>(init?.form ?? empty);
   const [addrs, setAddrs] = useState<KV[]>(init?.addrs ?? []);
   const [bypass, setBypass] = useState<KV[]>(init?.bypass ?? []);
-  // skip: the gateway's routes (rangeKey, or a name) left to the other rules
-  const [skip, setSkip] = useState<string[]>(init?.skip ?? []);
   const [name, setName] = useState(prevName || defaultName);
   const [saved, setSaved] = useState(!!initial?.active);
   const fromProfile = !!initial?.profile; // the subscription's: 保存 puts a copy of it in the override
@@ -152,7 +207,6 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
     switch (form.type) {
       case "easyconnect":
         str("server"); num("port", 443); str("username"); str("password"); str("totp-secret");
-        if (skip.length) proxy["skip-routes"] = skip;
         break;
       case "wireguard":
         str("server"); num("port"); str("private-key"); str("public-key"); str("pre-shared-key"); str("ip"); str("ipv6"); num("mtu");
@@ -176,7 +230,7 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
         break;
     }
     const policy = conds.length ? `${name} 路由` : name;
-    const rules = form.type === "easyconnect" ? [`EASYCONNECT,${name},${policy}`] : [];
+    const rules: string[] = [];
     const routes = addrs.length ? addrs : auto.filter((a) => a !== "0.0.0.0/0" && a !== "::/0").map((a) => ({ t: "IP-CIDR", v: a }));
     const seen = new Set<string>();
     for (const r of routes) { const line = ruleOf(r, policy); if (!seen.has(line)) { seen.add(line); rules.push(line); } }
@@ -192,8 +246,9 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
   // save keeps the settings (a connected VPN takes them at once); connect puts a disconnected one
   // in the config; reconnect drops a connected one's tunnel and logs in again
   const save = () => run(ProfileService.SaveVPN(build() as any, prevName).then(onDone));
-  const connect = () => run(ProfileService.SetVPN(build() as any, prevName).then(() => { setSaved(true); onDone(); }));
-  const reconnect = () => run(ProfileService.ReconnectVPN(prevName || name).then(onDone));
+  const connected = () => { if (form.type === "tailscale") onConnected(name); onDone(); };
+  const connect = () => run(ProfileService.SetVPN(build() as any, prevName).then(() => { setSaved(true); connected(); }));
+  const reconnect = () => run(ProfileService.ReconnectVPN(prevName || name).then(connected));
   // logging in takes the account from wherever else it is signed in: after a recent kick, ask first
   const [askKick, setAskKick] = useState(false);
   const login = () => { setAskKick(false); (saved ? reconnect : connect)(); };
@@ -209,11 +264,19 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
   const currentNetwork = () => CoreService.CurrentNetwork().then((n): KV | null => (n.ssid ? { t: "SSID", v: n.ssid } : n.router ? { t: "ROUTER", v: n.router } : null));
 
   const routing = tunnel?.routing;
-  // routeBox picks whether one of the gateway's routes goes through the VPN; unticked, the rules
-  // after the VPN's decide. 保存 applies it without logging in again.
-  const routeBox = (key: string) => (
-    <td><input type="checkbox" checked={!skip.includes(key)} onChange={(e) => setSkip(e.target.checked ? skip.filter((k) => k !== key) : [...skip, key])} /></td>
-  );
+  // the gateway's routes as rows to pick: a range as its CIDRs, a name as a domain suffix
+  const gatewayRows: RouteRow[] = routing ? [
+    ...nonNull(routing.ip).map((r) => {
+      const ports = r.portMin === 1 && r.portMax === 65535 ? "全部" : r.portMin === r.portMax ? String(r.portMin) : `${r.portMin}-${r.portMax}`;
+      return { key: `${r.from}-${r.to}-${r.portMin}-${r.protocol}`, routes: cidrsOf(r.from, r.to).map((v) => ({ t: "IP-CIDR", v })),
+        cells: [r.from === r.to ? r.from : `${r.from} ~ ${r.to}`, ports, protocolLabel[r.protocol] ?? r.protocol] };
+    }),
+    ...nonNull(routing.domains).map((d) => ({ key: d, routes: [{ t: "DOMAIN-SUFFIX", v: d }], cells: [d, "全部", "域名"] })),
+  ] : [];
+  // the subnets the tailnet's nodes advertise; reaching one needs accept-routes, ticked with it
+  const tailnetRows: RouteRow[] = nonNull(live?.routes).map((r) => ({ key: r.prefix, routes: [{ t: "IP-CIDR", v: r.prefix }],
+    cells: [r.prefix, <span className={r.online ? "" : "muted"}>{r.node}{r.online ? "" : "（离线）"}</span>] }));
+  const routesNote = "勾选的项目加入下方「VPN 路由」，以规则写入配置，经此 VPN 转发；其余流量交由后续规则处理。保存后生效。";
 
   return (
     <div className="card" style={{ marginTop: 16 }}>
@@ -244,7 +307,7 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
         <div className="form">{text("username", "用户名，可选")}{secret("password", "密码，可选")}</div>
       </>}
       {form.type === "tailscale" && <>
-        <div className="form">{secret("auth-key", "Auth key（可选，留空时登录链接见日志）")}{text("hostname", "本机在 tailnet 中的名称（可选）")}</div>
+        <div className="form">{secret("auth-key", "Auth key（可选，留空时连接后在浏览器中登录）")}{text("hostname", "本机在 tailnet 中的名称（可选）")}</div>
         <div className="form">{text("control-url", "控制服务器，Headscale 时填，可选")}{text("exit-node", "出口节点，可选")}
           <label className="radio"><input type="checkbox" checked={form["accept-routes"] === "true"} onChange={(e) => setForm({ ...form, "accept-routes": String(e.target.checked) })} /> 接受子网路由</label></div>
       </>}
@@ -268,29 +331,37 @@ function VpnEditor({ status, initial, tunnel, onDone }: { status: Status; initia
       </div>}
       {error && <div className="error small" style={{ marginTop: 8 }}>{error}</div>}
 
-    {saved && form.type === "easyconnect" && (
-      <div style={{ marginTop: 14 }}>
-        <div className="label" style={{ gap: 12, alignItems: "baseline", fontSize: 13 }}>状态
-          <span className={stateClass[tunnel?.state ?? "down"]}>{stateLabel[tunnel?.state ?? "down"]}</span>
-          {tunnel?.address && <span>隧道地址 {tunnel.address}</span>}
-          {!tunnel?.kicked && tunnel?.kicks ? <span className="delay-warn">网关于 {new Date(tunnel.lastKick).toLocaleTimeString("zh-CN", { hour12: false })} 结束会话（10 分钟内 {tunnel.kicks} 次），该账号可能已在其他设备登录；累计 3 次后将暂停自动重连。</span> : null}
-          {tunnel?.kicked && <span className="error">该账号可能已在其他设备登录，自动重连已暂停。请先在其他设备上退出，再点击「重连」。</span>}
-          {routing?.dns?.length ? <span>DNS {routing.dns.join(", ")}</span> : null}
+    {saved && form.type === "tailscale" && live && (
+      <div>
+        <div className="vpn-facts">
+          <Fact label="状态"><span className={stateClass[live.state]}>{stateLabel[live.state]}</span></Fact>
+          {live.ips?.length ? <Fact label="Tailnet 地址"><span className="selectable">{live.ips.join("、")}</span></Fact> : null}
+          {live.state === "login" && (live.authURL
+            ? <button className="btn small-btn primary" onClick={() => Browser.OpenURL(live.authURL!)}>登录</button>
+            : <span className="muted small">正在获取登录链接…</span>)}
         </div>
-        {routing && (routing.ip?.length || routing.domains?.length) ? (<>
-              <div className="table-wrap tight">
-                <table className="table">
-                  <thead><tr><th style={{ width: 1 }}>走 VPN</th><th>网关下发的网段</th><th>端口</th><th>协议</th></tr></thead>
-                  <tbody>
-                    {nonNull(routing.ip).map((r, i) => {
-                      const k = r.from === r.to ? r.from : `${r.from}-${r.to}`; // the core's Range.Key
-                      return <tr key={i}>{routeBox(k)}<td>{k.replace("-", " ~ ")}</td><td>{r.portMin === r.portMax ? r.portMin : `${r.portMin}-${r.portMax}`}</td><td>{r.protocol}</td></tr>;
-                    })}
-                    {nonNull(routing.domains).map((d) => <tr key={d}>{routeBox(d)}<td>{d}</td><td /><td>域名</td></tr>)}
-                  </tbody>
-                </table>
-              </div>
-              <div className="muted small" style={{ marginTop: 6 }}>未勾选的网段和域名不走 VPN，交给后面的规则；改完点「保存」生效，不会重新登录。</div>
+        {live.state === "up" && <>
+          <div className="label section-label">子网路由</div>
+          {tailnetRows.length
+            ? <><RoutePicker head={["网段", "节点"]} rows={tailnetRows} addrs={addrs} setAddrs={setAddrs} onPick={() => setForm({ ...form, "accept-routes": "true" })} />
+              <div className="muted small vpn-routes-note">{routesNote}选用子网路由会同时开启「接受子网路由」。</div></>
+            : <div className="muted small vpn-routes-note">Tailnet 中没有节点发布子网路由。</div>}
+        </>}
+      </div>
+    )}
+    {saved && form.type === "easyconnect" && (
+      <div>
+        <div className="vpn-facts">
+          <Fact label="状态"><span className={stateClass[tunnel?.state ?? "down"]}>{stateLabel[tunnel?.state ?? "down"]}</span></Fact>
+          {tunnel?.address && <Fact label="隧道地址"><span className="selectable">{tunnel.address}</span></Fact>}
+          {routing?.dns?.length ? <Fact label="DNS"><span className="selectable">{routing.dns.join("、")}</span></Fact> : null}
+        </div>
+        {!tunnel?.kicked && tunnel?.kicks ? <div className="delay-warn small">网关于 {new Date(tunnel.lastKick).toLocaleTimeString("zh-CN", { hour12: false })} 结束会话（10 分钟内 {tunnel.kicks} 次），该账号可能已在其他设备登录；累计 3 次后将暂停自动重连。</div> : null}
+        {tunnel?.kicked && <div className="error small">该账号可能已在其他设备登录，自动重连已暂停。请先在其他设备上退出，再点击「重连」。</div>}
+        {gatewayRows.length ? (<>
+          <div className="label section-label">网关路由</div>
+          <RoutePicker head={["网段或域名", "端口", "协议"]} rows={gatewayRows} addrs={addrs} setAddrs={setAddrs} />
+          <div className="muted small vpn-routes-note">{routesNote}端口与协议的限制不随之写入。</div>
         </>) : null}
       </div>
     )}
@@ -307,12 +378,20 @@ export default function Vpn({ status }: { status: Status }) {
   const [target, setTarget] = useState("");
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<string[]>([]);
+  // a Tailscale VPN just connected: its login link opens in the browser once the core has it
+  const [awaiting, setAwaiting] = useState<{ name: string; until: number } | null>(null);
 
   const load = useCallback(() => Promise.all([
     ProfileService.VPNs().then((v) => setVpns(nonNull(v))),
     CoreService.EasyConnects().then((t) => setTunnels(nonNull(t))).catch(() => setTunnels([])),
   ]), []);
-  usePoll(load, 5000, status.running);
+  usePoll(load, awaiting ? 1500 : 5000, status.running);
+  useEffect(() => {
+    if (!awaiting) return;
+    const v = vpns.find((x) => x.proxy?.name === awaiting.name);
+    if (v?.state === "login" && v.authURL) Browser.OpenURL(v.authURL);
+    if (v?.state === "login" && v.authURL || v?.state === "up" || Date.now() > awaiting.until) setAwaiting(null);
+  }, [vpns, awaiting]);
 
   const current = editing === "new" ? null : editing; // the VPN being edited, if an existing one
   const test = () => {
@@ -339,7 +418,9 @@ export default function Vpn({ status }: { status: Status }) {
         })}
         <button className="tile add" onClick={() => setEditing("new")} title="添加 VPN">＋</button>
       </div>
-      {editing && <VpnEditor key={String(current?.proxy?.name ?? "new")} status={status} initial={current} tunnel={tunnels.find((t) => t.name === current?.proxy?.name) ?? null} onDone={() => { setEditing(null); load(); }} />}
+      {editing && <VpnEditor key={String(current?.proxy?.name ?? "new")} status={status} initial={current} live={vpns.find((v) => v.proxy?.name === current?.proxy?.name) ?? null}
+        tunnel={tunnels.find((t) => t.name === current?.proxy?.name) ?? null} onDone={() => { setEditing(null); load(); }}
+        onConnected={(name) => setAwaiting({ name, until: Date.now() + 60_000 })} />}
 
       {vpns.some((v) => v.active) && (
         <div className="card" style={{ marginTop: 16 }}>

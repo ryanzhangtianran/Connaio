@@ -336,7 +336,7 @@ func (t *trayMenu) toggleVPN(name string) {
 	t.tick()
 }
 
-var vpnPills = map[string]string{"up": dot("good", "已连接"), "connecting": dot("warn", "连接中"), "down": dot("gray", "未连接")}
+var vpnPills = map[string]string{"up": dot("good", "已连接"), "connecting": dot("warn", "连接中"), "login": dot("warn", "待登录"), "down": dot("gray", "未连接")}
 
 // vpnStates reads every VPN's state off the lock: name -> 未连接 / 连接中 / 已连接 as a dot.
 func (t *trayMenu) vpnStates() map[string]string {

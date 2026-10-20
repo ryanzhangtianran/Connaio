@@ -62,7 +62,7 @@ function KeySelect({ value, genName, onChange }: { value: string; genName: strin
         {other && <option value={"\u0000"}>配置中原有的密钥</option>}
         {keys.map((k) => <option key={k.name} value={k.name}>{k.name}</option>)}
       </select>
-      <button className="btn small-btn" disabled={!validName(genName)} title={`生成 ed25519 密钥对 ~/.connaio/${genName || "<名称>"}_ed25519；已有则沿用`}
+      <button className="btn small-btn" disabled={!validName(genName)} title={`生成 ed25519 密钥对 ~/.connaio/${genName.toLowerCase() || "<名称>"}_ed25519；已有则沿用`}
         onClick={() => ToolService.KeyPair(genName).then((k) => { load(); onChange(k.private, `已保存在 ${k.path}`); })}>生成密钥对</button>
     </>
   );
@@ -153,13 +153,15 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
   const [frpRows, setFrpRows] = useState<Row[]>(init?.frpRows ?? [{ name: "web", type: "tcp", localIP: "127.0.0.1", localPort: "8080", remotePort: "18080" }]);
   const [sshRows, setSshRows] = useState<Row[]>(init?.sshRows ?? [{ remote: "127.0.0.1:8080", local: "127.0.0.1:80" }]);
   const [names, setNames] = useState<string[]>([]);
-  const [auth, setAuth] = useState<Auth>(editing?.["private-key"] ? "key" : "password");
+  // an SSH tunnel logs in with a key only: a password would sit in the config as plain text.
+  // passwordOnly: a tunnel saved before, with a password and no key, until a key is chosen
+  const passwordOnly = !!editing?.password && !editing?.["private-key"];
   const [deploying, setDeploying] = useState(false);
   const [busy, setBusy] = useState(false);
   // installing: the one-off server password for putting the key's public half on the server
   const [installing, setInstalling] = useState<string | null>(null);
   const [keyNote, setKeyNote] = useState("");
-  const dirty = useDirty([v, frpRows, sshRows, kind, auth]);
+  const dirty = useDirty([v, frpRows, sshRows, kind]);
   const [mixedPort, setMixedPort] = useState(0);
   useEffect(() => { ProfileService.Value("mixed-port").then((p) => setMixedPort(Number(p) || 0)); }, []);
   // viaRules: a forward from the server to Connaio's proxy port, so devices using it as a proxy
@@ -180,7 +182,7 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
     setTest({ ok: true, text: "测试中…" });
     ToolService.TestTunnel(kind === "frp"
       ? { type: "frp", host: v.serverAddr ?? "", port: num(v.serverPort) ?? 7000 }
-      : { type: "ssh", host: v.server ?? "", port: num(v.port) ?? 22, user: v.username, password: auth === "password" ? v.password : "", key: auth === "key" ? v.key : "", hostKey: v.hostKey })
+      : { type: "ssh", host: v.server ?? "", port: num(v.port) ?? 22, user: v.username, password: "", key: v.key, hostKey: v.hostKey })
       .then((t) => setTest({ ok: true, text: t + (v.dialer ? "（直接连接测试，未经跳板代理）" : "") }))
       .catch((e) => setTest({ ok: false, text: errText(e) }));
   };
@@ -209,7 +211,7 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
         }),
       };
     }
-    return { ...base, ...clean({ server: v.server, port: num(v.port), username: v.username, password: auth === "password" ? v.password : undefined, "private-key": auth === "key" ? v.key : undefined, "host-key": v.hostKey ? [v.hostKey] : undefined }), forwards: sshRows };
+    return { ...base, ...clean({ server: v.server, port: num(v.port), username: v.username, "private-key": v.key, "host-key": v.hostKey ? [v.hostKey] : undefined }), forwards: sshRows };
   };
 
   const save = () => {
@@ -223,7 +225,7 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
   const ports = kind === "frp"
     ? [v.serverPort, ...frpRows.flatMap((r) => [r.localPort, r.remotePort])]
     : [v.port, ...sshRows.flatMap((r) => [splitAddr(r.remote)[1], splitAddr(r.local)[1]])];
-  const ready = validName(v.name ?? "") && ports.every((p) => !p || validPort(p)) && (kind === "frp" ? !!v.serverAddr : !!v.server && !!v.username)
+  const ready = validName(v.name ?? "") && ports.every((p) => !p || validPort(p)) && (kind === "frp" ? !!v.serverAddr : !!v.server && !!v.username && !!v.key)
     && (!viaRules || validPort(viaPort)); // the via-rules forward's server port has no default
 
   return (
@@ -249,28 +251,23 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
             <>
               <label>SSH 服务器</label><div className="inline">{field("server", "vps.example.com")} : <span style={{ width: 90 }}>{field("port", "22")}</span></div>
               <label>用户名</label>{field("username", "必填")}
-              <label>认证方式</label>
-              <AuthSeg auth={auth} setAuth={setAuth} />
-              {auth === "password"
-                ? <><label>密码</label>{field("password", "", "password")}</>
-                : <>
-                  <label>私钥</label>
-                  <div>
-                    <div className="inline">
-                      <KeySelect value={v.key ?? ""} genName={v.name ?? ""} onChange={(key, note) => { setV((x) => ({ ...x, key })); setKeyNote(note); }} />
-                      <button className="btn small-btn" disabled={!v.key || !v.server || !v.username} title="用一次服务器密码把公钥加入 ~/.ssh/authorized_keys，密码不保存" onClick={() => setInstalling("")}>安装公钥到服务器</button>
-                      {keyNote && <span className="muted small">{keyNote}</span>}
-                    </div>
-                  </div>
-                  {installing !== null && <>
-                    <label>服务器密码</label>
-                    <div className="inline">
-                      <PasswordInput placeholder="仅用于这次安装" value={installing} onChange={(e) => setInstalling(e.target.value)} />
-                      <button className="btn small-btn" disabled={busy || !installing} onClick={installKey}>安装</button>
-                      <button className="btn small-btn" onClick={() => setInstalling(null)}>取消</button>
-                    </div>
-                  </>}
-                </>}
+              {passwordOnly && <><span /><div className="delay-warn small">此隧道原以密码登录，密码以明文保存在配置中。请选择或生成私钥并安装到服务器，保存后原密码随之删除。</div></>}
+              <label>私钥</label>
+              <div>
+                <div className="inline">
+                  <KeySelect value={v.key ?? ""} genName={v.name ?? ""} onChange={(key, note) => { setV((x) => ({ ...x, key })); setKeyNote(note); }} />
+                  <button className="btn small-btn" disabled={!v.key || !v.server || !v.username} title="用一次服务器密码把公钥加入 ~/.ssh/authorized_keys，密码不保存" onClick={() => setInstalling("")}>安装公钥到服务器</button>
+                  {keyNote && <span className="muted small">{keyNote}</span>}
+                </div>
+              </div>
+              {installing !== null && <>
+                <label>服务器密码</label>
+                <div className="inline">
+                  <PasswordInput placeholder="仅用于这次安装" value={installing} onChange={(e) => setInstalling(e.target.value)} />
+                  <button className="btn small-btn" disabled={busy || !installing} onClick={installKey}>安装</button>
+                  <button className="btn small-btn" onClick={() => setInstalling(null)}>取消</button>
+                </div>
+              </>}
               <label>服务器公钥</label>
               <div className="inline">{field("hostKey", "建议填写")}
                 <button className="btn small-btn" disabled={!v.server} onClick={() => ToolService.HostKey(v.server, num(v.port) ?? 22).then((k) => setV({ ...v, hostKey: k }))}>获取</button></div>

@@ -22,8 +22,13 @@ type VPN struct {
 	Group map[string]any `json:"group"` // the subnet group, or nil when the VPN is always used
 	// Active says the node is in the override (connected); false for a draft.
 	Active bool `json:"active"`
-	// State is up, connecting or down: for EasyConnect the tunnel's, else whether it is active.
-	State string `json:"state"`
+	// State is up, connecting, login or down: for EasyConnect the tunnel's, for Tailscale its
+	// login's (login: waiting to be signed in at AuthURL), else whether it is active.
+	State   string   `json:"state"`
+	AuthURL string   `json:"authURL,omitempty"`
+	IPs     []string `json:"ips,omitempty"` // a Tailscale node's addresses in the tailnet
+	// Routes are the subnets the tailnet's nodes advertise, for the page to pick from
+	Routes []TailscaleRoute `json:"routes,omitempty"`
 	// Kicked says the EasyConnect login is paused: the gateway kept ending the session, the
 	// account probably signed in elsewhere; ReconnectVPN resumes it.
 	Kicked bool `json:"kicked"`
@@ -61,8 +66,20 @@ func (s *ProfileService) VPNs() ([]VPN, error) {
 	if slices.ContainsFunc(active, func(v VPN) bool { return v.Proxy["type"] == "easyconnect" }) {
 		tunnels, _ = easyConnects(s.core)
 	}
+	var tails []TailscaleStatus
+	if slices.ContainsFunc(active, func(v VPN) bool { return v.Proxy["type"] == "tailscale" }) {
+		tails, _ = tailscales(s.core)
+	}
 	for i := range list {
 		list[i].State = "up"
+		if list[i].Proxy["type"] == "tailscale" {
+			list[i].State = "connecting"
+			for _, ts := range tails {
+				if ts.Name == list[i].name() {
+					list[i].State, list[i].AuthURL, list[i].IPs, list[i].Routes = tailscaleState(ts), ts.AuthURL, ts.IPs, ts.Routes
+				}
+			}
+		}
 		if list[i].Proxy["type"] == "easyconnect" {
 			list[i].State = "down"
 			for _, tn := range tunnels {
@@ -81,6 +98,20 @@ func (s *ProfileService) VPNs() ([]VPN, error) {
 		}
 	}
 	return list, nil
+}
+
+// tailscaleState is the page's state for a Tailscale node's: in the tailnet, waiting to be signed in
+// (or approved by the tailnet's admin), failed, or still starting.
+func tailscaleState(ts TailscaleStatus) string {
+	switch {
+	case ts.State == "Running":
+		return "up"
+	case ts.State == "NeedsLogin" || ts.State == "NeedsMachineAuth":
+		return "login"
+	case ts.Error != "" || ts.State == "Stopped":
+		return "down"
+	}
+	return "connecting"
 }
 
 func (s *ProfileService) activeVPNs() ([]VPN, error) {
@@ -163,7 +194,7 @@ func (s *ProfileService) SetVPN(v VPN, replace string) error {
 // saveDraft keeps v as its draft, in place of the one named replace when renamed.
 func (s *ProfileService) saveDraft(v VPN, replace string) {
 	draft := v
-	draft.Active, draft.State, draft.Kicked, draft.Kicks = false, "", false, 0
+	draft.Active, draft.State, draft.Kicked, draft.Kicks, draft.AuthURL, draft.IPs, draft.Routes = false, "", false, 0, "", nil, nil
 	_ = s.settings.Update(func(st *Settings) {
 		if st.VPNs == nil {
 			st.VPNs = map[string]VPN{}

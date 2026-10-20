@@ -121,6 +121,36 @@ func (s *CoreService) ReverseTunnels() ([]Tunnel, error) {
 
 func (s *CoreService) EasyConnects() ([]EasyConnectTunnel, error) { return easyConnects(s.core) }
 
+// TailscaleStatus is one Tailscale outbound's login state, from the core: State is tailscale's
+// (NeedsLogin with AuthURL, Running with IPs, …), "" with Error.
+type TailscaleStatus struct {
+	Name    string           `json:"name"`
+	State   string           `json:"state"`
+	AuthURL string           `json:"authURL"`
+	IPs     []string         `json:"ips"`
+	Routes  []TailscaleRoute `json:"routes"` // the subnets other nodes advertise
+	Error   string           `json:"error"`
+}
+
+// TailscaleRoute is a subnet a tailnet node advertises, and the node.
+type TailscaleRoute struct {
+	Prefix string `json:"prefix"`
+	Node   string `json:"node"`
+	Online bool   `json:"online"`
+}
+
+// tailscales reads every Tailscale outbound's state; asking starts one nothing has used yet, which
+// is what brings its login link.
+func tailscales(c *core.Core) ([]TailscaleStatus, error) {
+	var resp struct {
+		Tunnels []TailscaleStatus `json:"tunnels"`
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second) // a first start waits for the control server
+	defer cancel()
+	err := c.Do(ctx, http.MethodGet, "/tailscale", nil, &resp)
+	return resp.Tunnels, err
+}
+
 func easyConnects(c *core.Core) ([]EasyConnectTunnel, error) {
 	var resp struct {
 		Tunnels []EasyConnectTunnel `json:"tunnels"`

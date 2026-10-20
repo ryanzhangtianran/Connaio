@@ -199,8 +199,9 @@ func (s *ToolService) KeyPairs() ([]KeyPair, error) {
 }
 
 // KeyPair loads ~/.connaio/<name>_ed25519, generating it (ed25519, no passphrase) only when missing,
-// so a key already installed on a server is never replaced.
+// so a key already installed on a server is never replaced. The name is lowercased, as key files are.
 func (s *ToolService) KeyPair(name string) (KeyPair, error) {
+	name = strings.ToLower(name)
 	if name == "" || strings.ContainsAny(name, `/\`) {
 		return KeyPair{}, errors.New("先填写隧道名称")
 	}

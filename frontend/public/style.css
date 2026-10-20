@@ -283,17 +283,26 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .dash-item .client-icon { width: 15px; height: 15px; }
 .client-cell { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .client-cell .client-icon { width: 16px; height: 16px; }
-/* a tunnel connection's way, hop by hop: the user at the server, the server, the tunnel, here, the rule, the policy, the host */
-.path { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
-.hop { display: flex; flex-direction: column; gap: 1px; min-width: 0; max-width: 260px; padding: 5px 10px; border-radius: 9px; background: var(--track); }
-.hop span { font-size: 11px; color: var(--text-2); }
-.hop b { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
-.hop-step { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.path-arrow { flex: none; width: 12px; height: 12px; color: var(--text-2); }
-.live-routes { display: flex; flex-direction: column; gap: 8px; }
-.live-route { padding: 12px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--card-line); }
-.live-route .path { margin-top: 8px; }
-.live-hosts { margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* a tunnel connection's way as a band across its box: stops, and links sharing the room between them */
+.pathline { display: flex; align-items: center; margin-top: 12px; padding: 11px 16px; border-radius: 12px; background: var(--track); }
+.pl-stop { display: flex; align-items: center; flex: 0 1 auto; min-width: 0; }
+.pl-link { flex: 1 1 24px; min-width: 16px; height: 2px; margin: 0 14px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.pl-dot { flex: none; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--accent); }
+.pl-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pl-label { font-size: 11px; color: var(--text-2); }
+.pl-value { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.live-routes { display: flex; flex-direction: column; gap: 12px; }
+.live-card { padding: 16px 18px; }
+.live-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.live-stat { display: inline-flex; gap: 6px; margin-left: 14px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.live-head .client-icon { width: 22px; height: 22px; border-radius: 6px; }
+.live-table { margin-top: 14px; }
+.live-table .table :is(th, td):first-child { padding-left: 16px; } /* in line with the band's dots */
+.live-table .table :is(th, td):last-child { padding-right: 16px; }
+.live-table .table td { max-width: none; overflow: hidden; text-overflow: ellipsis; }
+.live-table .table { table-layout: fixed; }
+.live-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.live-empty { padding: 14px 0; }
 .dash-table { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .dash-empty { flex: 1; display: grid; place-items: center; }
 .dash-table .table th { position: sticky; top: 0; background: var(--card); }
@@ -711,3 +720,12 @@ tr.muted td.rule-actions { text-decoration: none; }
 /* the groups beside the lists, a quarter wide: one tile a row */
 /* scrolls as the ranking does, whole tiles (useWholeRows); no padding under them, where the next tile would show */
 .activity .group-tiles { grid-template-columns: minmax(0, 1fr); padding-bottom: 0; margin-bottom: 0; }
+/* a VPN's state in its editor: labelled values in a row, then the gateway's routes as a compact table */
+.vpn-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin-top: 16px; font-size: 13px; }
+.vpn-fact { display: inline-flex; align-items: baseline; gap: 8px; }
+.vpn-fact > .muted { font-size: 12px; }
+.vpn-routes-head { justify-content: space-between; }
+.vpn-routes-head .radio { font-size: 12px; color: var(--text); }
+.vpn-routes { max-width: 760px; margin-top: 14px; }
+.vpn-routes tr.muted td { color: var(--text-2); }
+.vpn-routes-note { max-width: 760px; margin-top: 6px; }
