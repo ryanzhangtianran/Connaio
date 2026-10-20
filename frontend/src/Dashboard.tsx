@@ -12,7 +12,7 @@ function method(c: Conn) {
   if (c.network === "udp") return c.port === "443" ? "QUIC" : "UDP";
   return c.port === "443" ? "HTTPS" : c.port === "80" ? "HTTP" : "TCP";
 }
-// client names a connection's client as the activity page does: the app it counts towards, 隧道 <name>
+// client names a connection's client as the activity page does: the app it counts towards, a tunnel's name
 // for one a reverse tunnel brought in
 const client = (c: Conn) => c.app || (c.inbound === "Inner" ? "Connaio" : c.process || c.source || "未知");
 

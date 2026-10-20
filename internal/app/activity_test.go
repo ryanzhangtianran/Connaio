@@ -103,7 +103,7 @@ func TestClientOf(t *testing.T) {
 	if n, i := clientOf(Conn{Source: "192.168.1.9"}); n != "192.168.1.9" || i != "" {
 		t.Fatalf("%q %q", n, i)
 	}
-	if n, i := clientOf(Conn{Inbound: "SSH", InName: "vps", Source: "127.0.0.1", Tunnel: &TunnelHop{Name: "vps"}}); n != "隧道 vps" || i != "tunnel" {
+	if n, i := clientOf(Conn{Inbound: "SSH", InName: "vps", Source: "127.0.0.1", Tunnel: &TunnelHop{Name: "vps"}}); n != "vps" || i != "tunnel" {
 		t.Errorf("a connection a reverse tunnel brought in: %q %q", n, i) // not this machine's, though its source is loopback
 	}
 	// the tunnel's connection to the proxy port and the request it carried there: one connection,
@@ -316,5 +316,14 @@ func TestLedgerMonth(t *testing.T) {
 	}
 	if len(clients) != 2 || clients[0] != (Usage{Name: "B", Icon: "b", Split: Split{Proxy: 5}}) || clients[1].Direct+clients[1].Proxy != 3 {
 		t.Errorf("clients: %+v", clients)
+	}
+}
+
+func TestLedgerTunnelRename(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "traffic.json")
+	os.WriteFile(p, []byte(`{"2026-10-20":{"client":{"隧道 vps":{"direct":0,"proxy":5},"vps":{"direct":1,"proxy":2},"Ghostty":{"direct":3,"proxy":0}}}}`), 0o644)
+	d := openLedger(p).days["2026-10-20"]
+	if len(d.Client) != 2 || d.Client["vps"] != (Split{Direct: 1, Proxy: 7}) || d.Client["Ghostty"].Direct != 3 {
+		t.Errorf("clients: %v", d.Client)
 	}
 }

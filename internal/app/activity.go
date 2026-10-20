@@ -360,7 +360,7 @@ func clientOf(c Conn) (name, icon string) {
 		return "Connaio", cmp.Or(ownBundle, ownExe)
 	}
 	if c.Tunnel != nil && c.Tunnel.Name != "" {
-		return "隧道 " + c.Tunnel.Name, "tunnel" // came in from the server through a reverse tunnel, not this machine's; drawn as the tunnels page's icon
+		return c.Tunnel.Name, "tunnel" // came in from the server through a reverse tunnel, not this machine's; its icon says so
 	}
 	if systemDaemon(c.Path) {
 		return "macOS", "/System/Applications/System Settings.app"
@@ -446,6 +446,18 @@ func openLedger(path string) *ledger {
 	l := &ledger{path: path, days: map[string]*Day{}}
 	if b, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(b, &l.days)
+	}
+	for _, d := range l.days { // a tunnel's client was "隧道 <name>" until 0.1.23: counted under its name now
+		for k, v := range d.Client {
+			if name, ok := strings.CutPrefix(k, "隧道 "); ok {
+				d.Client[name] = Split{d.Client[name].Direct + v.Direct, d.Client[name].Proxy + v.Proxy}
+				delete(d.Client, k)
+				if d.Icons != nil {
+					d.Icons[name] = "tunnel"
+					delete(d.Icons, k)
+				}
+			}
+		}
 	}
 	return l
 }

@@ -52,7 +52,7 @@ apps = [("Google Chrome", 1.42, 0.61), ("WeChat", 0.38, 0.02), ("Visual Studio C
 by_process = [{"name": "macOS" if n == "System Settings" else ("Zoom" if n == "zoom.us" else n), "icon": f"/Applications/{n}.app",
                "direct": int(d * GB), "proxy": int(p * GB)} for n, d, p in apps]
 icons = {f"/Applications/{n}.app": icon(n) for n, _, _ in apps}
-by_process.insert(2, {"name": "隧道 vps", "icon": "tunnel", "direct": 0, "proxy": int(0.31 * GB)})  # a reverse tunnel's users
+by_process.insert(2, {"name": "vps", "icon": "tunnel", "direct": 0, "proxy": int(0.31 * GB)})  # a reverse tunnel's users
 
 activity = {
     "today": {"direct": int(2.13 * GB), "proxy": int(1.36 * GB)}, "month": {"direct": int(41.8 * GB), "proxy": int(27.5 * GB)},
@@ -88,7 +88,7 @@ conns = [{"id": str(i), "network": "tcp", "inbound": "HTTP", "process": p, "path
              ("Ghostty", "node", "registry.npmjs.org", "Match", "Proxy → 日本 02"),
          ], 1)]
 # a request a reverse tunnel brought to the proxy port, with the tunnel's hop (linkTunnels)
-conns.insert(0, {"id": "t1", "network": "tcp", "inbound": "Mixed", "process": "", "path": "", "app": "隧道 vps", "icon": "tunnel",
+conns.insert(0, {"id": "t1", "network": "tcp", "inbound": "Mixed", "process": "", "path": "", "app": "vps", "icon": "tunnel",
                  "source": "127.0.0.1", "host": "api.openai.com", "port": "443", "rule": "DomainSuffix(openai.com)",
                  "chain": "AI → 新加坡 01", "upload": 310_000, "download": 4_200_000, "start": start, "inName": "vps",
                  "tunnel": {"name": "vps", "type": "SSH", "from": "198.51.100.77:51544", "target": "127.0.0.1:7890"}})
