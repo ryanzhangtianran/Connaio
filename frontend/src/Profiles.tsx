@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ProfileService, SettingsService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import type { Profiles as ProfilesData } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
+import type { OverrideParts, Profiles as ProfilesData } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { ago, sizeText, words } from "./format";
 import { on } from "./hooks";
 
@@ -33,6 +33,12 @@ const overrideFields = [
 
 // Profiles lists subscriptions and local configs (click to select, double-click to use), the
 // override merged on top, and where it is all stored.
+// partNote says what each part of the override holds.
+const partNote: Record<keyof OverrideParts, string> = {
+  clash: "Clash（mihomo）通用的部分，可在其他客户端中使用",
+  connaio: "仅 Connaio 支持的部分：反向隧道、接管方式、EasyConnect 节点、Subnet 策略组及相关规则；保存时此部分的规则排在前面",
+};
+
 export default function Profiles() {
   const [data, setData] = useState<ProfilesData>({ current: "", profiles: [] });
   const [sel, setSel] = useState("");
@@ -40,8 +46,10 @@ export default function Profiles() {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [link, setLink] = useState("");
-  const [override, setOverride] = useState("");
-  const [savedOverride, setSavedOverride] = useState("");
+  // the override as two parts (ProfileService.OverrideParts), one shown at a time
+  const [parts, setParts] = useState<OverrideParts>({ clash: "", connaio: "" });
+  const [savedParts, setSavedParts] = useState<OverrideParts>({ clash: "", connaio: "" });
+  const [part, setPart] = useState<keyof OverrideParts>("clash");
   const [dataDir, setDataDir] = useState("");
   const [field, setField] = useState("");
   const [value, setValue] = useState("");
@@ -49,9 +57,11 @@ export default function Profiles() {
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null); // the row whose name is an input
 
   const load = useCallback(() => ProfileService.Profiles().then(setData), []);
+  const loadParts = () => ProfileService.OverrideParts().then((p) => { setParts(p); setSavedParts(p); });
+  const dirty = parts.clash !== savedParts.clash || parts.connaio !== savedParts.connaio;
   useEffect(() => {
     load();
-    ProfileService.Override().then((o) => { setOverride(o); setSavedOverride(o); });
+    loadParts();
     SettingsService.About().then((a) => setDataDir(a.dataDir));
     return on("profiles", (d) => setData(d));
   }, [load]);
@@ -61,9 +71,8 @@ export default function Profiles() {
     action().finally(() => setBusy(""));
   };
   // a field goes straight into the saved override, so it waits until the editor holds no unsaved edits
-  const canAdd = !!field.trim() && override === savedOverride && !busy;
-  const addField = () => run("field", () => ProfileService.SetText(field, value)
-    .then(() => ProfileService.Override()).then((o) => { setOverride(o); setSavedOverride(o); setField(""); setValue(""); }));
+  const canAdd = !!field.trim() && !dirty && !busy;
+  const addField = () => run("field", () => ProfileService.SetText(field, value).then(loadParts).then(() => { setField(""); setValue(""); }));
   const list = data.profiles ?? [];
   const selected = list.find((p) => p.id === sel);
   const rename = () => {
@@ -135,14 +144,22 @@ export default function Profiles() {
           <input className="field-input" list="override-fields" placeholder="字段，如 dns.enable" value={field} onChange={(e) => setField(e.target.value)} />
           <datalist id="override-fields">{overrideFields.map((f) => <option key={f} value={f} />)}</datalist>
           <input placeholder="值，如 true、7890、[a, b]" value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => e.key === "Enter" && canAdd && addField()} className="grow" />
-          <button className="btn" disabled={!canAdd} title={override !== savedOverride ? "先保存或还原编辑框里的改动" : ""} onClick={addField}>{busy === "field" ? "添加中…" : "添加"}</button>
+          <button className="btn" disabled={!canAdd} title={dirty ? "先保存或还原编辑框里的改动" : ""} onClick={addField}>{busy === "field" ? "添加中…" : "添加"}</button>
         </div>
-        <textarea className="code override" rows={10} spellCheck={false} value={override} onChange={(e) => setOverride(e.target.value)} />
+        <div className="plist-tools override-tabs">
+          <div className="seg">
+            <button className={part === "clash" ? "on" : ""} onClick={() => setPart("clash")}>Clash</button>
+            <button className={part === "connaio" ? "on" : ""} onClick={() => setPart("connaio")}>Connaio</button>
+          </div>
+          <span className="muted small">{partNote[part]}</span>
+        </div>
+        <textarea className="code override" rows={10} spellCheck={false} value={parts[part]} onChange={(e) => setParts({ ...parts, [part]: e.target.value })} />
         <div className="plist-tools">
-          <button className="btn" disabled={!override || !!busy} onClick={() => setOverride("")}>清除</button>
+          <button className="btn" disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件到覆写：同名项以导入的为准，列表追加"} onClick={() => run("import", () => ProfileService.ImportOverride().then(loadParts))}>导入…</button>
+          <button className="btn" disabled={!parts[part] || !!busy} onClick={() => setParts({ ...parts, [part]: "" })}>清除</button>
           <span className="grow" />
-          <button className="btn" disabled={override === savedOverride || !!busy} onClick={() => setOverride(savedOverride)}>还原</button>
-          <button className="btn primary" disabled={override === savedOverride || !!busy} onClick={() => run("override", () => ProfileService.SetOverride(override).then(() => ProfileService.Override()).then((o) => { setOverride(o); setSavedOverride(o); }))}>
+          <button className="btn" disabled={!dirty || !!busy} onClick={() => setParts(savedParts)}>还原</button>
+          <button className="btn primary" disabled={!dirty || !!busy} onClick={() => run("override", () => ProfileService.SetOverrideParts(parts).then(loadParts))}>
             {busy === "override" ? "应用中…" : "保存并应用"}
           </button>
         </div>

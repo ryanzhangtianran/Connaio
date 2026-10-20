@@ -334,6 +334,9 @@ func (s *CoreService) Groups() ([]Group, error) {
 			if n := len(m.History); n > 0 {
 				delay = m.History[n-1].Delay
 			}
+			if v, ok := tailscaleLatency.Load(member); ok && m.Type == "Tailscale" { // measured by ping, not the core's URL test
+				delay = v.(int)
+			}
 			g.All = append(g.All, Proxy{Name: member, Type: m.Type, Delay: delay})
 		}
 		return g, true
@@ -383,6 +386,9 @@ func (s *CoreService) testProxy(ctx context.Context, name string) (int, error) {
 		Type string `json:"type"`
 	}
 	_ = s.core.Do(ctx, http.MethodGet, "/proxies/"+url.PathEscape(name), nil, &p)
+	if p.Type == "Tailscale" {
+		return measureTailscale(s.core, name)
+	}
 	return s.delay(ctx, name, testURLFor(p.Type))
 }
 
@@ -436,7 +442,13 @@ func (s *CoreService) TestGroup(group string) (map[string]int, error) {
 	for _, m := range all {
 		if u := testURLFor(resp.Proxies[m].Type); u != testURL {
 			delete(delays, m)
-			if d, err := s.delay(ctx, m, u); err == nil && d > 0 {
+			d, err := 0, error(nil)
+			if resp.Proxies[m].Type == "Tailscale" {
+				d, err = measureTailscale(s.core, m)
+			} else {
+				d, err = s.delay(ctx, m, u)
+			}
+			if err == nil && d > 0 {
 				delays[m] = d
 			}
 		}

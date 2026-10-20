@@ -243,7 +243,6 @@ static void setMenuDecor(void *p, const char *label, const char *detail, const c
 import "C"
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"unicode/utf8"
@@ -317,13 +316,12 @@ func padRate(b int64) string {
 
 // showTray draws the menu bar item: the cat badged with the outbound mode, greyed while nothing is
 // captured (no system proxy, no enhanced mode), plus upload over download unless the speed is hidden.
-func showTray(tray *application.SystemTray, icon []byte, t Traffic, mode, state string, showSpeed bool) {
+// Before the app has started there is no item to draw on: false, and the caller tries again with the
+// next change (no one-line text label in the meantime, which the two lines would then replace).
+func showTray(tray *application.SystemTray, icon []byte, t Traffic, mode, state string, showSpeed bool) bool {
 	item := statusItem(tray)
 	if item == nil {
-		if showSpeed {
-			tray.SetLabel(fmt.Sprintf("↑%s ↓%s", rate(t.Up), rate(t.Down)))
-		}
-		return
+		return false
 	}
 	badge, up, down := (*C.char)(nil), (*C.char)(nil), (*C.char)(nil)
 	if letter := modeBadges[mode]; letter != "" {
@@ -337,6 +335,7 @@ func showTray(tray *application.SystemTray, icon []byte, t Traffic, mode, state 
 	for _, p := range []unsafe.Pointer{unsafe.Pointer(badge), unsafe.Pointer(up), unsafe.Pointer(down)} {
 		C.free(p) // free(NULL) is a no-op
 	}
+	return true
 }
 
 // onMenuThread runs fn on the main thread, where Wails' item setters then act at once. Called from

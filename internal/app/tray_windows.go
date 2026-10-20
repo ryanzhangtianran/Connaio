@@ -10,7 +10,7 @@ import (
 
 // showTray sets the cat on its state's tile, only when that changes. The notification area shows
 // no text, so the tooltip carries the mode and whether anything is captured; no speed, as on Linux.
-func showTray(tray *application.SystemTray, icon []byte, _ Traffic, mode, state string, _ bool) {
+func showTray(tray *application.SystemTray, icon []byte, _ Traffic, mode, state string, _ bool) bool {
 	setTrayIcon(tray, icon, state)
 	tip := "Connaio"
 	if label := modeLabel(mode); label != "" {
@@ -20,6 +20,7 @@ func showTray(tray *application.SystemTray, icon []byte, _ Traffic, mode, state 
 		tip += " · 未接管流量"
 	}
 	tray.SetTooltip(tip)
+	return true
 }
 
 // menuRebuilt hands the rebuilt menu to the tray again, which keeps the native menu it built when

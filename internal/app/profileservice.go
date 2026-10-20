@@ -234,6 +234,50 @@ func (s *ProfileService) Override() (string, error) {
 	return text, nil
 }
 
+// OverrideParts is the override as the page edits it: what any Clash client reads, and what only
+// Connaio's core does (profile.Store.SplitOverride).
+type OverrideParts struct {
+	Clash   string `json:"clash"`
+	Connaio string `json:"connaio"`
+}
+
+func (s *ProfileService) OverrideParts() (OverrideParts, error) {
+	clash, connaio, err := s.store.SplitOverride()
+	if err != nil {
+		return OverrideParts{}, err
+	}
+	format := func(text string) string {
+		if f, err := profile.FormatBlock(text); err == nil && strings.TrimSpace(text) != "" {
+			return f
+		}
+		return text
+	}
+	return OverrideParts{format(clash), format(connaio)}, nil
+}
+
+// SetOverrideParts saves the two parts as the override, Connaio's items first, and applies it.
+func (s *ProfileService) SetOverrideParts(p OverrideParts) error {
+	return s.edit(func() error { return s.store.JoinOverride(p.Clash, p.Connaio) })
+}
+
+// ImportOverride merges a chosen YAML file into the override (profile.Store.ImportOverride) and
+// applies it; nothing happens when no file is chosen.
+func (s *ProfileService) ImportOverride() error {
+	path, err := application.Get().Dialog.OpenFile().
+		SetTitle("导入覆写").
+		CanChooseFiles(true).
+		AddFilter("YAML", "*.yaml;*.yml").
+		PromptForSingleSelection()
+	if err != nil || path == "" {
+		return err
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return s.edit(func() error { return s.store.ImportOverride(string(b)) })
+}
+
 // SetOverride saves and applies the override, restoring the old one if the core rejects the result.
 func (s *ProfileService) SetOverride(content string) error {
 	return s.edit(func() error { return s.store.SetOverride(content) })

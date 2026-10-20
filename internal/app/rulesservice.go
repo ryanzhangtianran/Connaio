@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ryanzhangtianran/Connaio/internal/core"
@@ -128,7 +130,8 @@ type TailscaleStatus struct {
 	State   string           `json:"state"`
 	AuthURL string           `json:"authURL"`
 	IPs     []string         `json:"ips"`
-	Routes  []TailscaleRoute `json:"routes"` // the subnets other nodes advertise
+	Routes  []TailscaleRoute `json:"routes"`  // the subnets other nodes advertise
+	Latency int              `json:"latency"` // a Tailscale ping's round trip to the exit node or a node, ms; 0: none answered
 	Error   string           `json:"error"`
 }
 
@@ -148,7 +151,25 @@ func tailscales(c *core.Core) ([]TailscaleStatus, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second) // a first start waits for the control server
 	defer cancel()
 	err := c.Do(ctx, http.MethodGet, "/tailscale", nil, &resp)
+	for _, t := range resp.Tunnels {
+		tailscaleLatency.Store(t.Name, t.Latency)
+	}
 	return resp.Tunnels, err
+}
+
+// tailscaleLatency is each Tailscale node's last measured latency (name -> ms), what the groups
+// show for it: a URL test can't reach past the tailnet without an exit node.
+var tailscaleLatency sync.Map
+
+// measureTailscale pings through the named Tailscale node (tailscales) and returns its latency.
+func measureTailscale(c *core.Core, name string) (int, error) {
+	if _, err := tailscales(c); err != nil {
+		return 0, err
+	}
+	if v, _ := tailscaleLatency.Load(name); v != nil && v.(int) > 0 {
+		return v.(int), nil
+	}
+	return 0, errors.New("tailnet 中没有节点应答")
 }
 
 func easyConnects(c *core.Core) ([]EasyConnectTunnel, error) {

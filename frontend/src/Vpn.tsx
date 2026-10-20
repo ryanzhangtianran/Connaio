@@ -276,11 +276,38 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
   // the subnets the tailnet's nodes advertise; reaching one needs accept-routes, ticked with it
   const tailnetRows: RouteRow[] = nonNull(live?.routes).map((r) => ({ key: r.prefix, routes: [{ t: "IP-CIDR", v: r.prefix }],
     cells: [r.prefix, <span className={r.online ? "" : "muted"}>{r.node}{r.online ? "" : "（离线）"}</span>] }));
-  const routesNote = "勾选的项目加入下方「VPN 路由」，以规则写入配置，经此 VPN 转发；其余流量交由后续规则处理。保存后生效。";
+  // the VPN's state, under the title: whether it is up, its address, and for Tailscale a way to log in
+  const facts = saved && form.type === "tailscale" && live ? (
+    <div className="vpn-facts">
+      <Fact label="状态"><span className={stateClass[live.state]}>{stateLabel[live.state]}</span></Fact>
+      {live.ips?.length ? <Fact label="Tailnet 地址"><span className="selectable">{live.ips.join("、")}</span></Fact> : null}
+      {live.state === "login" && (live.authURL
+        ? <button className="btn small-btn primary" onClick={() => Browser.OpenURL(live.authURL!)}>登录</button>
+        : <span className="muted small">正在获取登录链接…</span>)}
+    </div>
+  ) : saved && form.type === "easyconnect" ? (<>
+    <div className="vpn-facts">
+      <Fact label="状态"><span className={stateClass[tunnel?.state ?? "down"]}>{stateLabel[tunnel?.state ?? "down"]}</span></Fact>
+      {tunnel?.address && <Fact label="隧道地址"><span className="selectable">{tunnel.address}</span></Fact>}
+      {routing?.dns?.length ? <Fact label="DNS"><span className="selectable">{routing.dns.join("、")}</span></Fact> : null}
+    </div>
+    {!tunnel?.kicked && tunnel?.kicks ? <div className="delay-warn small">网关于 {new Date(tunnel.lastKick).toLocaleTimeString("zh-CN", { hour12: false })} 结束会话（10 分钟内 {tunnel.kicks} 次），该账号可能已在其他设备登录；累计 3 次后将暂停自动重连。</div> : null}
+    {tunnel?.kicked && <div className="error small">该账号可能已在其他设备登录，自动重连已暂停。请先在其他设备上退出，再点击「重连」。</div>}
+  </>) : null;
+  // what the gateway or the tailnet offers, picked into the VPN's routes, under the hand-typed ones
+  const offered = form.type === "tailscale" ? (live?.state === "up" ? {
+    title: "子网路由", rows: tailnetRows, head: ["网段", "节点"], empty: "Tailnet 中没有节点发布子网路由",
+    note: "勾选后作为规则写入配置并经此 VPN 转发，同时开启「接受子网路由」",
+    onPick: () => setForm({ ...form, "accept-routes": "true" }),
+  } : null) : form.type === "easyconnect" && gatewayRows.length ? {
+    title: "网关路由", rows: gatewayRows, head: ["网段或域名", "端口", "协议"], empty: "",
+    note: "勾选后作为规则写入配置并经此 VPN 转发，端口与协议限制不随之写入", onPick: undefined,
+  } : null;
 
   return (
-    <div className="card" style={{ marginTop: 16 }}>
+    <div className="card vpn-editor" style={{ marginTop: 16 }}>
       <div className="label">{initial ? "编辑 VPN" : "添加 VPN"}</div>
+      {facts}
       <div className="form">
         <input style={{ width: 150 }} placeholder="名称" value={name} onChange={(e) => setName(e.target.value)} />
         <select style={{ width: 150 }} value={form.type} disabled={saved} onChange={(e) => setForm({ ...empty, type: e.target.value, port: defaultPort[e.target.value] ?? "" })}>
@@ -315,7 +342,11 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
       <KVRow kinds={bypassKinds} items={bypass} onChange={setBypass} fill={{ label: "当前网络", get: currentNetwork }} />
       <div className="label section-label">{form.type === "easyconnect" ? "附加路由" : "VPN 路由"}</div>
       <KVRow kinds={routeKinds} items={addrs} onChange={setAddrs} />
-      <div className="form">
+      {offered && <>
+        <div className="vpn-offered-head"><span className="label">{offered.title}</span><span className="muted small">{offered.note}</span></div>
+        {offered.rows.length ? <RoutePicker head={offered.head} rows={offered.rows} addrs={addrs} setAddrs={setAddrs} onPick={offered.onPick} /> : <div className="muted small">{offered.empty}</div>}
+      </>}
+      <div className="form vpn-actions">
         <button className="btn primary" disabled={busy || !ready || !name.trim() || !status.running} onClick={tunnel?.kicked || tunnel?.kicks ? () => setAskKick(true) : login}>{saved ? "重连" : "连接"}</button>
         <button className="btn" disabled={busy || !ready || !name.trim()} onClick={save}>保存</button>
         {saved && !fromProfile && <button className="btn" disabled={busy} onClick={disconnect}>断开</button>}
@@ -331,40 +362,6 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
       </div>}
       {error && <div className="error small" style={{ marginTop: 8 }}>{error}</div>}
 
-    {saved && form.type === "tailscale" && live && (
-      <div>
-        <div className="vpn-facts">
-          <Fact label="状态"><span className={stateClass[live.state]}>{stateLabel[live.state]}</span></Fact>
-          {live.ips?.length ? <Fact label="Tailnet 地址"><span className="selectable">{live.ips.join("、")}</span></Fact> : null}
-          {live.state === "login" && (live.authURL
-            ? <button className="btn small-btn primary" onClick={() => Browser.OpenURL(live.authURL!)}>登录</button>
-            : <span className="muted small">正在获取登录链接…</span>)}
-        </div>
-        {live.state === "up" && <>
-          <div className="label section-label">子网路由</div>
-          {tailnetRows.length
-            ? <><RoutePicker head={["网段", "节点"]} rows={tailnetRows} addrs={addrs} setAddrs={setAddrs} onPick={() => setForm({ ...form, "accept-routes": "true" })} />
-              <div className="muted small vpn-routes-note">{routesNote}选用子网路由会同时开启「接受子网路由」。</div></>
-            : <div className="muted small vpn-routes-note">Tailnet 中没有节点发布子网路由。</div>}
-        </>}
-      </div>
-    )}
-    {saved && form.type === "easyconnect" && (
-      <div>
-        <div className="vpn-facts">
-          <Fact label="状态"><span className={stateClass[tunnel?.state ?? "down"]}>{stateLabel[tunnel?.state ?? "down"]}</span></Fact>
-          {tunnel?.address && <Fact label="隧道地址"><span className="selectable">{tunnel.address}</span></Fact>}
-          {routing?.dns?.length ? <Fact label="DNS"><span className="selectable">{routing.dns.join("、")}</span></Fact> : null}
-        </div>
-        {!tunnel?.kicked && tunnel?.kicks ? <div className="delay-warn small">网关于 {new Date(tunnel.lastKick).toLocaleTimeString("zh-CN", { hour12: false })} 结束会话（10 分钟内 {tunnel.kicks} 次），该账号可能已在其他设备登录；累计 3 次后将暂停自动重连。</div> : null}
-        {tunnel?.kicked && <div className="error small">该账号可能已在其他设备登录，自动重连已暂停。请先在其他设备上退出，再点击「重连」。</div>}
-        {gatewayRows.length ? (<>
-          <div className="label section-label">网关路由</div>
-          <RoutePicker head={["网段或域名", "端口", "协议"]} rows={gatewayRows} addrs={addrs} setAddrs={setAddrs} />
-          <div className="muted small vpn-routes-note">{routesNote}端口与协议的限制不随之写入。</div>
-        </>) : null}
-      </div>
-    )}
     </div>
   );
 }

@@ -724,8 +724,16 @@ tr.muted td.rule-actions { text-decoration: none; }
 .vpn-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 22px; margin-top: 16px; font-size: 13px; }
 .vpn-fact { display: inline-flex; align-items: baseline; gap: 8px; }
 .vpn-fact > .muted { font-size: 12px; }
-.vpn-routes-head { justify-content: space-between; }
-.vpn-routes-head .radio { font-size: 12px; color: var(--text); }
-.vpn-routes { max-width: 760px; margin-top: 14px; }
-.vpn-routes tr.muted td { color: var(--text-2); }
-.vpn-routes-note { max-width: 760px; margin-top: 6px; }
+.vpn-routes { margin-top: 8px; }
+/* the editor's rows fit the card: a field gives way rather than pushing the next one past the edge */
+.vpn-editor .form > * { min-width: 0; }
+.vpn-editor .form > .grow { flex: 1 1 0; }
+.vpn-editor .form > .radio { flex: none; white-space: nowrap; }
+.vpn-editor .vpn-facts { margin-top: 10px; }
+.vpn-offered-head { display: flex; align-items: baseline; gap: 12px; margin-top: 18px; white-space: nowrap; overflow: hidden; }
+.vpn-offered-head .muted { overflow: hidden; text-overflow: ellipsis; }
+.vpn-actions { margin-top: 20px; }
+/* the override's parts: the switch, and what the part shown holds, on one line */
+.override-tabs { gap: 12px; }
+.override-tabs .seg { flex: none; }
+.override-tabs .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -165,7 +165,10 @@ func (t *trayMenu) locked(change func()) {
 	t.drawMu.Lock()
 	defer t.drawMu.Unlock()
 	if next.traffic != t.drawn.traffic || next.mode != t.drawn.mode || next.state != t.drawn.state || next.speed != t.drawn.speed {
-		showTray(t.tray, t.icon, next.traffic, next.mode, next.state, next.speed)
+		if !showTray(t.tray, t.icon, next.traffic, next.mode, next.state, next.speed) {
+			// nothing drawn yet: what is shown stays as recorded, so the next change draws it all
+			next.traffic, next.mode, next.state, next.speed = t.drawn.traffic, t.drawn.mode, t.drawn.state, t.drawn.speed
+		}
 	}
 	if started && (!maps.Equal(next.details, t.drawn.details) || !maps.Equal(next.icons, t.drawn.icons)) {
 		decorate(next.details, next.icons)
