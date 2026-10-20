@@ -3,6 +3,7 @@ package app
 import (
 	"cmp"
 	"context"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -41,6 +42,20 @@ type Conn struct {
 	// InName is the inbound's name: for a connection a reverse tunnel brought in (Inbound SSH or
 	// FRP), the tunnel's
 	InName string `json:"inName,omitempty"`
+	// Tunnel is how a connection came in from a reverse tunnel's server: set on the tunnel's own
+	// connection, and on a request it carried to the proxy port, which stands for both (linkTunnels)
+	Tunnel *TunnelHop `json:"tunnel,omitempty"`
+
+	outLocal string // the dialed connection's own end, when it stays on this machine
+}
+
+// TunnelHop is the part of a connection's way before Connaio's proxy took it: who connected at the
+// server, through which tunnel, to which local target.
+type TunnelHop struct {
+	Name   string `json:"name"`   // the tunnel's
+	Type   string `json:"type"`   // SSH or FRP
+	From   string `json:"from"`   // the user at the server's end, address:port
+	Target string `json:"target"` // what the tunnel forwards to here, e.g. 127.0.0.1:7890
 }
 
 type TempRule struct {
@@ -127,6 +142,7 @@ func (s *CoreService) fetchConnections() ([]Conn, error) {
 
 				Ancestors []string `json:"processAncestors"`
 				InName    string   `json:"inboundName"`
+				OutLocal  string   `json:"outboundLocal"`
 			} `json:"metadata"`
 		} `json:"connections"`
 	}
@@ -157,13 +173,49 @@ func (s *CoreService) fetchConnections() ([]Conn, error) {
 		conn := Conn{
 			ID: c.ID, Network: m.Network, Inbound: m.Type, Process: process, Path: m.ProcessPath, System: system, Source: m.SourceIP, SrcPort: m.SourcePort, Ancestors: m.Ancestors, InName: m.InName,
 			Host: cmp.Or(m.Host, m.DestIP), Port: m.DestPort, Rule: rule, Chain: strings.Join(chain, " → "),
-			Upload: c.Upload, Download: c.Download, Start: c.Start.Format(time.RFC3339),
+			Upload: c.Upload, Download: c.Download, Start: c.Start.Format(time.RFC3339), outLocal: m.OutLocal,
 		}
-		conn.App, conn.Icon = clientOf(conn)
+		if conn.Inbound == "SSH" || conn.Inbound == "FRP" {
+			conn.Tunnel = &TunnelHop{conn.InName, conn.Inbound, net.JoinHostPort(conn.Source, conn.SrcPort), net.JoinHostPort(conn.Host, conn.Port)}
+		}
 		conns = append(conns, conn)
+	}
+	conns = linkTunnels(conns)
+	for i := range conns {
+		conns[i].App, conns[i].Icon = clientOf(conns[i])
 	}
 	slices.SortFunc(conns, func(a, b Conn) int { return strings.Compare(b.Start, a.Start) })
 	return conns, nil
+}
+
+// linkTunnels hands a tunnel's connection to Connaio's proxy port over to the request it carried:
+// the core sees that request come in again from the tunnel connection's own end. The request takes
+// the tunnel's hop and stands for both, and the carrier leaves the list, or its bytes would count
+// twice, once as DIRECT to the proxy port.
+func linkTunnels(conns []Conn) []Conn {
+	carriers := map[string]int{} // the tunnel connection's own end -> its index
+	for i, c := range conns {
+		if c.Tunnel != nil && c.outLocal != "" {
+			carriers[c.outLocal] = i
+		}
+	}
+	if len(carriers) == 0 {
+		return conns
+	}
+	carried := map[int]bool{}
+	for i, c := range conns {
+		if j, ok := carriers[net.JoinHostPort(c.Source, c.SrcPort)]; ok && c.Tunnel == nil {
+			conns[i].Tunnel, conns[i].InName = conns[j].Tunnel, conns[j].InName
+			carried[j] = true
+		}
+	}
+	out := conns[:0]
+	for i, c := range conns {
+		if !carried[i] {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // CloseAll closes every live connection.

@@ -5,8 +5,8 @@ import type { Activity as ActivityData, Conn, DiagSection, Group, IPInfo, LanInf
 import { delayClass, nodesOf } from "./Proxies";
 import { errText, platform, size, sizeText, speed } from "./format";
 import { DiagLog } from "./ProxyDiagnose";
-import { on, usePoll, useCachedURL, useClickAway } from "./hooks";
-import { Brand, Icon } from "./icons";
+import { on, usePoll, useCachedURL, useClickAway, useWholeRows } from "./hooks";
+import { Brand, Icon, hasBrand } from "./icons";
 import { Switch } from "./Settings";
 import { session, useHistory } from "./store";
 
@@ -166,7 +166,6 @@ function StatusCard({ activity, mode, setMode, latency }: { activity: ActivityDa
         {paused ? <span className="chip warn"><i className="dot warn" />已暂停</span> : <span className="chip good"><i className="dot on" />运行中</span>}
       </div>
       <div className="hero-ip">
-        <Cookie className="cc"><b>{info?.code || "—"}</b></Cookie>
         <div className="hero-main">
           <div className={`ip-huge selectable ${info ? "" : "muted"}`}>{info?.ip ?? (busy ? "查询中…" : "—")}</div>
           <div className="chips">
@@ -251,10 +250,23 @@ function LanCard({ lan, reload, go }: { lan: LanInfo | null; reload: () => void;
   );
 }
 
-// ServicesCard is whether well-known sites answer through the rules, and how fast.
+// SiteLogo is a site's mark in its colours (the defaults'), else its own icon (CoreService.SiteIcon),
+// else its initial on a colour of its own.
+function SiteLogo({ name, url }: { name: string; url: string }) {
+  const known = hasBrand(name);
+  const src = useCachedURL(known || !url ? undefined : url, CoreService.SiteIcon);
+  if (known) return <Brand name={name} />;
+  if (src) return <img className="brand" src={src} alt="" />;
+  const hue = [...name].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 360, 7);
+  return <span className="svc-initial" style={{ background: `hsl(${hue} 62% 52%)` }}>{[...name][0]?.toUpperCase()}</span>;
+}
+
+// ServicesCard is whether the chosen sites answer through the rules, and how fast; the pencil
+// changes which.
 function ServicesCard({ measure }: { measure: () => void }) {
   const [list, setList] = useState<Service[]>([]);
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   // rounds with no answer at all before the first that had one: just after launch the core is
   // still settling, so those read as 测试中, not 不可达, until the third
   const [blank, setBlank] = useState(0);
@@ -265,6 +277,8 @@ function ServicesCard({ measure }: { measure: () => void }) {
       setBlank((n) => (n < 0 || s?.some((x) => x.ms) ? -1 : n + 1));
     }).finally(() => setBusy(false));
   };
+  // the tiles show at once, as 测试中, while the first round runs
+  useEffect(() => { SettingsService.Sites().then((s) => setList((l) => (l.length ? l : (s ?? []).map((x) => ({ ...x, ms: 0 }))))); }, []);
   const down = list.filter((s) => !s.ms).length;
   const settling = blank >= 0 && blank < 3;
   usePoll(load, settling ? 5_000 : down ? 15_000 : 60_000);
@@ -272,18 +286,57 @@ function ServicesCard({ measure }: { measure: () => void }) {
   return (
     <div className="card" style={{ gridArea: "svc" }}>
       <Head icon="vpn" title={<>服务状态{list.length > 0 && !testing && <span className={`chip ${down ? "bad" : "good"}`}>{down ? `${down} 项不可达` : "全部可达"}</span>}</>}>
+        <IconButton icon="edit" title="编辑站点" onClick={() => setEditing(true)} />
         <IconButton icon="processes" title="重新测试" onClick={() => { load(); measure(); }} disabled={busy} />
       </Head>
-      <div className="svc-grid">
-        {(list.length ? list : ["Google", "GitHub", "Claude", "ChatGPT"].map((name) => ({ name, ms: 0 }))).map((t) => (
-          <div key={t.name} className="svc">
-            <span className="svc-logo"><Brand name={t.name} /><i className={`dot ${t.ms > 0 ? "on" : testing ? "" : "err"}`} /></span>
+      <div className="svc-grid" style={{ gridTemplateRows: `repeat(${Math.max(2, Math.ceil(list.length / 2))}, minmax(0, 1fr))` }}>
+        {list.map((t) => (
+          <div key={t.name} className="svc" title={t.url}>
+            <span className="svc-logo"><SiteLogo name={t.name} url={t.url} /><i className={`dot ${t.ms > 0 ? "on" : testing ? "" : "err"}`} /></span>
             <span className="svc-text">
               <span className="svc-name">{t.name}</span>
               <span className={`svc-ms ${delayClass(t.ms)}`}>{t.ms > 0 ? `${t.ms} ms` : testing ? "测试中…" : "不可达"}</span>
             </span>
           </div>
         ))}
+      </div>
+      {editing && <SitesSheet onClose={(saved) => { setEditing(false); if (saved) { setList([]); setBlank(0); SettingsService.Sites().then((s) => setList((s ?? []).map((x) => ({ ...x, ms: 0 })))); load(); } }} />}
+    </div>
+  );
+}
+
+const MAX_SITES = 6; // activity.go maxSites
+
+// SitesSheet edits the 服务状态 card's sites: a name and an address each, at most MAX_SITES.
+function SitesSheet({ onClose }: { onClose: (saved: boolean) => void }) {
+  const [rows, setRows] = useState<{ name: string; url: string }[]>([]);
+  const [error, setError] = useState("");
+  useEffect(() => { SettingsService.Sites().then((s) => setRows(s ?? [])); }, []);
+  const set = (i: number, k: "name" | "url", v: string) => setRows(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  const save = (list: { name: string; url: string }[]) => SettingsService.SetSites(list).then(() => onClose(true), (e) => setError(errText(e)));
+  const ready = rows.length > 0 && rows.every((r) => r.name.trim() && r.url.trim());
+  return (
+    <div className="modal-bg" onClick={() => onClose(false)}>
+      <div className="sheet sites-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-head"><div className="sheet-title">编辑站点</div><div className="muted small">经规则访问各站点，测量首次响应的时间；最多 {MAX_SITES} 个。</div></div>
+        <div className="sheet-body">
+          {rows.map((r, i) => (
+            <div key={i} className="site-row">
+              <span className="svc-logo"><SiteLogo name={r.name} url={r.url.includes("://") ? r.url : `https://${r.url}`} /></span>
+              <input placeholder="名称" value={r.name} onChange={(e) => set(i, "name", e.target.value)} />
+              <input className="code-input" placeholder="https://example.com" value={r.url} onChange={(e) => set(i, "url", e.target.value)} />
+              <button className="list-remove" title="删除" onClick={() => setRows(rows.filter((_, j) => j !== i))}>−</button>
+            </div>
+          ))}
+          <button className="btn site-add" disabled={rows.length >= MAX_SITES} onClick={() => setRows([...rows, { name: "", url: "" }])}>添加站点</button>
+          {error && <div className="error small">{error}</div>}
+        </div>
+        <div className="sheet-foot">
+          <button className="btn" onClick={() => save([])}>恢复默认</button>
+          <span className="grow" />
+          <button className="btn" onClick={() => onClose(false)}>取消</button>
+          <button className="btn primary" disabled={!ready} onClick={() => save(rows)}>保存</button>
+        </div>
       </div>
     </div>
   );
@@ -314,8 +367,9 @@ function MemoryCard() {
 }
 
 // TrafficSum is today's or this month's traffic, split into direct and proxied, above the ranking's chart.
-function TrafficSum({ activity }: { activity: ActivityData | null }) {
-  const [range, setRange] = useState<"today" | "month">("today");
+type Range = "today" | "month";
+
+function TrafficSum({ activity, range, setRange }: { activity: ActivityData | null; range: Range; setRange: (r: Range) => void }) {
   const [confirming, setConfirming] = useState(false); // 清除 asks once more before it forgets
   useEffect(() => {
     if (!confirming) return;
@@ -351,7 +405,7 @@ function TrafficSum({ activity }: { activity: ActivityData | null }) {
 }
 
 // ExitCell is the exit address of one route, looked up once per session.
-function ExitCell({ policy }: { policy: string }) {
+export function ExitCell({ policy }: { policy: string }) {
   const [text, setText] = useState("查询出口…");
   const [full, setFull] = useState("");
   useEffect(() => {
@@ -404,29 +458,36 @@ function niceScale(v: number) {
   return [1, 2, 5, 10].map((m) => m * p).find((m) => m >= v)!;
 }
 
-// HourChart is today's traffic per hour: a bar where there was any, a dot where there was none.
-function HourChart({ values }: { values: number[] }) {
+// BarChart is traffic per slot, today's hours or this month's days: a bar where there was any, a
+// dot where there was none, grey for the slots still to come. labels mark slots by index.
+function BarChart({ values, now, labels, tip }: { values: number[]; now: number; labels: [number, string][]; tip: (i: number) => string }) {
   const peak = Math.max(0, ...values);
   const top = niceScale(Math.max(peak, 1));
-  const now = new Date().getHours();
   return (
     <div className="hours">
       {[1, 0.5].map((f) => <div key={f} className="hours-grid" style={{ bottom: `calc(18px + ${f} * (100% - 18px))` }}>{peak > 0 && <span>{sizeText(top * f)}</span>}</div>)}
       <div className="hours-bars">
-        {values.map((v, h) => (
-          <div key={h} className="hours-col" title={`${h}:00 · ${sizeText(v)}`}>
-            {v > 0 ? <i style={{ height: `${Math.max(4, (v / top) * 100)}%` }} /> : <b className={h > now ? "later" : ""} />}
+        {values.map((v, i) => (
+          <div key={i} className="hours-col" title={`${tip(i)} · ${sizeText(v)}`}>
+            {v > 0 ? <i style={{ height: `${Math.max(4, (v / top) * 100)}%` }} /> : <b className={i > now ? "later" : ""} />}
           </div>
         ))}
       </div>
-      <div className="hours-axis">{["12AM", "6AM", "12PM", "6PM"].map((l) => <span key={l}>{l}</span>)}</div>
+      <div className="hours-axis">{labels.map(([i, l]) => <span key={i} style={{ left: `${(i / values.length) * 100}%` }}>{l}</span>)}</div>
     </div>
   );
 }
 
-// ClientIcon is a client's Finder icon (an app's, or an executable's generic one), or a device glyph.
+const hourLabels: [number, string][] = [[0, "12AM"], [6, "6AM"], [12, "12PM"], [18, "6PM"]];
+const dayLabels: [number, string][] = [0, 7, 14, 21, 28].map((i) => [i, `${i + 1}日`]);
+
+// ClientIcon is a client's Finder icon (an app's, or an executable's generic one), a reverse
+// tunnel's tile (clientOf's "tunnel": the tunnels page's servers on blue, as the cards' switches), or
+// a device glyph.
 export function ClientIcon({ path }: { path?: string }) {
-  const src = useCachedURL(path || (platform === "linux" ? "device" : undefined), SettingsService.AppIcon); // Linux has a theme icon for devices
+  const tunnel = path === "tunnel";
+  const src = useCachedURL(tunnel ? undefined : path || (platform === "linux" ? "device" : undefined), SettingsService.AppIcon); // Linux has a theme icon for devices
+  if (tunnel) return <span className="client-icon tunnel"><Icon name="tunnels" className="" /></span>;
   if (src) return <img className="client-icon" src={src} alt="" />;
   return (
     <span className="client-icon device">
@@ -440,19 +501,27 @@ export function ClientIcon({ path }: { path?: string }) {
 // RankPane is the traffic totals and today's by hour beside the top applications (a command counted towards the
 // one it was started from), hosts or policies.
 function RankPane({ activity, by, proxyOnly }: { activity: ActivityData | null; by: number; proxyOnly: boolean }) {
+  const [range, setRange] = useState<Range>("today"); // the totals, the bars and the ranking alike
+  const list = useWholeRows<HTMLDivElement>();
+  const month = range === "month";
   const pick = (s: { direct: number; proxy: number }) => (proxyOnly ? s.proxy : s.direct + s.proxy);
-  const lists: (Usage[] | null | undefined)[] = [activity?.byProcess, activity?.byHost, activity?.byPolicy];
+  const lists: (Usage[] | null | undefined)[] = month
+    ? [activity?.monthByProcess, activity?.monthByHost, activity?.monthByPolicy]
+    : [activity?.byProcess, activity?.byHost, activity?.byPolicy];
+  const today = new Date();
   // as many whole rows as the pane is tall: no scrollbar, no row cut in half
   const rows = (lists[by] ?? []).filter((r) => pick(r) > 0).sort((a, b) => pick(b) - pick(a)).slice(0, 30);
   const peak = Math.max(1, ...rows.map(pick));
   return (
     <div className="pane rank-pane">
       <div className="rank-left">
-        <TrafficSum activity={activity} />
-        <HourChart values={(activity?.hours ?? []).map(pick)} />
+        <TrafficSum activity={activity} range={range} setRange={setRange} />
+        {month
+          ? <BarChart values={(activity?.days ?? []).map(pick)} now={today.getDate() - 1} labels={dayLabels} tip={(i) => `${today.getMonth() + 1}月${i + 1}日`} />
+          : <BarChart values={(activity?.hours ?? []).map(pick)} now={today.getHours()} labels={hourLabels} tip={(i) => `${i}:00`} />}
       </div>
-      <div className={`rank ${by === 0 ? "with-icons" : ""}`}>
-        {rows.length === 0 ? <div className="muted small">今天还没有流量</div> : rows.map((r) => (
+      <div className={`rank whole-rows ${by === 0 ? "with-icons" : ""}`} ref={list}>
+        {rows.length === 0 ? <div className="muted small">{month ? "本月还没有流量" : "今天还没有流量"}</div> : rows.map((r) => (
             <div key={r.name} className="row">
               {by === 0 && <ClientIcon path={r.icon} />}
               <span className="name" title={r.name}>{r.name}</span>
@@ -512,14 +581,20 @@ function NodeFlag({ node, fallback }: { node: string; fallback: string }) {
 // GroupsCard is the policy groups, each with the node it uses now; a tile opens the policies page.
 function GroupsCard({ go, running }: { go: (page: string) => void; running: boolean }) {
   const [groups, setGroups] = useState<Group[]>([]);
-  usePoll(() => CoreService.Groups().then((g) => setGroups((g ?? []).filter((x) => x.name !== "GLOBAL"))), 5000, running);
+  const [testing, setTesting] = useState(false);
+  const tiles = useWholeRows<HTMLDivElement>();
+  const load = () => CoreService.Groups().then((g) => setGroups((g ?? []).filter((x) => x.name !== "GLOBAL")));
+  usePoll(load, 5000, running);
+  // every node at once, as the policies page does: GLOBAL holds them all, and each group's tile reads its node's result
+  const test = () => { setTesting(true); CoreService.TestGroup("GLOBAL").finally(() => { setTesting(false); load(); }); };
   return (
     <div className="card" style={{ gridArea: "side" }}>
       <Head icon="layers" title={<>策略组<span className="chip">{groups.length}</span></>}>
+        <IconButton icon="processes" title={testing ? "测速中…" : "测速"} onClick={test} disabled={testing || !running} spin={testing} />
         <IconButton icon="more" title="策略" onClick={() => go("proxies")} />
       </Head>
       {groups.length === 0 ? <div className="pane-empty muted small">配置中没有策略组</div> : (
-        <div className="pane group-tiles">
+        <div className="pane group-tiles whole-rows" ref={tiles}>
           {groups.map((g) => {
             const delay = g.all?.find((p) => p.name === g.now)?.delay ?? 0;
             return (

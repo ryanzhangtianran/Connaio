@@ -17,7 +17,9 @@ static void setTray(void *item, const void *icon, int iconLen, const char *badge
 		trayIcon = [[NSImage alloc] initWithData:[NSData dataWithBytes:icon length:iconLen]];
 	}
 	NSString *b = badge ? @(badge) : nil, *u = up ? @(up) : nil, *d = down ? @(down) : nil;
-	dispatch_async(dispatch_get_main_queue(), ^{
+	// on the run loop, not the main queue: the open menu runs inside a main-queue block (Wails'
+	// showMenu), and the queue doesn't drain again until it closes
+	CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopCommonModes, ^{
 		NSStatusBarButton *button = ((NSStatusItem *)item).button;
 		CGFloat h = NSStatusBar.systemStatusBar.thickness, px = NSScreen.mainScreen.backingScaleFactor;
 		CGFloat (^snap)(CGFloat) = ^CGFloat(CGFloat v) { return round(v * px) / px; };
@@ -68,6 +70,7 @@ static void setTray(void *item, const void *icon, int iconLen, const char *badge
 			NSBaselineOffsetAttributeName: @(-4), // the button sits a two-line title high; centre it on the bar
 		}] autorelease];
 	});
+	CFRunLoopWakeUp(CFRunLoopGetMain());
 	}
 }
 
@@ -168,6 +171,14 @@ static NSFont *monoFont(void) { return [NSFont monospacedDigitSystemFontOfSize:m
 }
 @end
 
+extern void trayOpened(void);
+
+// observeTrayOpen calls trayOpened each time menu opens.
+static void observeTrayOpen(void *menu) {
+	[NSNotificationCenter.defaultCenter addObserverForName:NSMenuDidBeginTrackingNotification object:(NSMenu *)menu
+		queue:nil usingBlock:^(NSNotification *n) { trayOpened(); }];
+}
+
 // setSectionHeader draws a disabled item as a section title. Runs on the main thread.
 static void setSectionHeader(void *p) {
 	NSMenuItem *item = p;
@@ -190,6 +201,19 @@ static void setMenuDecor(void *p, const char *label, const char *detail, const c
 		if (!icons) icons = [NSMutableDictionary new];
 		NSString *key = @(path);
 		img = icons[key];
+		if (!img && [key isEqualToString:@"tunnel"]) { // a reverse tunnel's: the window's tile, white servers on blue
+			NSImage *glyph = [[NSImage imageWithSystemSymbolName:@"server.rack" accessibilityDescription:nil]
+				imageWithSymbolConfiguration:[[NSImageSymbolConfiguration configurationWithPointSize:8 weight:NSFontWeightSemibold]
+					configurationByApplyingConfiguration:[NSImageSymbolConfiguration configurationWithHierarchicalColor:NSColor.whiteColor]]];
+			img = [NSImage imageWithSize:NSMakeSize(16, 16) flipped:NO drawingHandler:^BOOL(NSRect r) {
+				[NSColor.systemBlueColor setFill];
+				[[NSBezierPath bezierPathWithRoundedRect:NSInsetRect(r, 1, 1) xRadius:3.5 yRadius:3.5] fill];
+				NSSize g = glyph.size;
+				[glyph drawInRect:NSMakeRect((16 - g.width) / 2, (16 - g.height) / 2, g.width, g.height)];
+				return YES;
+			}];
+			icons[key] = img;
+		}
 		if (!img) {
 			img = [[[NSWorkspace sharedWorkspace] iconForFile:key] copy];
 			img.size = NSMakeSize(16, 16);
@@ -313,6 +337,25 @@ func showTray(tray *application.SystemTray, icon []byte, t Traffic, mode, state 
 	for _, p := range []unsafe.Pointer{unsafe.Pointer(badge), unsafe.Pointer(up), unsafe.Pointer(down)} {
 		C.free(p) // free(NULL) is a no-op
 	}
+}
+
+// onMenuThread runs fn on the main thread, where Wails' item setters then act at once. Called from
+// elsewhere they wait on the main queue, which an open menu holds until it closes (setTray).
+func onMenuThread(fn func()) { application.InvokeSync(fn) }
+
+// trayOpen is called as the menu bar menu opens (onTrayOpen).
+var trayOpen func()
+
+// onTrayOpen has fn called each time the menu opens; false while the native menu doesn't exist yet.
+// Wails rebuilds the menu inside the same NSMenu, so one observer lasts.
+func onTrayOpen(menu *application.Menu, fn func()) bool {
+	p := native(menu, "nsMenu")
+	if p == nil {
+		return false
+	}
+	trayOpen = fn
+	C.observeTrayOpen(p)
+	return true
 }
 
 // menuRebuilt has nothing to do: the menu bar shows the menu itself, rebuilt in place.

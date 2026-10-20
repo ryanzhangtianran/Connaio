@@ -52,6 +52,7 @@ apps = [("Google Chrome", 1.42, 0.61), ("WeChat", 0.38, 0.02), ("Visual Studio C
 by_process = [{"name": "macOS" if n == "System Settings" else ("Zoom" if n == "zoom.us" else n), "icon": f"/Applications/{n}.app",
                "direct": int(d * GB), "proxy": int(p * GB)} for n, d, p in apps]
 icons = {f"/Applications/{n}.app": icon(n) for n, _, _ in apps}
+by_process.insert(2, {"name": "隧道 vps", "icon": "tunnel", "direct": 0, "proxy": int(0.31 * GB)})  # a reverse tunnel's users
 
 activity = {
     "today": {"direct": int(2.13 * GB), "proxy": int(1.36 * GB)}, "month": {"direct": int(41.8 * GB), "proxy": int(27.5 * GB)},
@@ -61,12 +62,17 @@ activity = {
     "byHost": [{"name": h, "direct": int(d * GB), "proxy": int(p * GB)} for h, d, p in
                [("googlevideo.com", 0, 0.52), ("github.com", 0, 0.21), ("weixin.qq.com", 0.33, 0), ("apple.com", 0.24, 0),
                 ("openai.com", 0, 0.17), ("bilibili.com", 0.71, 0), ("zoom.us", 0.16, 0), ("npmjs.org", 0, 0.08)]],
+    "days": [{"direct": int(abs(((d * 37) % 11) - 3) * 0.4 * GB), "proxy": int(((d * 53) % 7) * 0.3 * GB)} if d < now.day else {"direct": 0, "proxy": 0}
+             for d in range(31)],
+    "monthByProcess": [dict(u, direct=u["direct"] * 14, proxy=u["proxy"] * 14) for u in by_process],
     "byPolicy": [{"name": h, "direct": int(d * GB), "proxy": int(p * GB)} for h, d, p in
                  [("DIRECT", 2.13, 0), ("香港 01", 0, 0.74), ("日本 02", 0, 0.41), ("新加坡 01", 0, 0.21)]],
 }
 groups = [{"name": "Proxy", "type": "Selector", "now": "香港 01", "all": [
     {"name": "香港 01", "type": "Vmess", "delay": 62}, {"name": "日本 02", "type": "Vmess", "delay": 88},
     {"name": "新加坡 01", "type": "Trojan", "delay": 104}, {"name": "美国 03", "type": "Trojan", "delay": 186}]}]
+groups += [dict(groups[0], name=n, now=m) for n, m in [("AI", "新加坡 01"), ("Streaming", "日本 02"), ("Telegram", "香港 01"),
+                                                      ("Apple", "美国 03"), ("Microsoft", "香港 01"), ("Games", "日本 02")]]
 start = (now - datetime.timedelta(minutes=3)).astimezone().isoformat()
 conns = [{"id": str(i), "network": "tcp", "inbound": "HTTP", "process": p, "path": f"/Applications/{a}.app/Contents/MacOS/{p}", "app": a,
           "source": "127.0.0.1", "host": h, "port": "443", "rule": r, "chain": c, "upload": 20_000 * i, "download": 900_000 * i, "start": start}
@@ -81,6 +87,16 @@ conns = [{"id": str(i), "network": "tcp", "inbound": "HTTP", "process": p, "path
              ("WeChat", "WeChat", "weixin.qq.com", "GeoSite(cn)", "DIRECT"),
              ("Ghostty", "node", "registry.npmjs.org", "Match", "Proxy → 日本 02"),
          ], 1)]
+# a request a reverse tunnel brought to the proxy port, with the tunnel's hop (linkTunnels)
+conns.insert(0, {"id": "t1", "network": "tcp", "inbound": "Mixed", "process": "", "path": "", "app": "隧道 vps", "icon": "tunnel",
+                 "source": "127.0.0.1", "host": "api.openai.com", "port": "443", "rule": "DomainSuffix(openai.com)",
+                 "chain": "AI → 新加坡 01", "upload": 310_000, "download": 4_200_000, "start": start, "inName": "vps",
+                 "tunnel": {"name": "vps", "type": "SSH", "from": "198.51.100.77:51544", "target": "127.0.0.1:7890"}})
+tunnels = [{"name": "vps", "type": "ssh", "state": "running", "error": "", "since": start,
+            "forwards": [{"remote": "0.0.0.0:17890", "local": "127.0.0.1:7890"}]}]
+sites = [{"name": "Google", "url": "https://www.google.com/generate_204"}, {"name": "GitHub", "url": "https://github.com"},
+         {"name": "Claude", "url": "https://claude.ai"}, {"name": "ChatGPT", "url": "https://chatgpt.com"},
+         {"name": "Bilibili", "url": "https://www.bilibili.com"}]  # one of the user's own: its initial, no icon offline
 exit_ips = {
     "DIRECT": {"ip": "198.51.100.23", "code": "CN", "country": "China", "region": "Shanghai", "city": "Shanghai", "isp": "China Telecom"},
     "香港 01": {"ip": "203.0.113.45", "code": "HK", "country": "Hong Kong", "region": "", "city": "Hong Kong", "isp": "Example Networks Ltd"},
@@ -101,6 +117,11 @@ def answer(name, args):
         "CoreService.Groups": groups,
         "CoreService.Connections": conns,
         "CoreService.Events": [],
+        "SettingsService.Sites": sites,
+        "CoreService.Services": [dict(x, ms=m) for x, m in zip(sites, [48, 132, 210, 186, 35])],
+        "CoreService.Recent": {"logs": [], "traffic": [], "session": {"up": 0, "down": 0}},
+        "CoreService.ReverseTunnels": tunnels,
+        "ProfileService.UserItems": {"tunnels": [{"name": "vps", "type": "ssh", "server": "vps.example.com", "port": 22}]},
         "CoreService.Mode": "rule",
         "SystemProxyService.Enabled": True,
         "EnhancedService.Mode": "process-tun",

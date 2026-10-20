@@ -69,8 +69,14 @@ function EventsButton() {
   );
 }
 
+function lastPage() {
+  try { return localStorage.getItem("page"); } catch { return null; }
+}
+
 export default function App() {
-  const [current, setCurrent] = useState("activity");
+  // a new window opens on the page asked for (app.go show), else where the last one was left
+  const [current, setCurrent] = useState(() => new URLSearchParams(location.search).get("page") || lastPage() || "activity");
+  useEffect(() => { try { localStorage.setItem("page", current); } catch { /* unavailable: opens on 活动 */ } }, [current]);
   const [status, setStatus] = useState<Status>({ running: false, version: "", error: "" });
   const [activity, setActivity] = useState<ActivityData | null>(null);
   const [sysProxy, setSysProxy] = useState(false);

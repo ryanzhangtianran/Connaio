@@ -135,6 +135,7 @@ func (s *CoreService) streamLogs(ctx context.Context) {
 		var l LogLine
 		if json.Unmarshal(line, &l) == nil {
 			l.Time = time.Now().Format("15:04:05")
+			keepLog(l)
 			emit("log", l)
 			if (l.Level == "warning" || l.Level == "error") && strings.Contains(l.Payload, "[EasyConnect]") {
 				if _, after, ok := strings.Cut(l.Payload, ")"); ok {

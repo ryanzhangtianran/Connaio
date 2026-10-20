@@ -3,11 +3,16 @@ package app
 import (
 	"cmp"
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"github.com/ryanzhangtianran/Connaio/internal/run"
+	"io"
 	"log"
+	"maps"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -41,6 +46,12 @@ type Activity struct {
 	ByProcess   []Usage   `json:"byProcess"` // today's top clients, hosts and policies
 	ByHost      []Usage   `json:"byHost"`
 	ByPolicy    []Usage   `json:"byPolicy"`
+	// this month, as the activity page's 本月 shows it: by day (the first at 0, as many as the
+	// month has), and its top clients, hosts and policies
+	Days           []Split `json:"days"`
+	MonthByProcess []Usage `json:"monthByProcess"`
+	MonthByHost    []Usage `json:"monthByHost"`
+	MonthByPolicy  []Usage `json:"monthByPolicy"`
 }
 
 type Latency struct {
@@ -85,6 +96,7 @@ func (s *CoreService) Activity() (Activity, error) {
 	a.Processes, a.Devices, a.Hosts = len(processes), len(devices), len(hosts)
 	a.Today, a.Month = s.ledger.totals(time.Now())
 	a.Hours, a.ByProcess, a.ByHost, a.ByPolicy = s.ledger.today(time.Now())
+	a.Days, a.MonthByProcess, a.MonthByHost, a.MonthByPolicy = s.ledger.month(time.Now())
 	return a, nil
 }
 
@@ -136,10 +148,13 @@ func pingMs(ctx context.Context, host string) int {
 // Latency measures the router, the direct internet path, the system DNS and the policy of the
 // final MATCH rule (where unmatched traffic goes); a DIRECT one is the internet path already.
 // One measurement at a time, and its result serves the menu bar and the activity page for a minute.
-func (s *CoreService) Latency() Latency {
+func (s *CoreService) Latency() Latency { return s.latency(time.Minute) }
+
+// latency is the last measurement while younger than maxAge, else a new one.
+func (s *CoreService) latency(maxAge time.Duration) Latency {
 	s.latMu.Lock()
 	defer s.latMu.Unlock()
-	if time.Since(s.latAt) < time.Minute && s.lat.Internet > 0 { // a failure isn't kept: the next ask measures again
+	if time.Since(s.latAt) < maxAge && s.lat.Internet > 0 { // a failure isn't kept: the next ask measures again
 		return s.lat
 	}
 	s.lat, s.latAt = s.measureLatency(), time.Now()
@@ -204,37 +219,88 @@ func (s *CoreService) ExternalInfo() (IPInfo, error) {
 	return lookupIP(oneShotClient(port, 8*time.Second))
 }
 
-// Service is a well-known site reached through the rules: ms to its first response, 0 when none came.
+// Service is a site reached through the rules: ms to its first response, 0 when none came.
 type Service struct {
 	Name string `json:"name"`
+	URL  string `json:"url"`
 	Ms   int    `json:"ms"`
 }
 
-var serviceURLs = []struct{ name, url string }{
+// Site is one of the 服务状态 card's sites: what it is called there and the address timed.
+type Site struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+// defaultSites are the card's until the user picks their own; the page draws these names' marks.
+var defaultSites = []Site{
 	{"Google", "https://www.google.com/generate_204"},
 	{"GitHub", "https://github.com"},
 	{"Claude", "https://claude.ai"},
 	{"ChatGPT", "https://chatgpt.com"},
 }
 
-// Services times a request to each of serviceURLs through the mixed-port, all at once; any answer,
-// a redirect or a refusal included, counts as reached. A site gets a second try: the first
+// maxSites is as many as the card's two columns show without scrolling.
+const maxSites = 6
+
+// sites are the user's, else defaultSites.
+func sites(st *settingsFile) []Site {
+	if st == nil { // a CoreService built without settings, as in tests
+		return defaultSites
+	}
+	if list := st.Get().Sites; len(list) > 0 {
+		return list
+	}
+	return defaultSites
+}
+
+// cleanSites checks the sites the card is given: 1 to maxSites, each named once, each an http(s)
+// address. None at all means the defaults again.
+func cleanSites(list []Site) ([]Site, error) {
+	if len(list) > maxSites {
+		return nil, fmt.Errorf("最多 %d 个站点", maxSites)
+	}
+	seen := map[string]bool{}
+	out := make([]Site, 0, len(list))
+	for _, st := range list {
+		st.Name, st.URL = strings.TrimSpace(st.Name), strings.TrimSpace(st.URL)
+		if st.Name == "" {
+			return nil, fmt.Errorf("站点名称不能为空")
+		}
+		if seen[strings.ToLower(st.Name)] {
+			return nil, fmt.Errorf("站点名称重复：%s", st.Name)
+		}
+		seen[strings.ToLower(st.Name)] = true
+		if !strings.Contains(st.URL, "://") {
+			st.URL = "https://" + st.URL
+		}
+		if u, err := url.Parse(st.URL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return nil, fmt.Errorf("地址无效：%s", st.URL)
+		}
+		out = append(out, st)
+	}
+	return out, nil
+}
+
+// Services times a request to each site through the mixed-port, all at once; any answer, a
+// redirect or a refusal included, counts as reached. A site gets a second try: the first
 // connection through a node just after the core starts can stall with no answer.
 func (s *CoreService) Services() ([]Service, error) {
 	port, err := mixedPort(s.core)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]Service, len(serviceURLs))
+	list := sites(s.settings)
+	out := make([]Service, len(list))
 	var wg sync.WaitGroup
-	for i, sv := range serviceURLs {
-		out[i].Name = sv.name
+	for i, sv := range list {
+		out[i].Name, out[i].URL = sv.Name, sv.URL
 		wg.Go(func() {
 			c := oneShotClient(port, 5*time.Second)
 			c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 			for range 2 {
 				start := time.Now()
-				if resp, err := c.Head(sv.url); err == nil {
+				if resp, err := c.Head(sv.URL); err == nil {
 					resp.Body.Close()
 					out[i].Ms = ms(start)
 					return
@@ -244,6 +310,36 @@ func (s *CoreService) Services() ([]Service, error) {
 	}
 	wg.Wait()
 	return out, nil
+}
+
+var siteIcons sync.Map // host -> data URL, "" when none came
+
+// SiteIcon is a site's own icon as a data URL, fetched through the rules from Google's favicon
+// service, which answers for any host with a PNG; "" when it can't be reached.
+// ponytail: one service for every site; ask the site itself (/favicon.ico) if that one is blocked
+func (s *CoreService) SiteIcon(site string) string {
+	u, err := url.Parse(site)
+	if err != nil || u.Hostname() == "" {
+		return ""
+	}
+	if v, ok := siteIcons.Load(u.Hostname()); ok {
+		return v.(string)
+	}
+	port, err := mixedPort(s.core)
+	if err != nil {
+		return ""
+	}
+	icon := ""
+	resp, err := oneShotClient(port, 8*time.Second).Get("https://www.google.com/s2/favicons?sz=64&domain=" + url.QueryEscape(u.Hostname()))
+	if err == nil {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 256<<10))
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK && len(b) > 0 {
+			icon = "data:" + http.DetectContentType(b) + ";base64," + base64.StdEncoding.EncodeToString(b)
+			siteIcons.Store(u.Hostname(), icon) // a failure isn't kept: asked again next time
+		}
+	}
+	return icon
 }
 
 func ms(start time.Time) int { return max(1, int(time.Since(start).Milliseconds())) }
@@ -263,8 +359,8 @@ func clientOf(c Conn) (name, icon string) {
 	if c.Inbound == "Inner" {
 		return "Connaio", cmp.Or(ownBundle, ownExe)
 	}
-	if (c.Inbound == "SSH" || c.Inbound == "FRP") && c.InName != "" {
-		return "隧道 " + c.InName, "" // came in from the server through a reverse tunnel, not this machine's
+	if c.Tunnel != nil && c.Tunnel.Name != "" {
+		return "隧道 " + c.Tunnel.Name, "tunnel" // came in from the server through a reverse tunnel, not this machine's; drawn as the tunnels page's icon
 	}
 	if systemDaemon(c.Path) {
 		return "macOS", "/System/Applications/System Settings.app"
@@ -438,6 +534,32 @@ func (l *ledger) today(now time.Time) (hours [24]Split, clients, hosts, policies
 		return
 	}
 	return d.Hours, topUsage(d.Client, d.Icons, 20), topUsage(d.Host, nil, 20), topUsage(d.Policy, nil, 20)
+}
+
+// month is this month's traffic by day, and its top clients, hosts and policies summed over its days.
+func (l *ledger) month(now time.Time) (days []Split, clients, hosts, policies []Usage) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	days = make([]Split, first.AddDate(0, 1, -1).Day())
+	client, host, policy, icons := map[string]Split{}, map[string]Split{}, map[string]Split{}, map[string]string{}
+	sum := func(into, from map[string]Split) {
+		for k, v := range from {
+			into[k] = Split{into[k].Direct + v.Direct, into[k].Proxy + v.Proxy}
+		}
+	}
+	for i := range days {
+		d := l.days[first.AddDate(0, 0, i).Format(time.DateOnly)]
+		if d == nil {
+			continue
+		}
+		days[i] = d.Split
+		sum(client, d.Client)
+		sum(host, d.Host)
+		sum(policy, d.Policy)
+		maps.Copy(icons, d.Icons) // later days' icons win
+	}
+	return days, topUsage(client, icons, 20), topUsage(host, nil, 20), topUsage(policy, nil, 20)
 }
 
 // topUsage is the n largest entries, biggest first (the page can rank by proxied traffic alone).

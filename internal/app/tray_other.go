@@ -95,6 +95,12 @@ var detailSep = map[bool]string{true: "\t", false: " · "}[runtime.GOOS == "
 // Linux and Windows menus show plain text: a dot becomes ● or ○, and icons are skipped.
 func sectionHeaders([]*application.MenuItem) {} // titles are separators here (build)
 
+func onMenuThread(fn func()) { fn() }
+
+// onTrayOpen does nothing here: on Linux every label change has the panel fetch the whole menu
+// again, and the network quality keeps its minute.
+func onTrayOpen(*application.Menu, func()) bool { return true }
+
 func decorate(details, _ map[*application.MenuItem]string) {
 	for item, detail := range details {
 		markState(item, dotColor(detail))

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -27,7 +28,7 @@ func Run(assets fs.FS, trayIcon []byte) error {
 		return err
 	}
 	settings := loadSettings(dataDir)
-	svc := &CoreService{core: core.New(dataDir), ledger: openLedger(filepath.Join(dataDir, "traffic.json"))}
+	svc := &CoreService{core: core.New(dataDir), ledger: openLedger(filepath.Join(dataDir, "traffic.json")), settings: settings}
 	profiles := &ProfileService{store: store, core: svc.core, settings: settings}
 	svc.onReady = profiles.apply
 	sysProxy := &SystemProxyService{core: svc.core, settings: settings, enabled: settings.Get().SystemProxy} // known before the menu is built; applied by the guard once the core answers
@@ -43,14 +44,23 @@ func Run(assets fs.FS, trayIcon []byte) error {
 		log.Printf("build config: %v (keeping the previous config.yaml)", err)
 	}
 
+	// a closed window is freed, its web content process with it, and the app runs on in the menu bar
+	// only, out of the Dock; showing it builds it again and brings both back
+	var windowMu sync.Mutex
 	var window *application.WebviewWindow
-	// a closed window leaves the app running in the menu bar only, out of the Dock; showing it brings both back
-	show := func() {
-		if window != nil {
-			setDockVisible(true)
-			window.Show()
-			window.Focus()
+	var newWindow func(page string) *application.WebviewWindow
+	// show opens the window on page, or where it was left when page is ""
+	show := func(page string) {
+		windowMu.Lock()
+		defer windowMu.Unlock()
+		setDockVisible(true)
+		if window == nil {
+			window = newWindow(page)
+		} else if page != "" {
+			emit("navigate", page)
 		}
+		window.Show()
+		window.Focus()
 	}
 	app := application.New(application.Options{
 		// the window shows no errors: whatever a call from it fails with is listed under the events button
@@ -58,42 +68,49 @@ func Run(assets fs.FS, trayIcon []byte) error {
 		// a second copy would fight the first over the core's ports; bring the first forward instead
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID:               "com.ryanzhangtianran.connaio",
-			OnSecondInstanceLaunch: func(application.SecondInstanceData) { show() },
+			OnSecondInstanceLaunch: func(application.SecondInstanceData) { show("") },
 		},
 		Name:        "Connaio",
 		Description: "Rule-based proxy with reverse tunnels",
 		Services:    []application.Service{application.NewService(svc), application.NewService(&ToolService{cs: svc}), application.NewService(profiles), application.NewService(sysProxy), application.NewService(enhanced), application.NewService(devices), application.NewService(settingsSvc)},
 		Assets:      application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
-		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: false, // lives on in the menu bar
-		},
+		// lives on in the menu bar
+		Mac:     application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: false},
+		Windows: application.WindowsOptions{DisableQuitOnLastWindowClosed: true},
+		Linux:   application.LinuxOptions{DisableQuitOnLastWindowClosed: true},
 	})
 
-	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:          "Connaio",
-		Width:          1440,
-		Height:         890,
-		MinWidth:       1440, // the activity page's four columns of cards show whole without scrolling from here, and every connections column too
-		MinHeight:      890,
-		BackgroundType: application.BackgroundTypeTranslucent,
-		Frameless:      runtime.GOOS == "linux", // the topbar draws the window buttons (App.tsx WindowButtons)
-		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 52,
-			Backdrop:                application.MacBackdropTranslucent,
-			TitleBar:                application.MacTitleBarHiddenInset,
-		},
-		Windows: application.WindowsWindow{BackdropType: application.Mica}, // the translucent background needs a backdrop behind it
-		URL:     "/",
-	})
-	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { makeVibrant(window) })
-	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
-		window.Hide()
-		setDockVisible(false)
-		e.Cancel()
-	})
+	newWindow = func(page string) *application.WebviewWindow {
+		w := app.Window.NewWithOptions(application.WebviewWindowOptions{
+			Title:          "Connaio",
+			Width:          1440,
+			Height:         890,
+			MinWidth:       1440, // the activity page's four columns of cards show whole without scrolling from here, and every connections column too
+			MinHeight:      890,
+			BackgroundType: application.BackgroundTypeTranslucent,
+			Frameless:      runtime.GOOS == "linux", // the topbar draws the window buttons (App.tsx WindowButtons)
+			Mac: application.MacWindow{
+				InvisibleTitleBarHeight: 52,
+				Backdrop:                application.MacBackdropTranslucent,
+				TitleBar:                application.MacTitleBarHiddenInset,
+			},
+			Windows: application.WindowsWindow{BackdropType: application.Mica}, // the translucent background needs a backdrop behind it
+			URL:     "/?page=" + url.QueryEscape(page),
+		})
+		w.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { makeVibrant(w) })
+		w.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) { // not cancelled: Wails closes it after
+			windowMu.Lock()
+			window = nil
+			windowMu.Unlock()
+			freeWebView(w)
+			setDockVisible(false)
+		})
+		return w
+	}
+	window = newWindow("")
 
-	// the floating process monitor: built on first use, kept above other windows, hidden when closed
-	// and shown again where it was left
+	// the floating process monitor: built when opened, kept above other windows, freed when closed
+	// and opened again where it was left
 	var monitorMu sync.Mutex
 	var monitor *application.WebviewWindow
 	openMonitor := func() {
@@ -116,11 +133,13 @@ func Run(assets fs.FS, trayIcon []byte) error {
 			}
 			monitor = app.Window.NewWithOptions(opts)
 			monitor.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { makeFloating(monitor) })
-			monitor.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+			monitor.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
+				monitorMu.Lock()
+				defer monitorMu.Unlock()
 				x, y := monitor.Position()
 				_ = settings.Update(func(st *Settings) { st.Monitor = []int{x, y} })
-				monitor.Hide()
-				e.Cancel()
+				freeWebView(monitor)
+				monitor = nil
 			})
 		}
 		monitor.Show()

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { EnhancedService, SettingsService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { ProcessChoice, Status } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { ListSetting, Switch, useSetting } from "./Settings";
-import { usePoll } from "./hooks";
+import { useFlip, usePoll } from "./hooks";
 import { cidr, words } from "./format";
 
 const sources: Record<string, string> = { app: "正在运行", network: "有网络连接" };
@@ -38,7 +38,11 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
   };
   const picked = processes ?? [];
   const has = (exec: string) => picked.some((p) => p.toLowerCase() === exec.toLowerCase());
-  const toggle = (exec: string, on: boolean) => setProcesses(on ? [...picked, exec] : picked.filter((p) => p.toLowerCase() !== exec.toLowerCase()));
+  const flip = useFlip<HTMLDivElement>(); // a picked app moves up to the others, sliding there
+  const toggle = (exec: string, on: boolean) => {
+    flip.capture();
+    return setProcesses(on ? [...picked, exec] : picked.filter((p) => p.toLowerCase() !== exec.toLowerCase()));
+  };
   const pick = () => SettingsService.PickApp().then((c) => { if (c.exec && !has(c.exec)) toggle(c.exec, true); });
 
   const known = new Map(choices.map((c) => [c.exec.toLowerCase(), c]));
@@ -86,7 +90,7 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
       </div>
 
       {partial && <>
-        <div className="plist tree" style={{ marginTop: 12 }}>
+        <div className="plist tree" style={{ marginTop: 12 }} ref={flip.ref}>
           <div className="plist-tools">
             <input className="dash-search" placeholder="搜索" value={query} onChange={(e) => setQuery(e.target.value)} />
             <span className="grow" />
@@ -120,9 +124,9 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
               <span className="muted small">{sources[r.source] ?? "未运行"}</span>
               <Switch on={has(r.exec)} onChange={(v) => toggle(r.exec, v)} />
             </>;
-            if (ks.length === 0) return <div key={r.exec} className="plist-row static">{row}</div>;
+            if (ks.length === 0) return <div key={r.exec} data-flip={r.exec} className="plist-row static">{row}</div>;
             return (
-              <details key={r.exec} className="plist-group">
+              <details key={r.exec} data-flip={r.exec} className="plist-group">
                 <summary className="plist-row static">{row}</summary>
                 {ks.map((k) => (
                   <div key={k.exec} className="plist-row static sub">

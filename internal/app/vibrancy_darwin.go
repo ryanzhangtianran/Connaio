@@ -5,6 +5,7 @@ package app
 #cgo LDFLAGS: -framework Cocoa -framework WebKit
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
+#import <objc/message.h>
 #include <stdlib.h>
 #include <stdbool.h>
 
@@ -108,6 +109,34 @@ static void setDockVisible(bool visible) {
 	});
 }
 
+// freeWebView ends a closing window's page, and with it WebKit's process for it: Wails allocates
+// the view and never releases it, so the page would run on behind the closed window. The view is
+// not released here either (AppKit and Wails may still reach it as the window closes); its page is
+// closed instead, and Wails' unretained webView properties on the window and its delegate cleared,
+// so nothing calls into it again. Runs on the main thread, before Wails closes the window.
+// ponytail: the view object itself stays allocated, a few KB per closed window
+@protocol WailsWebViewHolder
+@property (assign) WKWebView *webView;
+@end
+
+static void freeWebView(void *p) {
+	NSWindow *w = p;
+	if (![w respondsToSelector:@selector(webView)]) return;
+	WKWebView *view = ((id<WailsWebViewHolder>)w).webView;
+	if (!view) return;
+	((id<WailsWebViewHolder>)w).webView = nil;
+	if ([w.delegate respondsToSelector:@selector(setWebView:)]) ((id<WailsWebViewHolder>)w.delegate).webView = nil;
+	[w makeFirstResponder:nil];
+	[view stopLoading];
+	[view removeFromSuperview];
+	SEL closePage = NSSelectorFromString(@"_close"); // WebKit's own: ends the page and its process
+	if ([view respondsToSelector:closePage]) {
+		((void (*)(id, SEL))objc_msgSend)(view, closePage);
+	} else {
+		[view loadHTMLString:@"" baseURL:nil]; // at least the page's memory goes
+	}
+}
+
 // iconPNG is the Finder icon of path as a 64 px PNG.
 static void *iconPNG(const char *path, int *n) {
 	@autoreleasepool {
@@ -130,6 +159,13 @@ func setDockVisible(visible bool) { C.setDockVisible(C.bool(visible)) }
 func makeVibrant(w *application.WebviewWindow) {
 	if p := w.NativeWindow(); p != nil {
 		C.makeVibrant(p)
+	}
+}
+
+// freeWebView frees a closing window's web view, which Wails would leave running (see the C side).
+func freeWebView(w *application.WebviewWindow) {
+	if p := w.NativeWindow(); p != nil {
+		application.InvokeSync(func() { C.freeWebView(p) })
 	}
 }
 

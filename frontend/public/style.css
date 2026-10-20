@@ -82,7 +82,7 @@ button { font: inherit; color: inherit; }
 
 /* main */
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.topbar { height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: var(--gap) var(--gap) 0 28px; /* the title in line with the cards (.page), the pills at the right */ --wails-draggable: drag; }
+.topbar { height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: var(--gap) 28px 0; /* the title and the pills in line with the cards' edges (.page's sides) */ --wails-draggable: drag; }
 .page-title { flex: 1; min-width: 0; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
 .pill {
   display: flex; align-items: center; gap: 6px; min-width: 96px; justify-content: center; padding: 3px 12px;
@@ -183,7 +183,7 @@ textarea.code { display: block; width: 100%; margin: 8px 0; font: 12px/1.5 var(-
 .actions.end { justify-content: flex-end; margin-top: 12px; } /* a dialog's buttons */
 .grow { flex: 1; }
 summary { cursor: default; }
-select { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 0 8px; }
+select { font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 0 8px 0 10px; } /* the text where an input's starts */
 .table-wrap { overflow: auto; margin-top: 10px; }
 .table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .table th { text-align: left; font-weight: 500; color: var(--text-2); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -279,20 +279,34 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .dash-item { display: flex; justify-content: space-between; gap: 8px; padding: 5px 8px; border: 0; border-radius: 6px; background: none; text-align: left; font-size: 12px; }
 .dash-item:hover { background: var(--hover); }
 .dash-item.active { background: var(--active); font-weight: 600; }
-.dash-item .name { white-space: nowrap; }
+.dash-item .name { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; }
+.dash-item .client-icon { width: 15px; height: 15px; }
+.client-cell { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.client-cell .client-icon { width: 16px; height: 16px; }
+/* a tunnel connection's way, hop by hop: the user at the server, the server, the tunnel, here, the rule, the policy, the host */
+.path { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.hop { display: flex; flex-direction: column; gap: 1px; min-width: 0; max-width: 260px; padding: 5px 10px; border-radius: 9px; background: var(--track); }
+.hop span { font-size: 11px; color: var(--text-2); }
+.hop b { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.hop-step { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.path-arrow { flex: none; width: 12px; height: 12px; color: var(--text-2); }
+.live-routes { display: flex; flex-direction: column; gap: 8px; }
+.live-route { padding: 12px 14px; border-radius: 14px; background: var(--card); border: 1px solid var(--card-line); }
+.live-route .path { margin-top: 8px; }
+.live-hosts { margin-top: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dash-table { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 .dash-empty { flex: 1; display: grid; place-items: center; }
 .dash-table .table th { position: sticky; top: 0; background: var(--card); }
 .dash-table .table th, .dash-table .table td { padding: 8px 10px; }
-.dash-table .table :is(th, td):first-child { padding-left: 14px; }
-.dash-table .table :is(th, td):last-child { padding-right: 14px; }
+.dash-table .table :is(th, td):first-child { padding-left: 22px; }
+.dash-table .table :is(th, td):last-child { padding-right: 24px; }
 .dash-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .dash-table .table { table-layout: auto; } /* columns fit their content, the slack spread over 客户端 and 地址; too wide scrolls sideways */
 .dash-table .table td { max-width: none; }
 .dash-table .addr .method { margin-right: 8px; }
 .dash-table tr:hover td { background: var(--hover); }
 .row-selected td { background: var(--active) !important; }
-.method { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 4px; color: #fff; background: #8e8e93; }
+.method { display: inline-block; width: 46px; text-align: center; font-size: 10px; font-weight: 700; padding: 1px 0; border-radius: 4px; color: #fff; background: #ec4899; } /* one width, so the addresses after it line up; TCP's pink unless a kind below */
 .m-https { background: #f59e0b; } .m-http { background: #22c55e; } .m-quic { background: #8b5cf6; } .m-udp { background: #0ea5e9; }
 .dash-detail { margin-top: 10px; padding: 10px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--card-line); }
 .detail-grid { display: grid; grid-template-columns: 90px 1fr 90px 1fr; gap: 4px 12px; margin-top: 8px; font-size: 12px; }
@@ -399,6 +413,8 @@ tr.muted td.rule-actions { text-decoration: none; }
 .client-icon { width: 18px; height: 18px; flex: none; }
 .client-icon.device { display: grid; place-items: center; border-radius: 6px; background: var(--track); color: var(--text-2); }
 .client-icon.device svg { width: 12px; height: 12px; }
+.client-icon.tunnel { display: grid; place-items: center; border-radius: 5px; background: var(--accent); color: #fff; }
+.client-icon.tunnel svg { width: 64%; height: 64%; stroke-width: 2.2; }
 .hours { position: relative; flex: 1; min-height: 0; margin-top: 24px; } /* the card's height under its head, room above for the top gridline's label */
 .hours-grid { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); }
 .hours-grid span { position: absolute; right: 0; bottom: 2px; font: 500 10px var(--rounded); color: var(--text-2); }
@@ -407,8 +423,8 @@ tr.muted td.rule-actions { text-decoration: none; }
 .hours-col i { width: 100%; max-width: 8px; border-radius: 3px; background: var(--down); }
 .hours-col b { width: 5px; height: 5px; border-radius: 50%; background: var(--down); }
 .hours-col b.later { background: var(--track); }
-.hours-axis { position: absolute; left: 0; right: 0; bottom: 0; display: flex; font: 500 10px var(--rounded); color: var(--text-2); }
-.hours-axis span { flex: 1; } /* 12AM 6AM 12PM 6PM at hours 0, 6, 12, 18 */
+.hours-axis { position: absolute; left: 0; right: 0; bottom: 0; height: 12px; font: 500 10px var(--rounded); color: var(--text-2); }
+.hours-axis span { position: absolute; white-space: nowrap; } /* at its slot's left edge: 12AM 6AM 12PM 6PM, or the 1st, 8th, 15th… */
 /* rules: the page fills the window and the table scrolls inside its card, header pinned */
 .rules-page { display: flex; flex-direction: column; }
 .rules-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -534,12 +550,16 @@ tr.muted td.rule-actions { text-decoration: none; }
    four small cards, then the lists, which take the rest and scroll inside */
 .activity {
   display: grid; gap: 14px; grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 1.05fr) 64px minmax(0, 0.9fr) minmax(0, 1.15fr); /* the small cards a little lower than the rows around them */
+  /* at the smallest window the rows share the height about 1.05 : 0.9 : 1.15, the small cards a little
+     lower than the rows around them; taller, the small cards stop at what their contents fill and the
+     status grows a little further, the rest going to the lists, which have more to show */
+  --rows: calc(100vh - var(--chrome) - 64px - 3 * 14px);
+  grid-template-rows: clamp(220px, calc(var(--rows) * 0.34), 400px) 64px clamp(190px, calc(var(--rows) * 0.29), 250px) minmax(0, 1fr);
   grid-template-areas:
     "hero hero hero hero hero hero up up up down down down"
     "mode mode mode mode mode mode sys sys sys tun tun tun"
     "lan lan lan health health health svc svc svc mem mem mem"
-    "list list list list list list side side side side side side"; /* halves, so every edge lines up with a row above */
+    "list list list list list list list list list side side side"; /* the lists three quarters, the groups the rest: every edge lines up with a card above */
 }
 .activity > .card { display: flex; flex-direction: column; min-height: 0; }
 .activity .head { min-height: 22px; }
@@ -555,9 +575,6 @@ tr.muted td.rule-actions { text-decoration: none; }
 .hero-btn.paused .hero-cookie svg { fill: var(--warn); filter: drop-shadow(0 6px 14px color-mix(in srgb, var(--warn) 40%, transparent)); }
 .hero-glyph { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; }
 .hero-ip { display: flex; align-items: center; gap: 16px; margin: auto 0 28px; padding-top: 12px; min-width: 0; } /* auto here and above the stats: between the head and them, a little above the middle */
-.cc { position: relative; display: grid; place-items: center; flex: none; width: 50px; height: 50px; }
-.cc svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--track); }
-.cc b { position: relative; font: 600 14px var(--rounded); color: var(--text-2); }
 .hero-main { min-width: 0; }
 .head-actions .picker { flex: none; max-width: 220px; } /* a share of a box as wide as its contents is a sliver */
 .ip-huge { font: 700 31px/1.1 var(--rounded); letter-spacing: -0.3px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -592,7 +609,16 @@ tr.muted td.rule-actions { text-decoration: none; }
 .svc-grid { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 8px; margin-top: 10px; min-height: 0; }
 .svc { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 10px; border-radius: 14px; background: var(--track); }
 .svc-logo { position: relative; display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px; background: var(--card); color: var(--text); }
-.svc-logo .brand { width: 18px; height: 18px; }
+.svc-logo .brand { width: 18px; height: 18px; border-radius: 4px; }
+.svc-initial { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; font: 700 12px var(--rounded); color: #fff; }
+/* the sites' editor: the mark as it will show, the name, the address */
+.sites-sheet { width: min(560px, calc(100vw - 80px)); }
+.site-row { display: grid; grid-template-columns: 34px 120px minmax(0, 1fr) 22px; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+.site-row:first-child { border-top: 0; }
+.site-row .svc-logo { background: var(--track); }
+.site-row input { height: 28px; padding: 0 8px; font-size: 12px; }
+.site-row .code-input { font-family: var(--mono); }
+.site-add { margin-top: 10px; }
 .svc-logo .dot { position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; box-shadow: 0 0 0 2px var(--card); }
 .svc-text { display: flex; flex-direction: column; min-width: 0; }
 .svc-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -613,7 +639,7 @@ tr.muted td.rule-actions { text-decoration: none; }
 /* the ranking: today's hours at the left, the top entries beside them, scrolling past the first few */
 .rank-pane { display: flex; gap: 28px; }
 .rank-left { flex: 1.15; min-width: 0; display: flex; flex-direction: column; }
-.rank-pane .hours { margin-top: 34px; }
+.rank-pane .hours { flex: 0 1 300px; margin-top: 34px; } /* as tall as the pane up to 300px: a tall window gives the list more rows, not taller bars */
 .traffic-sum .big { margin-top: 0; font-size: 26px; }
 .traffic-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .traffic-range { display: flex; align-items: center; gap: 2px; }
@@ -623,10 +649,12 @@ tr.muted td.rule-actions { text-decoration: none; }
 .traffic-sum .split-bar { height: 6px; margin-top: 10px; }
 .traffic-sum .split-bar i { border-radius: 3px; }
 .traffic-sum .legend { justify-content: flex-start; gap: 18px; margin-top: 8px; }
-/* the ranking scrolls without a bar over the sizes; the row under the fold fades out instead of being cut */
-.rank-pane .rank { flex: 1; min-width: 0; overflow: auto; margin-top: 4px; padding-bottom: 24px; gap: 13px; scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); }
-.rank-pane .rank::-webkit-scrollbar { display: none; }
+/* the ranking scrolls without a bar over the sizes, as many whole rows tall as fit (useWholeRows) */
+.rank-pane .rank { flex: 1; min-width: 0; overflow: auto; margin-top: 4px; gap: 13px; }
+/* a list useWholeRows caps: no bar, and scrolling stops on whole rows */
+.whole-rows { scroll-snap-type: y mandatory; scrollbar-width: none; }
+.whole-rows::-webkit-scrollbar { display: none; }
+.whole-rows > * { scroll-snap-align: start; }
 .group-tiles { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 58px; gap: 8px; align-content: start; }
 .gtile { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 12px 0 10px; border: 0; border-radius: 14px; background: var(--track); text-align: left; transition: background .15s; }
 .gtile:hover { background: var(--active); }
@@ -680,3 +708,6 @@ tr.muted td.rule-actions { text-decoration: none; }
 :is(.linux, .windows) input[switch]:checked { background: var(--accent); }
 :is(.linux, .windows) input[switch]:checked::before { transform: translateX(16px); }
 :is(.linux, .windows) input[switch]:disabled { opacity: .5; cursor: default; }
+/* the groups beside the lists, a quarter wide: one tile a row */
+/* scrolls as the ranking does, whole tiles (useWholeRows); no padding under them, where the next tile would show */
+.activity .group-tiles { grid-template-columns: minmax(0, 1fr); padding-bottom: 0; margin-bottom: 0; }

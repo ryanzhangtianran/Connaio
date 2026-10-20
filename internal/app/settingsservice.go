@@ -65,6 +65,18 @@ func (s *SettingsService) LaunchAtLogin() bool {
 }
 
 // TraySpeed reports whether the menu bar shows the current speed; it applies on the next second's update.
+// Sites are the 服务状态 card's sites, the defaults until changed.
+func (s *SettingsService) Sites() []Site { return sites(s.settings) }
+
+// SetSites replaces the card's sites; an empty list puts the defaults back.
+func (s *SettingsService) SetSites(list []Site) error {
+	list, err := cleanSites(list)
+	if err != nil {
+		return err
+	}
+	return s.settings.Update(func(st *Settings) { st.Sites = list })
+}
+
 func (s *SettingsService) TraySpeed() bool { return !s.settings.Get().HideTraySpeed }
 
 func (s *SettingsService) SetTraySpeed(on bool) error {

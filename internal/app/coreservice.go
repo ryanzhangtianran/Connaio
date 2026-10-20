@@ -102,6 +102,46 @@ func (s *CoreService) ClearEvents() {
 	eventLog.Unlock()
 }
 
+// recent keeps what the window shows from before it opened, as closing the window frees its page.
+var recent struct {
+	sync.Mutex
+	Recent
+}
+
+// Recent is the core's latest log lines, the traffic of the last minute and the traffic since the
+// app started.
+type Recent struct {
+	Logs    []LogLine `json:"logs"`    // newest last, at most 500 (store.ts LOG_LINES)
+	Traffic []Traffic `json:"traffic"` // one a second, newest last, at most 60 (store.ts HISTORY)
+	Session Traffic   `json:"session"`
+}
+
+func (s *CoreService) Recent() Recent {
+	recent.Lock()
+	defer recent.Unlock()
+	return Recent{slices.Clone(recent.Logs), slices.Clone(recent.Traffic), recent.Session}
+}
+
+func (s *CoreService) ClearLogs() {
+	recent.Lock()
+	recent.Logs = nil
+	recent.Unlock()
+}
+
+func keepLog(l LogLine) {
+	recent.Lock()
+	recent.Logs = append(recent.Logs[max(0, len(recent.Logs)-499):], l)
+	recent.Unlock()
+}
+
+func keepTraffic(t Traffic) {
+	recent.Lock()
+	recent.Traffic = append(recent.Traffic[max(0, len(recent.Traffic)-59):], t)
+	recent.Session.Up += t.Up
+	recent.Session.Down += t.Down
+	recent.Unlock()
+}
+
 func emit(name string, data any) {
 	if app := application.Get(); app != nil {
 		app.Event.Emit(name, data)
@@ -111,6 +151,7 @@ func emit(name string, data any) {
 // CoreService owns the connaio-core child process and exposes its API to the frontend.
 type CoreService struct {
 	core      *core.Core
+	settings  *settingsFile                               // the 服务状态 card's sites
 	ledger    *ledger                                     // today's and this month's traffic
 	onReady   func() error                                // pushes the GUI's config once a core answers
 	onTraffic func(Traffic)                               // menu bar speed
@@ -470,6 +511,7 @@ func (s *CoreService) streamTraffic(ctx context.Context) {
 		if s.onTraffic != nil {
 			s.onTraffic(t)
 		}
+		keepTraffic(t)
 		emit("traffic", t)
 	}, func(error) {
 		if restarting.Load() > 0 {

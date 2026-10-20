@@ -35,8 +35,8 @@ type trayMenu struct {
 	app      *application.App
 	tray     *application.SystemTray
 	icon     []byte
-	show     func()
-	monitor  func() // shows the floating process monitor
+	show     func(page string) // opens the window on page, or where it was left when ""
+	monitor  func()            // shows the floating process monitor
 	svc      *CoreService
 	profiles *ProfileService
 	sysProxy *SystemProxyService
@@ -138,7 +138,11 @@ func (t *trayMenu) offer(fn func()) {
 // when something they show has changed; the native calls wait on the main thread, outside the lock.
 func (t *trayMenu) locked(change func()) {
 	t.mu.Lock()
-	change()
+	if t.started {
+		onMenuThread(change) // the menu items change live, even while the menu is open
+	} else {
+		change()
+	}
 	for key, item := range t.modeItems {
 		t.details[item] = ""
 		if key == t.mode {
@@ -202,14 +206,18 @@ func (t *trayMenu) toggleEnhanced(full bool) {
 }
 
 // loop refreshes the groups and profiles every 5s (the process rows and speed come from the data
-// path), and the network quality every minute.
+// path), and the network quality every minute and as the menu opens.
 // ponytail: polls /proxies even while the menu is closed; hook menuWillOpen if it shows up in a profile.
 func (t *trayMenu) loop() {
+	watching := false
 	for i := 0; ; i += 5 {
 		if i%60 == 10 { // the first one 10s in, once the startup apply has rebuilt the TUN under it
 			go t.measure()
 		}
 		t.tick()
+		if !watching { // once the native menu exists
+			watching = onTrayOpen(t.menu, func() { go t.measure() })
+		}
 		time.Sleep(5 * time.Second)
 	}
 }
@@ -222,7 +230,7 @@ func (t *trayMenu) measure() {
 			t.details[t.qualityItem] = dot("gray", "…")
 		}
 	})
-	q := qualityBadge(t.svc.Latency().Internet)
+	q := qualityBadge(t.svc.latency(10 * time.Second).Internet) // a menu opened again soon after reads the last one
 	t.locked(func() { t.details[t.qualityItem] = q })
 }
 
@@ -550,7 +558,7 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, 
 		return sub, item
 	}
 
-	t.details[m.Add("显示主窗口").SetAccelerator("CmdOrCtrl+M").OnClick(func(*application.Context) { t.show() })] = "" // no detail; on Linux a blank where the others have their dot (markState)
+	t.details[m.Add("显示主窗口").SetAccelerator("CmdOrCtrl+M").OnClick(func(*application.Context) { t.show("") })] = "" // no detail; on Linux a blank where the others have their dot (markState)
 	t.details[m.Add("显示进程监视").OnClick(func(*application.Context) { t.monitor() })] = ""
 	var headers []*application.MenuItem
 	header := func(title string) {
@@ -600,7 +608,7 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, 
 		// whole menu again and close the submenu being read, nor on Windows, which shows plain text
 		header("流量")
 		for range trayProcesses {
-			t.procItems = append(t.procItems, m.Add("").SetHidden(true).OnClick(func(*application.Context) { t.show() }))
+			t.procItems = append(t.procItems, m.Add("").SetHidden(true).OnClick(func(*application.Context) { t.show("") }))
 		}
 	}
 
@@ -619,7 +627,7 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, 
 	header("配置")
 	open := func(sub *application.Menu, label, page string) {
 		sub.AddSeparator()
-		sub.Add(label).OnClick(func(*application.Context) { t.show(); emit("navigate", page) })
+		sub.Add(label).OnClick(func(*application.Context) { t.show(page) })
 	}
 	var sub *application.Menu
 	sub, t.profileMenu = submenu("配置")

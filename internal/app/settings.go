@@ -22,6 +22,8 @@ type Settings struct {
 	VPNs map[string]VPN `json:"vpns,omitempty"`
 	// Monitor is where the floating process monitor was last closed, x and y, to open it there again.
 	Monitor []int `json:"monitor,omitempty"`
+	// Sites are the activity page's 服务状态 sites; none: defaultSites.
+	Sites []Site `json:"sites,omitempty"`
 }
 
 type settingsFile struct {

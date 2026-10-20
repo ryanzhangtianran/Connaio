@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { CoreService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Conn, Status, TempRule } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { RuleDialog, age } from "./RuleDialog";
+import { ClientIcon } from "./Activity";
+import { TunnelPath, useTunnelSites } from "./Tunnels";
 import { sizeText } from "./format";
 import { usePoll, useClickAway } from "./hooks";
 
@@ -14,7 +16,7 @@ function method(c: Conn) {
 // for one a reverse tunnel brought in
 const client = (c: Conn) => c.app || (c.inbound === "Inner" ? "Connaio" : c.process || c.source || "未知");
 
-function Detail({ c, onRule, onClose }: { c: Conn; onRule: () => void; onClose: () => void }) {
+function Detail({ c, sites, onRule, onClose }: { c: Conn; sites: ReturnType<typeof useTunnelSites>; onRule: () => void; onClose: () => void }) {
   const rows: [string, string][] = [
     ["客户端", client(c)], ["进程路径", c.path || "—"], ["入站", c.inbound], ["来源", c.source],
     ["目标", `${c.host}:${c.port}`], ["规则", c.rule], ["策略链", c.chain],
@@ -30,6 +32,7 @@ function Detail({ c, onRule, onClose }: { c: Conn; onRule: () => void; onClose: 
           <button className="btn" onClick={onClose}>×</button>
         </span>
       </div>
+      {c.tunnel && <TunnelPath c={c} {...sites} />}
       <div className="detail-grid">
         {rows.map(([k, v]) => [<span key={k} className="muted">{k}</span>, <span key={k + "v"} className="selectable">{v}</span>])}
       </div>
@@ -47,6 +50,7 @@ export default function Dashboard({ status }: { status: Status }) {
   const [detail, setDetail] = useState<string>(""); // connection id
   const [dialog, setDialog] = useState<Conn | null>(null);
   const [tempOpen, setTempOpen] = useState(false);
+  const sites = useTunnelSites(status.running);
 
   usePoll(() => Promise.all([
     CoreService.Connections().then((c) => setConns(c ?? [])),
@@ -64,6 +68,7 @@ export default function Dashboard({ status }: { status: Status }) {
   const shown = useMemo(() => conns.filter((c) => (!selected || keyOf(c) === selected) && (!q || `${client(c)} ${c.host} ${c.rule} ${c.chain}`.toLowerCase().includes(q))), [conns, groupBy, selected, q]);
   const MAX_ROWS = 300; // ponytail: a cap instead of virtualisation; virtualise if people scroll past it
   const current = conns.find((c) => c.id === detail);
+  const iconOf = useMemo(() => new Map(conns.map((c) => [client(c), c.icon])), [conns]);
 
   return (
     <div className="dash">
@@ -80,7 +85,7 @@ export default function Dashboard({ status }: { status: Status }) {
           </button>
           {groups.map(([name, n]) => (
             <button key={name} className={`dash-item ${selected === name ? "active" : ""}`} onClick={() => setSelected(name)} title={name}>
-              <span className="name">{name}</span><span className="muted">{n}</span>
+              <span className="name">{groupBy === "client" && <ClientIcon path={iconOf.get(name)} />}{name}</span><span className="muted">{n}</span>
             </button>
           ))}
         </aside>
@@ -109,12 +114,13 @@ export default function Dashboard({ status }: { status: Status }) {
           </div>
           <div className="dash-table">
             <table className="table">
-              <colgroup><col /><col /><col style={{ width: 88 }} /><col style={{ width: 74 }} /><col style={{ width: 74 }} /><col style={{ width: 52 }} /></colgroup>
+              {/* at least these shares, the address taking the rest; wider content widens its column (nothing is cut) */}
+              <colgroup><col style={{ width: "18%" }} /><col /><col style={{ width: "16%" }} /><col style={{ width: "11%" }} /><col style={{ width: "11%" }} /><col style={{ width: "9%" }} /></colgroup>
               <thead><tr><th>客户端</th><th className="addr">地址</th><th>策略</th><th className="num">上传</th><th className="num">下载</th><th className="num">时长</th></tr></thead>
               <tbody>
                 {shown.slice(0, MAX_ROWS).map((c) => (
                   <tr key={c.id} className={c.id === detail ? "row-selected" : ""} onClick={() => setDetail(c.id === detail ? "" : c.id)}>
-                    <td title={c.path}>{client(c)}</td>
+                    <td title={c.path}><span className="client-cell"><ClientIcon path={c.icon} />{client(c)}</span></td>
                     <td className="addr" title={`${c.host}:${c.port}`}><span className={`method m-${method(c).toLowerCase()}`}>{method(c)}</span>{c.host}:{c.port}</td>
                     <td title={`${c.rule} → ${c.chain}`}>{c.chain}</td>
                     <td className="num">{sizeText(c.upload)}</td>
@@ -129,7 +135,7 @@ export default function Dashboard({ status }: { status: Status }) {
           </div>
         </div>
       </div>
-      {current && <Detail c={current} onRule={() => setDialog(current)} onClose={() => setDetail("")} />}
+      {current && <Detail c={current} sites={sites} onRule={() => setDialog(current)} onClose={() => setDetail("")} />}
       {dialog && <RuleDialog conn={dialog} onClose={() => setDialog(null)} />}
     </div>
   );

@@ -103,8 +103,19 @@ func TestClientOf(t *testing.T) {
 	if n, i := clientOf(Conn{Source: "192.168.1.9"}); n != "192.168.1.9" || i != "" {
 		t.Fatalf("%q %q", n, i)
 	}
-	if n, _ := clientOf(Conn{Inbound: "SSH", InName: "vps", Source: "127.0.0.1"}); n != "隧道 vps" {
-		t.Errorf("a connection a reverse tunnel brought in: %q", n) // not this machine's, though its source is loopback
+	if n, i := clientOf(Conn{Inbound: "SSH", InName: "vps", Source: "127.0.0.1", Tunnel: &TunnelHop{Name: "vps"}}); n != "隧道 vps" || i != "tunnel" {
+		t.Errorf("a connection a reverse tunnel brought in: %q %q", n, i) // not this machine's, though its source is loopback
+	}
+	// the tunnel's connection to the proxy port and the request it carried there: one connection,
+	// the request's, with the tunnel's hop
+	hop := &TunnelHop{Name: "vps", Type: "SSH", From: "203.0.113.5:40000", Target: "127.0.0.1:7890"}
+	conns := linkTunnels([]Conn{
+		{ID: "carrier", Inbound: "SSH", InName: "vps", Tunnel: hop, outLocal: "127.0.0.1:51000"},
+		{ID: "request", Inbound: "Mixed", Source: "127.0.0.1", SrcPort: "51000", Host: "example.com"},
+		{ID: "other", Inbound: "Mixed", Source: "127.0.0.1", SrcPort: "51001"},
+	})
+	if len(conns) != 2 || conns[0].ID != "request" || conns[0].Tunnel != hop || conns[1].Tunnel != nil {
+		t.Errorf("linked: %+v", conns)
 	}
 	if n, _ := clientOf(Conn{Inbound: "Inner"}); n != "Connaio" {
 		t.Fatalf("the core's own connection is %q", n)
@@ -270,5 +281,40 @@ func TestClientOfSystemService(t *testing.T) {
 	}
 	if n, _ := clientOf(Conn{Source: "192.0.2.9"}); n != "192.0.2.9" {
 		t.Errorf("a LAN device keeps its address: %q", n)
+	}
+}
+
+func TestCleanSites(t *testing.T) {
+	got, err := cleanSites([]Site{{" Bilibili ", "www.bilibili.com"}, {"X", "http://x.com/path"}})
+	if err != nil || got[0] != (Site{"Bilibili", "https://www.bilibili.com"}) || got[1].URL != "http://x.com/path" {
+		t.Errorf("%v %v", got, err)
+	}
+	for _, bad := range [][]Site{
+		{{"", "https://a.com"}},
+		{{"A", "https://a.com"}, {"a", "https://b.com"}},
+		{{"A", "ftp://a.com"}},
+		make([]Site, maxSites+1),
+	} {
+		if _, err := cleanSites(bad); err == nil {
+			t.Errorf("%v accepted", bad)
+		}
+	}
+	if got, err := cleanSites(nil); err != nil || len(got) != 0 {
+		t.Errorf("no sites: %v %v", got, err) // stored as none, which reads as the defaults
+	}
+}
+
+func TestLedgerMonth(t *testing.T) {
+	l := &ledger{days: map[string]*Day{
+		"2026-02-01": {Split: Split{Direct: 1}, Client: map[string]Split{"A": {Direct: 1}}},
+		"2026-02-28": {Split: Split{Proxy: 2}, Client: map[string]Split{"A": {Proxy: 2}, "B": {Proxy: 5}}, Icons: map[string]string{"B": "b"}},
+		"2026-03-01": {Split: Split{Proxy: 9}, Client: map[string]Split{"C": {Proxy: 9}}}, // next month's: left out
+	}}
+	days, clients, _, _ := l.month(time.Date(2026, 2, 14, 12, 0, 0, 0, time.UTC))
+	if len(days) != 28 || days[0].Direct != 1 || days[27].Proxy != 2 {
+		t.Errorf("days: %v", days)
+	}
+	if len(clients) != 2 || clients[0] != (Usage{Name: "B", Icon: "b", Split: Split{Proxy: 5}}) || clients[1].Direct+clients[1].Proxy != 3 {
+		t.Errorf("clients: %+v", clients)
 	}
 }

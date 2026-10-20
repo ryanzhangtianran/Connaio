@@ -12,3 +12,7 @@ func makeVibrant(*application.WebviewWindow) {}
 func setDockVisible(bool) {}
 
 func makeFloating(*application.WebviewWindow) {}
+
+// freeWebView: closing a window frees its web view here already.
+// ponytail: assumed for WebView2 and WebKitGTK, not measured; check the process list if it shows up
+func freeWebView(*application.WebviewWindow) {}
