@@ -413,8 +413,10 @@ func (t *trayMenu) tick() {
 				up = append(up, name)
 			}
 		}
-		slices.Sort(up)
-		t.details[t.vpnItem] = cmp.Or(strings.Join(up, "、"), "未连接")
+		t.details[t.vpnItem] = "未连接" // a count, as 增强's: the names are in the submenu
+		if len(up) > 0 {
+			t.details[t.vpnItem] = fmt.Sprintf("%d 个已连接", len(up))
+		}
 		t.showRows()
 	})
 	if rebuilt {
