@@ -18,6 +18,10 @@ vars:
   # tasks below dispatch to the matching platform Taskfile via this variable.
   GOOS: '{{.GOOS | default OS}}'
 
+env:
+  # modules and go-installed tools under the repo, not ~/go
+  GOPATH: '{{.ROOT_DIR}}/.go'
+
 includes:
   common: ./build/Taskfile.yml
   darwin: ./build/darwin/Taskfile.yml

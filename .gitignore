@@ -9,3 +9,4 @@ frontend/bindings
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 *.syso
 build/windows/info.gen.json
+.go
