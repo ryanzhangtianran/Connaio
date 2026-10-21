@@ -169,6 +169,9 @@ func (s *CoreService) fetchConnections() ([]Conn, error) {
 			rule += "(" + c.RulePayload + ")"
 		}
 		chain := slices.Clone(c.Chains)
+		for i := range chain {
+			chain[i] = shownPolicy(chain[i])
+		}
 		slices.Reverse(chain) // the core lists the exit first; show group → node
 		conn := Conn{
 			ID: c.ID, Network: m.Network, Inbound: m.Type, Process: process, Path: m.ProcessPath, System: system, Source: m.SourceIP, SrcPort: m.SourcePort, Ancestors: m.Ancestors, InName: m.InName,

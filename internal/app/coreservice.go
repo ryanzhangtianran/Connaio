@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -346,8 +347,16 @@ func (s *CoreService) Groups() ([]Group, error) {
 		return g, true
 	}
 	var groups []Group
+	listed := map[string]bool{"GLOBAL": true}
 	for _, name := range resp.Proxies["GLOBAL"].All {
-		if g, ok := toGroup(name); ok {
+		if g, ok := toGroup(name); ok && !listed[name] {
+			groups = append(groups, g)
+			listed[name] = true
+		}
+	}
+	// a profile's own GLOBAL needn't list every group (the core builds one only without it): the rest by name
+	for _, name := range slices.Sorted(maps.Keys(resp.Proxies)) {
+		if g, ok := toGroup(name); ok && !listed[name] {
 			groups = append(groups, g)
 		}
 	}
@@ -355,6 +364,14 @@ func (s *CoreService) Groups() ([]Group, error) {
 		groups = append(groups, g)
 	}
 	return groups, nil
+}
+
+// shownPolicy is a policy as the GUI shows it: profile.TunnelDirect, the config's own, is DIRECT.
+func shownPolicy(name string) string {
+	if name == profile.TunnelDirect {
+		return "DIRECT"
+	}
+	return name
 }
 
 // ProxyNames lists every node and group a member list or dialer-proxy can name (GLOBAL excluded).

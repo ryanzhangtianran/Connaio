@@ -67,8 +67,7 @@ func tunnelDirect(cfg map[string]any) {
 			rules[i], found = strings.Join(f, ","), true
 		}
 	}
-	if found {
-		proxies, _ := cfg["proxies"].([]any)
+	if proxies, _ := cfg["proxies"].([]any); found && !slices.ContainsFunc(proxies, func(p any) bool { return groupName(p) == TunnelDirect }) {
 		cfg["proxies"] = append(proxies, map[string]any{"name": TunnelDirect, "type": "direct"})
 	}
 }
@@ -296,46 +295,68 @@ func Merge(profile, override map[string]any) map[string]any {
 			applyPatch(proxy, patch)
 		}
 	}
-	if len(removed) > 0 {
-		dropRemoved(cfg, removed)
-	}
+	dropRemoved(cfg, removed)
+	dropDangling(cfg)
 	return cfg
 }
 
-// dropRemoved deletes the named proxies and groups, takes them out of other groups (an emptied
-// group falls back to DIRECT) and drops the rules that target them, so the core still accepts it.
+// dropRemoved deletes the named proxies and groups; dropDangling then drops what refers to them.
 func dropRemoved(cfg map[string]any, removed map[string]bool) {
-	named := func(v any) bool {
-		m, _ := v.(map[string]any)
-		name, _ := m["name"].(string)
-		return removed[name]
-	}
 	for _, key := range []string{"proxies", "proxy-groups"} {
 		if list, ok := cfg[key].([]any); ok {
-			cfg[key] = slices.DeleteFunc(slices.Clone(list), named)
+			cfg[key] = slices.DeleteFunc(slices.Clone(list), func(x any) bool { return removed[groupName(x)] })
 		}
 	}
+}
+
+// builtins are the policies the core defines itself.
+var builtins = []string{"DIRECT", "REJECT", "REJECT-DROP", "COMPATIBLE", "PASS", "PASS-RULE", "GLOBAL"}
+
+// dropDangling takes out every reference to a proxy or group the config doesn't have: group members
+// (a group emptied by it falls back to DIRECT), a subnet group's rules and default, dialer-proxy, and
+// the rules targeting one. Removing a proxy or group leaves them behind, as does a subscription
+// update dropping a node an edited group still lists, and the core refuses the config over any.
+func dropDangling(cfg map[string]any) {
+	proxies, _ := cfg["proxies"].([]any)
 	groups, _ := cfg["proxy-groups"].([]any)
+	items := append(slices.Clone(proxies), groups...)
+	names := map[string]bool{}
+	for _, n := range builtins {
+		names[n] = true
+	}
+	for _, x := range items {
+		names[groupName(x)] = true
+	}
+	gone := func(v any) bool { s, ok := v.(string); return ok && !names[s] }
+	for _, x := range items {
+		if m, _ := x.(map[string]any); gone(m["dialer-proxy"]) {
+			delete(m, "dialer-proxy")
+		}
+	}
 	for _, g := range groups {
 		group, _ := g.(map[string]any)
 		if rules, ok := group["rules"].(map[string]any); ok { // subnet group
-			maps.DeleteFunc(rules, func(_ string, v any) bool { s, _ := v.(string); return removed[s] })
+			maps.DeleteFunc(rules, func(_ string, v any) bool { return gone(v) })
 		}
-		if def, _ := group["default"].(string); removed[def] {
+		if gone(group["default"]) {
 			group["default"] = "DIRECT"
 		}
 		list, ok := group["proxies"].([]any)
 		if !ok {
 			continue
 		}
-		list = slices.DeleteFunc(slices.Clone(list), func(p any) bool { s, _ := p.(string); return removed[s] })
-		if len(list) == 0 && group["use"] == nil {
-			list = []any{"DIRECT"}
+		kept := slices.DeleteFunc(slices.Clone(list), gone)
+		if len(kept) == 0 && len(list) > 0 && group["use"] == nil {
+			kept = []any{"DIRECT"}
 		}
-		group["proxies"] = list
+		group["proxies"] = kept
 	}
 	if rules, ok := cfg["rules"].([]any); ok {
-		cfg["rules"] = slices.DeleteFunc(slices.Clone(rules), func(r any) bool { s, _ := r.(string); return removed[RuleTarget(s)] })
+		cfg["rules"] = slices.DeleteFunc(slices.Clone(rules), func(r any) bool {
+			s, _ := r.(string)
+			typ, _, _ := strings.Cut(s, ",")
+			return !strings.EqualFold(strings.TrimSpace(typ), "SUB-RULE") && gone(RuleTarget(s)) // a sub-rule's target is a sub-rules name
+		})
 	}
 }
 

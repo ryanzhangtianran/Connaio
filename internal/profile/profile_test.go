@@ -689,3 +689,80 @@ func TestTunnelDirect(t *testing.T) {
 		t.Fatalf("no tunnel, no outbound: %v", cfg)
 	}
 }
+
+func TestDropDangling(t *testing.T) {
+	// a subscription update dropped A, which an edited group and a dialer-proxy still name
+	profile := map[string]any{
+		"proxies":      []any{map[string]any{"name": "B", "dialer-proxy": "A"}, map[string]any{"name": "C"}},
+		"proxy-groups": []any{map[string]any{"name": "G", "proxies": []any{"C"}}, map[string]any{"name": "E", "use": []any{"p"}, "proxies": []any{}}},
+		"rules":        []any{"SUB-RULE,(NETWORK,tcp),sub", "MATCH,G"},
+	}
+	override := map[string]any{"replace-proxy-groups": map[string]any{"G": map[string]any{"name": "G", "proxies": []any{"A", "B"}}}}
+	cfg := Merge(profile, override)
+	groups := cfg["proxy-groups"].([]any)
+	if g := groups[0].(map[string]any)["proxies"]; !slices.Equal(g.([]any), []any{"B"}) {
+		t.Fatalf("edited group keeps a dropped node: %v", g)
+	}
+	if e := groups[1].(map[string]any)["proxies"]; len(e.([]any)) != 0 {
+		t.Fatalf("a provider group's empty list filled: %v", e)
+	}
+	if b := cfg["proxies"].([]any)[0].(map[string]any); b["dialer-proxy"] != nil {
+		t.Fatalf("dialer-proxy to a dropped node kept: %v", b)
+	}
+	if r := cfg["rules"].([]any); len(r) != 2 {
+		t.Fatalf("rules %v", r)
+	}
+}
+
+func TestRemoveUserItems(t *testing.T) {
+	s, _ := Open(t.TempDir())
+	if _, err := s.AddLocal("sub", []byte(sub)); err != nil {
+		t.Fatal(err)
+	}
+	built := func() map[string]any {
+		b, err := s.Build(false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cfg map[string]any
+		_ = yaml.Unmarshal(b, &cfg)
+		return cfg
+	}
+	group := func(cfg map[string]any, name string) map[string]any {
+		for _, g := range cfg["proxy-groups"].([]any) {
+			if g.(map[string]any)["name"] == name {
+				return g.(map[string]any)
+			}
+		}
+		return nil
+	}
+	_ = s.AddProxy(map[string]any{"name": "P", "type": "direct"}, []string{"代理"})
+	_ = s.AddGroup(map[string]any{"name": "UG", "type": "select", "proxies": []any{"P"}})
+	_ = s.AddGroup(map[string]any{"name": "S", "type": "subnet", "default": "UG", "rules": map[string]any{"SSID:x": "P"}})
+	_ = s.PrependRule("DOMAIN,a.com,UG")
+	_ = s.PrependRule("DOMAIN,b.com,P")
+	if err := s.AddGroup(map[string]any{"name": "GLOBAL", "type": "select", "proxies": []any{"DIRECT"}}); err == nil {
+		t.Fatal("a group named GLOBAL accepted")
+	}
+
+	if err := s.EditGroup("代理", map[string]any{"type": "select", "proxies": []any{"hk"}}); err != nil {
+		t.Fatal(err)
+	}
+	if g := group(built(), "代理")["proxies"].([]any); !slices.Equal(g, []any{"hk"}) {
+		t.Fatalf("a member unticked in the edit came back: %v", g)
+	}
+
+	_ = s.RemoveProxy("P")
+	cfg := built()
+	if g := group(cfg, "UG")["proxies"].([]any); !slices.Equal(g, []any{"DIRECT"}) {
+		t.Fatalf("UG after removing P: %v", g)
+	}
+	if r := group(cfg, "S")["rules"].(map[string]any); len(r) != 0 {
+		t.Fatalf("subnet rule to removed P kept: %v", r)
+	}
+	_ = s.RemoveGroup("UG")
+	cfg = built()
+	if group(cfg, "S")["default"] != "DIRECT" || slices.ContainsFunc(cfg["rules"].([]any), func(r any) bool { return strings.Contains(r.(string), ".com,") }) {
+		t.Fatalf("references to removed P and UG kept: %v %v", group(cfg, "S"), cfg["rules"])
+	}
+}

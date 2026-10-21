@@ -45,8 +45,10 @@ export default function GroupDialog({ editing, onClose }: { editing?: Record<str
     (editing ? ProfileService.EditGroup(editing.name, group) : ProfileService.AddGroup(group)).then(onClose).finally(() => setBusy(false));
   };
   const setRule = (i: number, r: Partial<Rule>) => setRules(rules.map((x, j) => (j === i ? { ...x, ...r } : x)));
-  const duplicate = !editing && names.includes(name.trim());
-  const ready = !!name.trim() && !duplicate && (type === "subnet" || members.length > 0) && (!probes || (/^\d+$/.test(period) && Number(period) > 0));
+  const duplicate = !editing && [...names, "GLOBAL"].includes(name.trim()); // ProxyNames leaves GLOBAL out; the core's own
+  const conds = rules.filter((r) => fixed(r.t) || r.v.trim()).map((r) => condOf({ t: r.t, v: r.v.trim() }));
+  const sameCond = type === "subnet" && new Set(conds).size < conds.length; // one would silently replace the other
+  const ready = !!name.trim() && !duplicate && !sameCond && (type === "subnet" || members.length > 0) && (!probes || (/^\d+$/.test(period) && Number(period) > 0));
 
   return (
     <div className="modal-bg" onClick={dirty ? undefined : onClose}>
@@ -74,7 +76,7 @@ export default function GroupDialog({ editing, onClose }: { editing?: Record<str
                 <button className="btn" onClick={() => setRules(rules.filter((_, j) => j !== i))}>×</button>
               </div>
             ))}
-            <button className="btn" onClick={() => setRules([...rules, { t: "SSID", v: "", target: "DIRECT" }])}>增加一条</button>
+            <button className="btn" onClick={() => setRules([...rules, { t: "SSID", v: "", target: "DIRECT" }])}>增加一条</button>{sameCond && <span className="muted small" style={{ marginLeft: 8, color: "var(--bad)" }}>有重复的条件</span>}
           </>
         ) : (
           <>

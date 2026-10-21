@@ -142,6 +142,9 @@ func (s *Store) AddGroup(group map[string]any) error {
 	if name == "" {
 		return errors.New("策略组名称不能为空")
 	}
+	if slices.Contains(builtins, name) {
+		return fmt.Errorf("%s 是内置策略，不能用作策略组名称", name)
+	}
 	return s.editOverride(func(root *yaml.Node) error {
 		if findNamed(listOf(root, "prepend-proxy-groups"), name) >= 0 {
 			return fmt.Errorf("已存在名为 %s 的策略组", name)
@@ -161,6 +164,7 @@ func (s *Store) EditGroup(name string, group map[string]any) error {
 	}
 	orderKeys(&n)
 	return s.editOverride(func(root *yaml.Node) error {
+		dropMembers(root, name) // the edit lists them where they are to be, or leaves them out
 		if seq := listOf(root, "prepend-proxy-groups"); findNamed(seq, name) >= 0 {
 			seq.Content[findNamed(seq, name)] = &n
 			return nil
@@ -181,8 +185,21 @@ func (s *Store) RemoveGroup(name string) error {
 			return listName(root, "remove-proxy-groups", name)
 		}
 		removeNamed(root, "prepend-proxy-groups", name)
+		dropMembers(root, name) // a group made again under the name starts without them
 		return nil
 	})
+}
+
+// dropMembers forgets the user proxies group-members puts at the front of group.
+func dropMembers(root *yaml.Node, group string) {
+	if members := valueOf(root, "group-members"); members != nil && members.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(members.Content); i += 2 {
+			if members.Content[i].Value == group {
+				members.Content = slices.Delete(members.Content, i, i+2)
+				return
+			}
+		}
+	}
 }
 
 // listName adds name to the override's string list key, once.

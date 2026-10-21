@@ -99,7 +99,7 @@ func (s *CoreService) Rules() ([]Rule, error) {
 	}
 	rules := make([]Rule, 0, len(resp.Rules))
 	for _, r := range resp.Rules {
-		rule := Rule{Index: r.Index, Type: r.Type, Payload: r.Payload, Proxy: r.Proxy}
+		rule := Rule{Index: r.Index, Type: r.Type, Payload: r.Payload, Proxy: shownPolicy(r.Proxy)}
 		if r.Extra != nil {
 			rule.Disabled, rule.Hits = r.Extra.Disabled, r.Extra.HitCount
 		}
