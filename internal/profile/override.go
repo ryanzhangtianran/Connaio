@@ -24,6 +24,25 @@ func (s *Store) PrependRule(rule string) error {
 	})
 }
 
+// InsertRule puts rule into the override's prepend-rules right after the last one of first's, or
+// first when there is none: what must stay ahead of it (a VPN's routes) stays.
+func (s *Store) InsertRule(rule string, first func(rule string) bool) error {
+	return s.editOverride(func(root *yaml.Node) error {
+		seq := child(root, "prepend-rules", yaml.SequenceNode)
+		if seq.Kind != yaml.SequenceNode {
+			return errors.New("覆写中的 prepend-rules 不是列表")
+		}
+		i := 0
+		for j, n := range seq.Content {
+			if first(n.Value) {
+				i = j + 1
+			}
+		}
+		seq.Content = slices.Insert(seq.Content, i, &yaml.Node{Kind: yaml.ScalarNode, Value: rule})
+		return nil
+	})
+}
+
 // blockStyle writes every non-empty list and mapping one item per line: a flow-style
 // `prepend-proxies: [{name: VPN, ...}]` (as an edit once left it) is unreadable in the editor.
 func blockStyle(n *yaml.Node) {

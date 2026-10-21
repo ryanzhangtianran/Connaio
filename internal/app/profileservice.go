@@ -306,8 +306,21 @@ func (s *ProfileService) edit(change func() error) error {
 func (s *ProfileService) UserItems() (profile.UserItems, error) { return s.store.UserItems() }
 
 // AddRule makes rule permanent by prepending it in the override.
+// AddRule puts rule ahead of the rest of the user's rules but behind the connected VPNs' routes:
+// a rule such as PROCESS-NAME,ssh,DIRECT would otherwise take what is for a VPN's subnets off it,
+// and where it landed would depend on whether the VPN was connected before or after it was added.
 func (s *ProfileService) AddRule(rule string) error {
-	return s.edit(func() error { return s.store.PrependRule(rule) })
+	vpns, err := s.activeVPNs()
+	if err != nil {
+		return err
+	}
+	targets := map[string]bool{}
+	for _, v := range vpns {
+		targets[v.name()], targets[groupOf(v.name())] = true, true
+	}
+	return s.edit(func() error {
+		return s.store.InsertRule(rule, func(r string) bool { return targets[profile.RuleTarget(r)] })
+	})
 }
 
 func (s *ProfileService) RemoveRule(rule string) error {

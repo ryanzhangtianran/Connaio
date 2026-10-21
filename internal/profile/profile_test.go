@@ -766,3 +766,18 @@ func TestRemoveUserItems(t *testing.T) {
 		t.Fatalf("references to removed P and UG kept: %v %v", group(cfg, "S"), cfg["rules"])
 	}
 }
+
+func TestInsertRule(t *testing.T) {
+	s, _ := Open(t.TempDir())
+	_ = s.SetOverride("prepend-rules:\n  - IP-CIDR,10.0.0.0/8,VPN 路由\n  - DOMAIN,a.com,DIRECT\n  - IP-CIDR,172.16.0.0/12,VPN\n  - DOMAIN,b.com,DIRECT\n")
+	vpn := func(r string) bool { t := RuleTarget(r); return t == "VPN" || t == "VPN 路由" }
+	if err := s.InsertRule("PROCESS-NAME,ssh,DIRECT", vpn); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.InsertRule("DOMAIN,c.com,DIRECT", func(string) bool { return false }) // no VPN: first
+	items, _ := s.UserItems()
+	want := []string{"DOMAIN,c.com,DIRECT", "IP-CIDR,10.0.0.0/8,VPN 路由", "DOMAIN,a.com,DIRECT", "IP-CIDR,172.16.0.0/12,VPN", "PROCESS-NAME,ssh,DIRECT", "DOMAIN,b.com,DIRECT"}
+	if !slices.Equal(items.Rules, want) {
+		t.Fatalf("rules %v", items.Rules)
+	}
+}
