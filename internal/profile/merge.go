@@ -46,7 +46,31 @@ func (s *Store) Build(enhanced bool) ([]byte, error) {
 			capture["mode"] = "system-proxy"
 		}
 	}
+	tunnelDirect(cfg)
 	return yaml.Marshal(cfg)
+}
+
+// TunnelDirect is the DIRECT of its own that what reverse tunnels bring in goes out through.
+const TunnelDirect = "TUNNEL-DIRECT"
+
+// tunnelDirect points IN-NAME rules at DIRECT (the GUI's, taking a tunnel to the proxy port) to
+// TunnelDirect instead. A DIRECT rejects a connection from one it dialed itself as a loop, so with
+// the tunnel's hop to the proxy port dialed by the same DIRECT, the requests it carried couldn't go
+// out DIRECT: on a network where the rules pick DIRECT, nothing got through the tunnel.
+func tunnelDirect(cfg map[string]any) {
+	rules, _ := cfg["rules"].([]any)
+	found := false
+	for i, r := range rules {
+		s, _ := r.(string)
+		if f := strings.Split(s, ","); len(f) >= 3 && strings.TrimSpace(f[0]) == "IN-NAME" && strings.TrimSpace(f[2]) == "DIRECT" {
+			f[2] = TunnelDirect
+			rules[i], found = strings.Join(f, ","), true
+		}
+	}
+	if found {
+		proxies, _ := cfg["proxies"].([]any)
+		cfg["proxies"] = append(proxies, map[string]any{"name": TunnelDirect, "type": "direct"})
+	}
 }
 
 // merged is the config as the user set it: defaults, profile and override, aligned with enhanced mode.

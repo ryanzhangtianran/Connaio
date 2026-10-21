@@ -676,3 +676,16 @@ func TestMergeReplacesSameName(t *testing.T) {
 		t.Fatalf("rules %v", rs)
 	}
 }
+
+func TestTunnelDirect(t *testing.T) {
+	cfg := map[string]any{"rules": []any{"IN-NAME,OLA,DIRECT", "IN-NAME,web,代理", "MATCH,DIRECT"}}
+	tunnelDirect(cfg)
+	rules, proxies := cfg["rules"].([]any), cfg["proxies"].([]any)
+	if rules[0] != "IN-NAME,OLA,"+TunnelDirect || rules[1] != "IN-NAME,web,代理" || rules[2] != "MATCH,DIRECT" || len(proxies) != 1 {
+		t.Fatalf("tunnel rules: %v %v", rules, proxies)
+	}
+	cfg = map[string]any{"rules": []any{"MATCH,DIRECT"}}
+	if tunnelDirect(cfg); cfg["proxies"] != nil {
+		t.Fatalf("no tunnel, no outbound: %v", cfg)
+	}
+}

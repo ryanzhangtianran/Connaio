@@ -19,6 +19,7 @@ import (
 
 	"github.com/ryanzhangtianran/Connaio/internal/core"
 	"github.com/ryanzhangtianran/Connaio/internal/daemon"
+	"github.com/ryanzhangtianran/Connaio/internal/profile"
 	"github.com/ryanzhangtianran/Connaio/internal/run"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -329,6 +330,9 @@ func (s *CoreService) Groups() ([]Group, error) {
 		}
 		g := Group{Name: name, Type: p.Type, Now: p.Now, Default: p.Default, Rules: p.Rules}
 		for _, member := range p.All {
+			if member == profile.TunnelDirect { // the config's own, in GLOBAL only: not one to pick
+				continue
+			}
 			m := resp.Proxies[member]
 			delay := 0
 			if n := len(m.History); n > 0 {
