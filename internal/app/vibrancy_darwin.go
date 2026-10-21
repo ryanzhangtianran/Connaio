@@ -29,15 +29,26 @@ static void placeLights(NSWindow *w, CGFloat gap, CGFloat r) {
 	}
 }
 
-// keepLights re-places them whenever AppKit lays the title bar out again.
+// keepLights re-places them whenever AppKit lays the title bar out again. The blocks take the window
+// from the notification, not by capture, and are removed as it closes: a block holding it would keep
+// every closed window alive, each left behind as an empty window in Mission Control.
 static void keepLights(NSWindow *w, CGFloat gap, CGFloat r) {
 	placeLights(w, gap, r);
+	NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+	__block NSMutableArray *observers = [NSMutableArray new]; // __block: not retained by the block below, released by it
 	for (NSNotificationName n in @[NSWindowDidResizeNotification, NSWindowDidEndLiveResizeNotification, NSWindowDidBecomeKeyNotification,
 		NSWindowDidResignKeyNotification, NSWindowDidExitFullScreenNotification, NSWindowDidBecomeMainNotification]) {
-		[NSNotificationCenter.defaultCenter addObserverForName:n object:w queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
-			placeLights(w, gap, r);
-		}];
+		[observers addObject:[center addObserverForName:n object:w queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
+			placeLights(note.object, gap, r);
+		}]];
 	}
+	[observers addObject:[center addObserverForName:NSWindowWillCloseNotification object:w queue:nil usingBlock:^(NSNotification *note) {
+		// locals first: removing this observer may free the block, and its captured variables with it
+		NSNotificationCenter *c = center;
+		NSMutableArray *os = observers;
+		for (id o in os) [c removeObserver:o];
+		[os release];
+	}]];
 }
 
 static void makeVibrant(void *w) {
@@ -109,12 +120,11 @@ static void setDockVisible(bool visible) {
 	});
 }
 
-// freeWebView ends a closing window's page, and with it WebKit's process for it: Wails allocates
-// the view and never releases it, so the page would run on behind the closed window. The view is
-// not released here either (AppKit and Wails may still reach it as the window closes); its page is
-// closed instead, and Wails' unretained webView properties on the window and its delegate cleared,
-// so nothing calls into it again. Runs on the main thread, before Wails closes the window.
-// ponytail: the view object itself stays allocated, a few KB per closed window
+// freeWebView ends a closing window's page, and with it WebKit's process for it, which would
+// otherwise run on behind the closed window until the window itself is freed. Its page is closed,
+// Wails' unretained webView properties on the window and its delegate cleared so nothing calls into
+// it again, and it is taken out of the window: its superview is its only owner (Wails autoreleases
+// it), so that frees it. Runs on the main thread, before Wails closes the window.
 @protocol WailsWebViewHolder
 @property (assign) WKWebView *webView;
 @end
