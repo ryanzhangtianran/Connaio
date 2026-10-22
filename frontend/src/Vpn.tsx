@@ -39,8 +39,8 @@ function parseOvpn(text: string): Record<string, any> {
 }
 
 // A KV is one typed entry: a route (rule type + value) or a bypass condition (kind + value).
-export type KV = { t: string; v: string };
-export type Kind = { key: string; label: string; placeholder?: string; fixed?: boolean }; // fixed: no value
+type KV = { t: string; v: string };
+type Kind = { key: string; label: string; placeholder?: string; fixed?: boolean }; // fixed: no value
 
 const routeKinds: Kind[] = [
   { key: "IP-CIDR", label: "网段", placeholder: "10.0.0.0/8" },
@@ -118,7 +118,7 @@ const ipStr = (n: number) => [24, 16, 8, 0].map((s) => Math.floor(n / 2 ** s) % 
 // cidrsOf is an IPv4 range as the fewest CIDRs that cover it. A gateway lists networks without their
 // network and broadcast addresses (10.0.0.1 ~ 10.255.255.254), so x.1 ~ y.254 counts as the whole
 // networks, 10.0.0.0/8; an IPv6 or odd range is kept as its ends.
-export function cidrsOf(from: string, to: string): string[] {
+function cidrsOf(from: string, to: string): string[] {
   if (from.includes(":")) return from === to ? [`${from}/128`] : [from, to].map((a) => `${a}/128`);
   let lo = ipNum(from), hi = ipNum(to);
   if (lo !== hi && lo % 256 === 1 && hi % 256 === 254) { lo -= 1; hi += 1; }
@@ -174,6 +174,7 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
   const [addrs, setAddrs] = useState<KV[]>(init?.addrs ?? []);
   const [bypass, setBypass] = useState<KV[]>(init?.bypass ?? []);
   const [name, setName] = useState(prevName || defaultName);
+  const nameOK = !!name.trim() && !name.includes(","); // the name goes into rule lines
   const [saved, setSaved] = useState(!!initial?.active);
   const fromProfile = !!initial?.profile; // the subscription's: 保存 puts a copy of it in the override
   const [busy, setBusy] = useState(false);
@@ -347,8 +348,8 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
         {offered.rows.length ? <RoutePicker head={offered.head} rows={offered.rows} addrs={addrs} setAddrs={setAddrs} onPick={offered.onPick} /> : <div className="muted small">{offered.empty}</div>}
       </>}
       <div className="form vpn-actions">
-        <button className="btn primary" disabled={busy || !ready || !name.trim() || !status.running} onClick={tunnel?.kicked || tunnel?.kicks ? () => setAskKick(true) : login}>{saved ? "重连" : "连接"}</button>
-        <button className="btn" disabled={busy || !ready || !name.trim()} onClick={save}>保存</button>
+        <button className="btn primary" disabled={busy || !ready || !nameOK || !status.running} onClick={tunnel?.kicked || tunnel?.kicks ? () => setAskKick(true) : login}>{saved ? "重连" : "连接"}</button>
+        <button className="btn" disabled={busy || !ready || !nameOK} onClick={save}>保存</button>
         {saved && !fromProfile && <button className="btn" disabled={busy} onClick={disconnect}>断开</button>}
         {initial && !fromProfile && <button className="btn" style={{ color: "var(--bad)" }} disabled={busy} onClick={remove}>删除</button>}
         <button className="btn" disabled={busy} onClick={onDone}>取消</button>

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -119,20 +120,21 @@ func (s *ToolService) UploadTest(proxy string) (Speed, error) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, body)
 	start := time.Now()
 	resp, err := client.Do(req)
-	if err != nil && body.n == 0 {
+	if resp != nil {
+		resp.Body.Close() // the transport may still be sending the body until the response is done with
+	}
+	n := body.n.Load()
+	if err != nil && n == 0 {
 		return Speed{}, err
 	}
-	if resp != nil {
-		resp.Body.Close()
-	}
 	secs := time.Since(start).Seconds()
-	return Speed{Bytes: body.n, Seconds: secs, Mbps: float64(body.n) * 8 / secs / 1e6}, nil
+	return Speed{Bytes: n, Seconds: secs, Mbps: float64(n) * 8 / secs / 1e6}, nil
 }
 
 // timedZeros reads zeros until a deadline, counting them.
 type timedZeros struct {
 	until time.Time
-	n     int64
+	n     atomic.Int64
 }
 
 func (z *timedZeros) Read(p []byte) (int, error) {
@@ -140,7 +142,7 @@ func (z *timedZeros) Read(p []byte) (int, error) {
 		return 0, io.EOF
 	}
 	clear(p)
-	z.n += int64(len(p))
+	z.n.Add(int64(len(p)))
 	return len(p), nil
 }
 
@@ -178,7 +180,7 @@ func (s *ToolService) NATType(proxy string) ([]string, error) {
 
 // TCPRelay times an HTTP request through proxy on an established connection (as the latency test).
 func (s *ToolService) TCPRelay(proxy string) (string, error) {
-	ms, err := s.cs.TestProxy(proxy)
+	ms, err := s.cs.testProxy(context.Background(), proxy)
 	if err != nil {
 		return "", err
 	}

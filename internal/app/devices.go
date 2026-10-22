@@ -109,7 +109,7 @@ func (s *DeviceService) Devices() ([]Device, error) {
 	}
 	byIP := map[string]*Device{}
 	for _, c := range conns {
-		if c.Process != "" || net.ParseIP(c.Source) == nil || fromHere(c.Source) {
+		if c.Process != "" || c.Tunnel != nil || net.ParseIP(c.Source) == nil || fromHere(c.Source) { // a tunnel's visitor is at its server, not on the LAN
 			continue
 		}
 		d := byIP[c.Source]

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ProfileService, SettingsService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { OverrideParts, Profiles as ProfilesData } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { ago, sizeText, words } from "./format";
@@ -59,11 +59,15 @@ export default function Profiles() {
   const load = useCallback(() => ProfileService.Profiles().then(setData), []);
   const loadParts = () => ProfileService.OverrideParts().then((p) => { setParts(p); setSavedParts(p); });
   const dirty = parts.clash !== savedParts.clash || parts.connaio !== savedParts.connaio;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
   useEffect(() => {
     load();
     loadParts();
     SettingsService.About().then((a) => setDataDir(a.dataDir));
-    return on("profiles", (d) => setData(d));
+    // a setting changed from the tray or another page: shown, unless an edit here would be lost
+    const offs = [on("profiles", (d) => setData(d)), on("setting", () => { if (!dirtyRef.current) loadParts(); })];
+    return () => offs.forEach((off) => off());
   }, [load]);
 
   const run = (key: string, action: () => Promise<unknown>) => {

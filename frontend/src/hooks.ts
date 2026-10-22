@@ -15,10 +15,11 @@ export function usePoll(fn: () => void | Promise<unknown>, ms: number, enabled =
   useEffect(() => {
     if (!enabled) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let stopped = false;
+    let stopped = false, inflight = false; // inflight: a visibility change mustn't start a second loop
     const run = () => {
-      if (stopped || document.hidden) return;
-      Promise.resolve(latest.current()).finally(() => { if (!stopped) timer = setTimeout(run, ms); });
+      if (stopped || document.hidden || inflight) return;
+      inflight = true;
+      Promise.resolve(latest.current()).finally(() => { inflight = false; if (!stopped) timer = setTimeout(run, ms); });
     };
     const visible = () => { if (!document.hidden) { clearTimeout(timer); run(); } };
     document.addEventListener("visibilitychange", visible);

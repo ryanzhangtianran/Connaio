@@ -89,7 +89,7 @@ func (s *CoreService) Activity() (Activity, error) {
 	for _, c := range conns {
 		name, _ := clientOf(c)
 		processes[name], hosts[c.Host] = true, true
-		if c.Process == "" && c.Path == "" && net.ParseIP(c.Source) != nil && !fromHere(c.Source) { // a LAN device using us as a proxy or gateway
+		if c.Process == "" && c.Path == "" && c.Tunnel == nil && net.ParseIP(c.Source) != nil && !fromHere(c.Source) { // a LAN device using us as a proxy or gateway
 			devices[c.Source] = true
 		}
 	}
@@ -444,8 +444,9 @@ type ledger struct {
 
 func openLedger(path string) *ledger {
 	l := &ledger{path: path, days: map[string]*Day{}}
-	if b, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(b, &l.days)
+	if b, err := os.ReadFile(path); err == nil && json.Unmarshal(b, &l.days) != nil {
+		l.days = map[string]*Day{}
+		_ = os.Rename(path, path+".bad") // kept, rather than overwritten by the next save
 	}
 	for _, d := range l.days { // a tunnel's client was "隧道 <name>" until 0.1.23: counted under its name now
 		for k, v := range d.Client {
@@ -621,7 +622,13 @@ func (l *ledger) save() error {
 	if err != nil {
 		return err
 	}
-	return profile.WriteAtomic(l.path, b, 0o644)
+	if err := profile.WriteAtomic(l.path, b, 0o644); err != nil {
+		l.mu.Lock()
+		l.dirty = true // tried again at the next save, and at shutdown
+		l.mu.Unlock()
+		return err
+	}
+	return nil
 }
 
 // trimUsage keeps the n largest entries of m.

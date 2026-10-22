@@ -24,7 +24,7 @@ export function nodesOf(groups: Group[]): Proxy[] {
   }
   return nodes;
 }
-export const groupTypes: Record<string, string> = { Selector: "手动选择", URLTest: "自动测速", Fallback: "故障转移", LoadBalance: "负载均衡", Relay: "链式", Subnet: "Subnet 策略组" };
+const groupTypes: Record<string, string> = { Selector: "手动选择", URLTest: "自动测速", Fallback: "故障转移", LoadBalance: "负载均衡", Relay: "链式", Subnet: "Subnet 策略组" };
 
 export function delayClass(ms: number) {
   if (ms <= 0) return "";

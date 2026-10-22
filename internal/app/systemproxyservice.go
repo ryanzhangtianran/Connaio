@@ -48,7 +48,7 @@ func (s *SystemProxyService) SetEnabled(on bool) error {
 			return err
 		}
 		s.port = port
-	} else if s.port != 0 {
+	} else { // whether this session set it or an earlier one did (a crash left it on)
 		if err := sysproxy.Clear(); err != nil {
 			return err
 		}

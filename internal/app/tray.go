@@ -343,7 +343,7 @@ var vpnPills = map[string]string{"up": dot("good", "已连接"), "connecting": d
 
 // vpnStates reads every VPN's state off the lock: name -> 未连接 / 连接中 / 已连接 as a dot.
 func (t *trayMenu) vpnStates() map[string]string {
-	list, err := t.profiles.VPNs()
+	list, err := t.profiles.vpns(2 * time.Second) // the pills need up or down, not a login link
 	if err != nil {
 		return nil
 	}
@@ -457,7 +457,7 @@ func (t *trayMenu) partialApps() []partialApp {
 			apps = append(apps, partialApp{name, exec, on(exec)})
 		}
 	}
-	for _, c := range runningApps() {
+	for _, c := range runningAppsCached() {
 		add(c.Name, c.Exec)
 	}
 	for _, p := range picked {
@@ -465,6 +465,20 @@ func (t *trayMenu) partialApps() []partialApp {
 	}
 	slices.SortFunc(apps, func(a, b partialApp) int { return strings.Compare(strings.ToLower(a.name), strings.ToLower(b.name)) })
 	return apps
+}
+
+// runningAppsCached is runningApps at most every 30s: the tick rebuilds the submenu every 5s, and
+// the listing is a process scan (ps, /proc, PowerShell). Called from the loop goroutine only.
+var appsCache struct {
+	at   time.Time
+	list []ProcessChoice
+}
+
+func runningAppsCached() []ProcessChoice {
+	if time.Since(appsCache.at) > 30*time.Second {
+		appsCache.list, appsCache.at = runningApps(), time.Now()
+	}
+	return appsCache.list
 }
 
 // togglePartialApp picks exec for partial enhancement, or drops it when picked.

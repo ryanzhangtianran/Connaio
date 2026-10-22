@@ -397,9 +397,11 @@ func (s *CoreService) ProxyNames() ([]string, error) {
 	return names, nil
 }
 
-// TestProxy measures one proxy and returns its delay in ms.
+// TestProxy measures one proxy and returns its delay in ms, 0 when it fails: the page tests every
+// node, and an error from a bound call is listed as an event (MarshalError).
 func (s *CoreService) TestProxy(name string) (int, error) {
-	return s.testProxy(context.Background(), name)
+	d, _ := s.testProxy(context.Background(), name)
+	return d, nil
 }
 
 func (s *CoreService) testProxy(ctx context.Context, name string) (int, error) {
@@ -439,8 +441,8 @@ func (s *CoreService) Select(group, proxy string) error {
 }
 
 // TestGroup measures every member of group and returns name -> delay in ms (missing = failed).
-// VPN members are measured again on their own against vpnTestURL. A member that fails is measured
-// again on its own, twice, 3s apart: just after the app starts, while the core rebuilds the TUN
+// VPN members are measured again on their own against vpnTestURL. The members that fail are
+// measured again, twice, 3s apart: just after the app starts, while the core rebuilds the TUN
 // under the config it was just given, every test can fail at once, and the page's tiles would stay
 // blank until clicked.
 func (s *CoreService) TestGroup(group string) (map[string]int, error) {
@@ -485,8 +487,14 @@ func (s *CoreService) TestGroup(group string) (map[string]int, error) {
 			break
 		}
 		time.Sleep(3 * time.Second)
+		again := map[string]int{} // one parallel round for the lot, not one 5s call per member
+		_ = s.core.Do(ctx, http.MethodGet, "/group/"+url.PathEscape(group)+"/delay?"+q.Encode(), nil, &again)
 		for _, m := range failed {
-			if d, err := s.testProxy(ctx, m); err == nil && d > 0 {
+			d := again[m]
+			if testURLFor(resp.Proxies[m].Type) != testURL {
+				d, _ = s.testProxy(ctx, m)
+			}
+			if d > 0 {
 				delays[m] = d
 			}
 		}
@@ -535,7 +543,7 @@ func (s *CoreService) updateDaemon() {
 // GUI's config is pushed again once the stream is back.
 // A child core that has exited (a crash) is started again here, with backoff.
 func (s *CoreService) streamTraffic(ctx context.Context) {
-	warned := false
+	warned, ours := false, false // ours: broken by a restart the GUI made, which applies the config itself
 	s.retryStream(ctx, "traffic stream", "/traffic", func(line []byte) {
 		var t Traffic
 		if json.Unmarshal(line, &t) != nil {
@@ -548,9 +556,10 @@ func (s *CoreService) streamTraffic(ctx context.Context) {
 		emit("traffic", t)
 	}, func(error) {
 		if restarting.Load() > 0 {
+			ours = true
 			return
 		}
-		if !warned {
+		if !warned && !ours { // a crashed child below is still started again
 			warned = true
 			notify("warning", "与内核的连接中断，正在重连")
 		}
@@ -560,7 +569,14 @@ func (s *CoreService) streamTraffic(ctx context.Context) {
 				notify("error", "内核重启失败：%v", err)
 			}
 		}
-	}, func() { warned = false; go s.reconnected(ctx) })
+	}, func() {
+		warned = false
+		if ours { // the stream comes back after the restart's caller has returned and applied
+			ours = false
+			return
+		}
+		go s.reconnected(ctx)
+	})
 }
 
 // reconnected pushes the config to a core that came back on its own (a crash, launchd restarting

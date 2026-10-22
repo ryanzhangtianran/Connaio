@@ -47,6 +47,10 @@ func (s *Store) Build(enhanced bool) ([]byte, error) {
 		}
 	}
 	tunnelDirect(cfg)
+	// an FRP tunnel from before 0.1.27 (support removed) is left out, or the core would refuse the config
+	if tunnels, ok := cfg["reverse-tunnels"].([]any); ok {
+		cfg["reverse-tunnels"] = slices.DeleteFunc(slices.Clone(tunnels), func(t any) bool { m, _ := t.(map[string]any); return m["type"] == "frp" })
+	}
 	return yaml.Marshal(cfg)
 }
 
@@ -256,6 +260,7 @@ func Merge(profile, override map[string]any) map[string]any {
 		ours := map[string]bool{}
 		for _, x := range append(slices.Clone(pre), post...) {
 			ours[groupName(x)] = true
+			delete(removed, groupName(x)) // a GUI item takes the name of a removed profile item back
 		}
 		delete(ours, "") // rules have no name
 		if len(ours) > 0 {

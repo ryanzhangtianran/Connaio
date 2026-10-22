@@ -150,6 +150,8 @@ func (s *EnhancedService) useDaemon() error {
 
 // Uninstall turns enhanced mode off, removes the daemon and goes back to a child core.
 func (s *EnhancedService) Uninstall() error {
+	restarting.Add(1) // the stream breaks as the daemon goes; the config is applied below
+	defer restarting.Add(-1)
 	if s.Enabled() {
 		if err := s.SetEnabled(false); err != nil {
 			return err

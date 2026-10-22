@@ -25,12 +25,8 @@ type Rule struct {
 }
 
 type Forward struct {
-	Name   string `json:"name"`
-	Type   string `json:"type"`
 	Remote string `json:"remote"`
 	Local  string `json:"local"`
-	State  string `json:"state"`
-	Error  string `json:"error"`
 }
 
 type Tunnel struct {
@@ -144,11 +140,11 @@ type TailscaleRoute struct {
 
 // tailscales reads every Tailscale outbound's state; asking starts one nothing has used yet, which
 // is what brings its login link.
-func tailscales(c *core.Core) ([]TailscaleStatus, error) {
+func tailscales(c *core.Core, timeout time.Duration) ([]TailscaleStatus, error) {
 	var resp struct {
 		Tunnels []TailscaleStatus `json:"tunnels"`
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second) // a first start waits for the control server
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	err := c.Do(ctx, http.MethodGet, "/tailscale", nil, &resp)
 	for _, t := range resp.Tunnels {
@@ -163,7 +159,7 @@ var tailscaleLatency sync.Map
 
 // measureTailscale pings through the named Tailscale node (tailscales) and returns its latency.
 func measureTailscale(c *core.Core, name string) (int, error) {
-	if _, err := tailscales(c); err != nil {
+	if _, err := tailscales(c, tailscaleWait); err != nil {
 		return 0, err
 	}
 	if v, _ := tailscaleLatency.Load(name); v != nil && v.(int) > 0 {

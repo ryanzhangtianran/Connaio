@@ -32,7 +32,7 @@ export function RuleDialog({ conn, onClose }: { conn: Conn; onClose: () => void 
   const add = async () => {
     setBusy(true);
     try {
-      const rule = `${type},${payload},${policy}`;
+      const rule = `${type},${payload},${policy}${type === "IP-CIDR" ? ",no-resolve" : ""}`; // IP rules don't resolve names, as the rules page writes them
       if (permanent) await ProfileService.AddRule(rule);
       else await CoreService.AddTempRule(rule);
       if (reconnect) await CoreService.CloseHost(type.startsWith("DOMAIN") ? payload : conn.host);

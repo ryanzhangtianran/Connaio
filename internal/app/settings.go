@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"sync"
@@ -43,7 +44,9 @@ func loadSettings(dir string) *settingsFile {
 func (f *settingsFile) Get() Settings {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.s
+	s := f.s
+	s.VPNs = maps.Clone(s.VPNs) // read outside the lock, while a save or delete writes
+	return s
 }
 
 func (f *settingsFile) Update(change func(*Settings)) error {

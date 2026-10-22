@@ -323,7 +323,7 @@ func (s *Store) RemoveRule(rule string) error {
 // HideRule drops one of the profile's rules by listing it under remove-rules, which Merge filters
 // out; the rest of the profile's rules still follow the subscription.
 func (s *Store) HideRule(rule string) error {
-	return s.editOverride(func(root *yaml.Node) error { return appendItem(root, "remove-rules", rule) })
+	return s.editOverride(func(root *yaml.Node) error { return listName(root, "remove-rules", rule) })
 }
 
 // editOverride applies change to the override's YAML tree, keeping comments and layout.

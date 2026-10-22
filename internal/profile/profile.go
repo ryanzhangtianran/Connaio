@@ -275,7 +275,7 @@ func (s *Store) SetOverride(content string) error {
 	if _, err := parseMap([]byte(content)); err != nil {
 		return fmt.Errorf("覆写不是有效的 YAML 字典: %w", err)
 	}
-	return WriteAtomic(s.path("override.yaml"), []byte(content), 0o644)
+	return WriteAtomic(s.path("override.yaml"), []byte(content), 0o600) // holds tunnel keys and proxy passwords
 }
 
 // formatted is a profile as stored: Format'd, or as given if it can't be (validate already passed).

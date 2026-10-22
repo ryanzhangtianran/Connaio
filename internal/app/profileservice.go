@@ -221,19 +221,6 @@ func (s *ProfileService) Select(id string) error {
 	return nil
 }
 
-// Override is the override as the editor shows it: formatted one item per line, whatever
-// style the file on disk has.
-func (s *ProfileService) Override() (string, error) {
-	text, err := s.store.Override()
-	if err != nil {
-		return "", err
-	}
-	if f, err := profile.FormatBlock(text); err == nil && strings.TrimSpace(text) != "" {
-		return f, nil
-	}
-	return text, nil
-}
-
 // OverrideParts is the override as the page edits it: what any Clash client reads, and what only
 // Connaio's core does (profile.Store.SplitOverride).
 type OverrideParts struct {
@@ -276,11 +263,6 @@ func (s *ProfileService) ImportOverride() error {
 		return err
 	}
 	return s.edit(func() error { return s.store.ImportOverride(string(b)) })
-}
-
-// SetOverride saves and applies the override, restoring the old one if the core rejects the result.
-func (s *ProfileService) SetOverride(content string) error {
-	return s.edit(func() error { return s.store.SetOverride(content) })
 }
 
 // edit runs a change to the override and applies it; if the core rejects the result the override

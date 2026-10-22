@@ -7,6 +7,7 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/ryanzhangtianran/Connaio/internal/profile"
@@ -56,7 +57,13 @@ func isVPN(p map[string]any) bool {
 func groupOf(name string) string { return name + " 路由" }
 
 // VPNs lists every VPN: the connected ones from the override, then the drafts.
-func (s *ProfileService) VPNs() ([]VPN, error) {
+// tailscaleWait is how long a Tailscale status may take: a first start waits for the control server.
+const tailscaleWait = 12 * time.Second
+
+func (s *ProfileService) VPNs() ([]VPN, error) { return s.vpns(tailscaleWait) }
+
+// vpns is VPNs with its own bound on the Tailscale status; the tray's tick asks with a short one.
+func (s *ProfileService) vpns(tailscale time.Duration) ([]VPN, error) {
 	active, err := s.activeVPNs()
 	if err != nil {
 		return nil, err
@@ -68,7 +75,7 @@ func (s *ProfileService) VPNs() ([]VPN, error) {
 	}
 	var tails []TailscaleStatus
 	if slices.ContainsFunc(active, func(v VPN) bool { return v.Proxy["type"] == "tailscale" }) {
-		tails, _ = tailscales(s.core)
+		tails, _ = tailscales(s.core, tailscale)
 	}
 	for i := range list {
 		list[i].State = "up"
@@ -156,8 +163,8 @@ func (s *ProfileService) activeVPNs() ([]VPN, error) {
 // VPN named replace (its old name, when renamed; "" for a new one), and the draft is kept.
 func (s *ProfileService) SetVPN(v VPN, replace string) error {
 	name := v.name()
-	if name == "" {
-		return errors.New("VPN 需要一个名字")
+	if name == "" || strings.Contains(name, ",") { // the name goes into rule lines
+		return errors.New("VPN 需要一个不含逗号的名字")
 	}
 	active, err := s.activeVPNs()
 	if err != nil {
@@ -177,6 +184,7 @@ func (s *ProfileService) SetVPN(v VPN, replace string) error {
 			return err
 		}
 		if v.Group != nil {
+			v.Group = maps.Clone(v.Group) // a draft's own map, which the pages read
 			v.Group["name"] = groupOf(name)
 			if err := s.store.AddGroup(v.Group); err != nil {
 				return err
@@ -209,8 +217,8 @@ func (s *ProfileService) saveDraft(v VPN, replace string) {
 // SaveVPN keeps v's settings without connecting: a connected VPN (named replace, or v's own name
 // for a new one) takes them at once, as SetVPN; a disconnected one only in its draft.
 func (s *ProfileService) SaveVPN(v VPN, replace string) error {
-	if v.name() == "" {
-		return errors.New("VPN 需要一个名字")
+	if v.name() == "" || strings.Contains(v.name(), ",") {
+		return errors.New("VPN 需要一个不含逗号的名字")
 	}
 	active, err := s.activeVPNs()
 	if err != nil {

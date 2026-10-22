@@ -49,8 +49,11 @@ func (s *SettingsService) About() About {
 // OpenDataDir shows the data folder (config, logs, profiles) in Finder or the Linux file manager.
 func (s *SettingsService) OpenDataDir() error {
 	opener := "open"
-	if runtime.GOOS == "linux" {
+	switch runtime.GOOS {
+	case "linux":
 		opener = "xdg-open"
+	case "windows":
+		opener = "explorer"
 	}
 	return run.Command(opener, s.core.core.Dir).Run()
 }

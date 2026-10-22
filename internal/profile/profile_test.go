@@ -495,6 +495,31 @@ func TestFormat(t *testing.T) {
 	}
 }
 
+// TestMergeRemovedNameReused: a GUI proxy or group named like a removed profile item is kept, with
+// the rules that point at it.
+func TestMergeRemovedNameReused(t *testing.T) {
+	profile := map[string]any{
+		"proxies":      []any{map[string]any{"name": "HK", "server": "old"}},
+		"proxy-groups": []any{map[string]any{"name": "G", "proxies": []any{"HK"}}},
+		"rules":        []any{"DOMAIN,x.com,HK", "MATCH,G"},
+	}
+	override := map[string]any{
+		"remove-proxies": []any{"HK"}, "remove-proxy-groups": []any{"G"},
+		"prepend-proxies":      []any{map[string]any{"name": "HK", "server": "new"}},
+		"prepend-proxy-groups": []any{map[string]any{"name": "G", "proxies": []any{"HK"}}},
+	}
+	cfg := Merge(profile, override)
+	if p := cfg["proxies"].([]any); len(p) != 1 || p[0].(map[string]any)["server"] != "new" {
+		t.Fatalf("proxies %v", p)
+	}
+	if g := cfg["proxy-groups"].([]any); len(g) != 1 {
+		t.Fatalf("groups %v", g)
+	}
+	if r := cfg["rules"].([]any); !slices.Equal(r, []any{"DOMAIN,x.com,HK", "MATCH,G"}) {
+		t.Fatalf("rules %v", r)
+	}
+}
+
 func TestMergeRemoveRules(t *testing.T) {
 	cfg := Merge(map[string]any{"rules": []any{"DOMAIN,x.com,DIRECT", "MATCH,DIRECT"}}, map[string]any{"remove-rules": []any{"DOMAIN,x.com,DIRECT"}})
 	if r := cfg["rules"].([]any); !slices.Equal(r, []any{"MATCH,DIRECT"}) || cfg["remove-rules"] != nil {
@@ -674,6 +699,21 @@ func TestMergeReplacesSameName(t *testing.T) {
 	}
 	if rs := cfg["rules"].([]any); len(rs) != 2 { // rules have no name: both kept
 		t.Fatalf("rules %v", rs)
+	}
+}
+
+// TestBuildDropsFRPTunnels: a tunnel of the removed FRP type in an old override doesn't reach the core.
+func TestBuildDropsFRPTunnels(t *testing.T) {
+	s, _ := Open(t.TempDir())
+	if err := s.SetOverride("reverse-tunnels:\n  - {name: old, type: frp, config: {serverAddr: x}}\n  - {name: vps, type: ssh, server: h, port: 22, username: u, private-key: k, forwards: [{remote: '127.0.0.1:1', local: '127.0.0.1:2'}]}\n"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := s.Build(false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if text := string(b); strings.Contains(text, "frp") || !strings.Contains(text, "name: vps") {
+		t.Fatalf("built config:\n%s", text)
 	}
 }
 

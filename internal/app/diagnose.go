@@ -21,7 +21,7 @@ func init() {
 }
 
 // ToolService runs diagnostics and tests through the core (network diagnosis, DNS leak, speed,
-// UDP and NAT checks) and deploys frps; it keeps no core state of its own.
+// UDP and NAT checks); it keeps no core state of its own.
 type ToolService struct {
 	cs       *CoreService
 	mu       sync.Mutex
@@ -235,7 +235,7 @@ func (s *ToolService) DNSLeakTest() (DNSLeak, error) {
 	probe(client, id)
 	close(stop)
 	r.Policy = <-seen
-	if r.Policy == "DIRECT" {
+	if strings.HasSuffix(r.Policy, "DIRECT") { // or a group whose current node is DIRECT
 		return r, errors.New("测试域名按规则直连，没有经过代理，无法检测")
 	}
 	ips, dns, err := leakResults(client, id)
