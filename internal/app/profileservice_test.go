@@ -42,18 +42,21 @@ func TestProfileService(t *testing.T) {
 		t.Fatal("first profile is applied to the running core")
 	}
 
-	if err := s.SetOverride("prepend-rules:\n  - NOT-A-RULE,x,DIRECT\n"); err == nil {
+	parts, _ := s.OverrideParts()
+	bad := parts
+	bad.Clash += "prepend-rules:\n  - NOT-A-RULE,x,DIRECT\n"
+	if err := s.SetOverrideParts(bad); err == nil {
 		t.Fatal("the core must reject an invalid rule")
 	}
-	if text, _ := s.Override(); strings.Contains(text, "NOT-A-RULE") {
-		t.Fatalf("rejected override must be rolled back, got %q", text)
+	if p, _ := s.OverrideParts(); strings.Contains(p.Clash, "NOT-A-RULE") {
+		t.Fatalf("rejected override must be rolled back, got %q", p.Clash)
 	}
 	if !hasProxy("hk") {
 		t.Fatal("running config survives a rejected override")
 	}
 
-	text, _ := s.Override()
-	if err := s.SetOverride(text + "mode: global\n"); err != nil {
+	parts.Clash += "mode: global\n"
+	if err := s.SetOverrideParts(parts); err != nil {
 		t.Fatal(err)
 	}
 	var cfg struct {
@@ -134,12 +137,6 @@ func TestFormShapes(t *testing.T) {
 		"ws-opts": map[string]any{"path": "/ws", "headers": map[string]any{"Host": "cdn.example.com"}}}
 	if err := s.AddProxy(ws, "", nil); err != nil {
 		t.Fatalf("trojan ws form: %v", err)
-	}
-	frp := map[string]any{"name": "nas", "type": "frp", "config": map[string]any{
-		"serverAddr": "127.0.0.1", "serverPort": 1, "auth": map[string]any{"token": "x"},
-		"proxies": []any{map[string]any{"name": "web", "type": "tcp", "localIP": "127.0.0.1", "localPort": 8080, "remotePort": 18080}}}}
-	if err := s.AddTunnel(frp); err != nil {
-		t.Fatalf("frp form: %v", err)
 	}
 	ssh := map[string]any{"name": "vps", "type": "ssh", "server": "127.0.0.1", "port": 1, "username": "u", "password": "p",
 		"forwards": []any{map[string]any{"remote": "0.0.0.0:8080", "local": "127.0.0.1:80"}}}

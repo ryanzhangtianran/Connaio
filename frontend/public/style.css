@@ -526,7 +526,6 @@ tr.muted td.rule-actions { text-decoration: none; }
 .monitor:hover .monitor-btn { opacity: 1; }
 .monitor-btn:hover { background: var(--hover); color: var(--text); }
 .monitor-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; }
-.deploy-log { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--card); max-height: 180px; overflow: auto; font-size: 12px; }
 
 /* Linux: no native blur shows through the window, and the window is frameless, its buttons at the
    topbar's end as GNOME places them, round like Adwaita's and as tall as the pills */

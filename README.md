@@ -28,7 +28,7 @@
 - 内置 [connaio-core](https://github.com/ryanzhangtianran/connaio-core) 内核，基于 mihomo，增加了按进程接管、进程祖先规则和 VPN 出站。
 - 三种接管方式：系统代理、增强模式（TUN 接管全部流量）、部分增强（只接管勾选的应用及其子进程）。
 - VPN：EasyConnect（深信服 SSL VPN）、WireGuard、OpenVPN、Tailscale；只有网关下发或手动列出的网段和域名走 VPN，可指定在某些网络时直连。
-- 反向隧道：FRP 和 SSH，可通过 SSH 一键在服务器上部署 frps；局域网设备可把本机当作代理或网关。
+- 反向隧道：SSH，密钥在本机生成并一键安装到服务器；局域网设备可把本机当作代理或网关。
 - 活动页：网络延迟、出口 IP（按节点或 DIRECT）、实时速度、今日流量、按应用的流量排行、进程监视、测速、DNS 泄漏检测、网络修复与诊断。
 - 流量按应用归类：子进程和从终端启动的命令算到它所属的应用。
 - 订阅与本地配置管理，覆写叠加在配置之上，订阅更新不会覆盖。
@@ -45,7 +45,6 @@ Connaio was based on or inspired by these projects and so on:
 - [MetaCubeX/mihomo](https://github.com/MetaCubeX/mihomo): A rule-based tunnel in Go.
 - [clash-verge-rev/clash-verge-rev](https://github.com/clash-verge-rev/clash-verge-rev): A Clash Meta GUI based on Tauri.
 - [wailsapp/wails](https://github.com/wailsapp/wails): Build desktop applications using Go and web technologies.
-- [fatedier/frp](https://github.com/fatedier/frp): A fast reverse proxy.
 - [vitejs/vite](https://github.com/vitejs/vite): Next generation frontend tooling.
 - [Lucide](https://lucide.dev): The sidebar icons.
 - [Maple Mono](https://github.com/subframe7536/maple-font): The monospace font in the logs and editors.

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -176,21 +175,6 @@ func TestLedgerFoldsApps(t *testing.T) {
 	}
 	if _, clients, _, _ := openLedger(l.path).today(now); clients[0].Icon != "/Applications/Google Chrome.app" {
 		t.Fatalf("the app's icon must survive a restart: %+v", clients[0])
-	}
-}
-
-func TestFrpsScript(t *testing.T) {
-	script := fmt.Sprintf(frpsScript, 7000, "abc")
-	if strings.Contains(script, "%!") || !strings.Contains(script, `bindPort = 7000\nauth.method = "token"\nauth.token = "abc"`) {
-		t.Fatalf("script:\n%s", script)
-	}
-	if !strings.Contains(script, "is-active --quiet frps || {") {
-		t.Fatal("a frps that did not start must fail the deploy")
-	}
-	cmd := exec.Command("sh", "-n")
-	cmd.Stdin = strings.NewReader(script)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("sh -n: %v %s", err, out)
 	}
 }
 

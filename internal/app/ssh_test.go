@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net"
 	"os"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -34,6 +33,9 @@ func TestKeyPairKept(t *testing.T) {
 	}
 	if keys, _ := s.KeyPairs(); len(keys) != 1 || keys[0].Name != "vps" || keys[0].Private != a.Private {
 		t.Fatalf("KeyPairs: %+v", keys)
+	}
+	if b, _ := s.KeyPair("My-VPS"); !strings.HasSuffix(b.Path, "my_vps_id_ed25519") {
+		t.Fatalf("path %q", b.Path)
 	}
 }
 
@@ -69,21 +71,12 @@ func TestTunnelTest(t *testing.T) {
 	port := l.Addr().(*net.TCPAddr).Port
 	hostLine := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(host.PublicKey())))
 
-	if msg, err := s.TestTunnel(TunnelTest{Type: "ssh", Host: "127.0.0.1", Port: port, User: "u", Key: key.Private, HostKey: hostLine}); err != nil || !strings.Contains(msg, ssh.FingerprintSHA256(host.PublicKey())) {
+	if msg, err := s.TestTunnel(TunnelTest{Host: "127.0.0.1", Port: port, User: "u", Key: key.Private, HostKey: hostLine}); err != nil || !strings.Contains(msg, ssh.FingerprintSHA256(host.PublicKey())) {
 		t.Fatalf("key login: %q %v", msg, err)
 	}
 	_, otherPriv, _ := ed25519.GenerateKey(nil)
 	other, _ := ssh.NewSignerFromKey(otherPriv)
-	if _, err := s.TestTunnel(TunnelTest{Type: "ssh", Host: "127.0.0.1", Port: port, User: "u", Key: key.Private, HostKey: string(ssh.MarshalAuthorizedKey(other.PublicKey()))}); err == nil {
+	if _, err := s.TestTunnel(TunnelTest{Host: "127.0.0.1", Port: port, User: "u", Key: key.Private, HostKey: string(ssh.MarshalAuthorizedKey(other.PublicKey()))}); err == nil {
 		t.Fatal("a server whose key differs from the tunnel's was accepted")
-	}
-	if _, err := s.TestTunnel(TunnelTest{Type: "frp", Host: "127.0.0.1", Port: port}); err != nil {
-		t.Fatalf("frp port open: %v", err)
-	}
-	closed, _ := net.Listen("tcp", "127.0.0.1:0")
-	closedPort := closed.Addr().(*net.TCPAddr).Port
-	closed.Close()
-	if _, err := s.TestTunnel(TunnelTest{Type: "frp", Host: "127.0.0.1", Port: closedPort}); err == nil || !strings.Contains(err.Error(), strconv.Itoa(closedPort)) {
-		t.Fatalf("frp port closed: %v", err)
 	}
 }

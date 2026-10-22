@@ -1,22 +1,21 @@
 import { useEffect, useState } from "react";
-import { CoreService, ProfileService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
+import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Conn, Status, Tunnel } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import TunnelDialog from "./TunnelDialog";
 import { ExitCell } from "./Activity";
 import { Icon } from "./icons";
-import { nonNull, sizeText } from "./format";
+import { errText, nonNull, sizeText } from "./format";
 import { usePoll } from "./hooks";
 
 const stateLabel: Record<string, string> = { running: "运行中", connecting: "连接中", retrying: "重试中", stopped: "已停止" };
 const stateClass: Record<string, string> = { running: "delay-good", connecting: "delay-warn", retrying: "delay-bad", stopped: "muted" };
-const kindLabel: Record<string, string> = { frp: "FRP", ssh: "SSH" };
 
 // localRule takes what comes in through a tunnel straight to its local target (here Connaio's own
 // proxy port, whose requests then follow the rules) instead of matching the rules itself.
 export const localRule = (tunnel: string) => `IN-NAME,${tunnel},DIRECT`;
 
 // serverOf is the host a tunnel of the GUI's own connects to, "" for one from the profile.
-const serverOf = (own?: Record<string, any>) => (own?.type === "frp" ? own.config?.serverAddr : own?.server) ?? "";
+const serverOf = (own?: Record<string, any>) => own?.server ?? "";
 const hostOf = (addr: string) => addr.slice(0, addr.lastIndexOf(":")).replace(/^\[|\]$/g, "");
 const portOf = (addr?: string) => addr?.slice(addr.lastIndexOf(":") + 1) ?? "";
 
@@ -165,11 +164,16 @@ export default function Tunnels({ status }: { status: Status }) {
   usePoll(poll, 2000, status.running);
   usePoll(() => CoreService.Connections().then((c) => setConns(c ?? [])), 2000, status.running);
 
+  // takeOver ends the sessions another machine holds the remote ports with; the core's retry then gets them
+  const takeOver = (own: Record<string, any>) =>
+    ToolService.TakeOverTunnel({ host: own.server, port: own.port ?? 22, user: own.username, password: own.password, key: own["private-key"], hostKey: own["host-key"]?.[0] },
+      (own.forwards ?? []).map((f: Record<string, any>) => f.remote))
+      .then(() => CoreService.Notify("info", `已断开其他设备上的隧道 ${own.name}，本机将于 10 秒内接管`), (e) => CoreService.Notify("error", errText(e, "接管失败")));
   const remove = (name: string) => ProfileService.RemoveTunnel(name).then(() => ProfileService.RemoveRule(localRule(name))).then(load);
 
   return (
     <>
-      <div className="hint">通过 FRP 或 SSH 把本机服务暴露到公网。</div>
+      <div className="hint">通过 SSH 把本机服务暴露到公网。</div>
 
       <div className="tile-head"><span className="tile-title groups">隧道</span></div>
       <div className="tiles">
@@ -179,7 +183,7 @@ export default function Tunnels({ status }: { status: Status }) {
           return (
             <div key={t.name} className="tile-wrap">
               <button className={`tile ${open === t.name ? "selected" : ""}`} onClick={() => setOpen(open === t.name ? "" : t.name)}>
-                <span className="kind">{kindLabel[t.type] ?? t.type} · {forwards.length} 条转发</span>
+                <span className="kind">SSH · {forwards.length} 条转发</span>
                 <span className="name">{t.name}</span>
                 <span className={`foot ${stateClass[t.state] ?? ""}`}>{stateLabel[t.state] ?? t.state}{t.error && " · 有错误"}</span>
               </button>
@@ -191,15 +195,13 @@ export default function Tunnels({ status }: { status: Status }) {
                   {t.error && <div className="error small detail-head">{t.error}</div>}
                   {forwards.map((f, i) => (
                     <div key={i} className="detail-row">
-                      <span>{f.name ? `${f.name} · ` : ""}{f.type || "tcp"}</span>
-                      <span className="muted">{f.remote || "—"} → {f.local}</span>
-                      {f.state && <span className={f.state === "running" ? "delay-good" : "delay-warn"}>{f.state}</span>}
-                      {f.error && <span className="error small">{f.error}</span>}
+                      <span className="muted">{f.remote} → {f.local}</span>
                     </div>
                   ))}
                   {own && <>
                     {/* a stopped tunnel stays in the config, disabled, until started again */}
                     <button onClick={() => { ProfileService.SetTunnelDisabled(t.name, t.state !== "stopped"); setOpen(""); }}>{t.state === "stopped" ? "开始连接" : "停止连接"}</button>
+                    {t.error?.startsWith("remote listen") && <button onClick={() => { takeOver(own); setOpen(""); }}>接管连接</button>}
                     <button onClick={() => { setDialog(own); setOpen(""); }}>编辑此隧道</button>
                     <button className="danger" onClick={() => { remove(t.name); setOpen(""); }}>删除此隧道</button>
                   </>}
