@@ -1,15 +1,15 @@
 package app
 
 import (
-	"cmp"
 	"fmt"
-	"github.com/ryanzhangtianran/Connaio/internal/run"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/ryanzhangtianran/Connaio/internal/run"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"golang.org/x/sys/windows"
 )
@@ -17,28 +17,29 @@ import (
 // updateAsset ends the name of this platform's release package: the NSIS installer.
 const updateAsset = "-windows-" + runtime.GOARCH + ".exe"
 
-// installPackage runs the installer silently; it raises the UAC prompt itself.
+// installPackage hands the install to a script that outlives this app: the installer wants
+// elevation, which only ShellExecute (Start-Process -Verb RunAs) can ask for, and it kills a running
+// Connaio, so nothing here could wait for it. Once this app has quit (relaunch), the script runs the
+// installer silently, drops it, and starts the new version; a declined prompt starts the old one
+// again. The installer is moved out of the download dir first, which InstallUpdate removes.
 func installPackage(installer string) error {
-	out, err := run.Command(installer, "/S").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("安装更新失败：%s", cmp.Or(strings.TrimSpace(string(out)), err.Error()))
-	}
-	return nil
-}
-
-func restartCommand() []string {
-	exe, _ := os.Executable() // the install dir's connaio.exe, now the new version
-	return []string{exe}
-}
-
-// relaunch quits and runs cmd once this process is gone, so the single-instance check doesn't
-// hand the new one back to the quitting one.
-func relaunch(cmd []string) error {
-	c := run.Command("cmd", "/c", "timeout /t 1 /nobreak >nul & start \"\" \""+cmd[0]+"\"")
-	c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NEW_PROCESS_GROUP | windows.DETACHED_PROCESS}
-	if err := c.Start(); err != nil {
+	moved := filepath.Join(os.TempDir(), "Connaio-update.exe")
+	if err := os.Rename(installer, moved); err != nil {
 		return err
 	}
+	exe, _ := os.Executable()
+	q := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+	script := fmt.Sprintf("Wait-Process -Id %d -ErrorAction SilentlyContinue; try { Start-Process -FilePath %s -ArgumentList '/S' -Verb RunAs -Wait } catch {}; Remove-Item -Force %s; Start-Process -FilePath %s",
+		os.Getpid(), q(moved), q(moved), q(exe))
+	c := run.Command("powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
+	c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW | windows.CREATE_NEW_PROCESS_GROUP | windows.DETACHED_PROCESS}
+	return c.Start()
+}
+
+func restartCommand() []string { return nil } // installPackage's script starts the new version
+
+// relaunch quits; installPackage's script, waiting for that, installs and starts what comes next.
+func relaunch([]string) error {
 	go func() {
 		time.Sleep(300 * time.Millisecond) // the window hears the call returned first
 		application.Get().Quit()
