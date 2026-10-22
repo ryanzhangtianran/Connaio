@@ -22,13 +22,13 @@ jobs:
       - uses: ./Connaio/.github/actions/setup
         with:
           wails-tags: gtk3
+      - name: Build the frontend # typechecks it; main.go embeds frontend/dist, so Go needs it built
+        working-directory: Connaio
+        run: |
+          wails3 task common:generate:bindings
+          cd frontend && npm ci && npm run build
       - name: Vet and test
         working-directory: Connaio
         run: |
           go vet ./...
           go test ./internal/profile ./internal/app
-      - name: Typecheck the frontend
-        working-directory: Connaio
-        run: |
-          wails3 task common:generate:bindings
-          cd frontend && npm ci && npx tsc --noEmit
