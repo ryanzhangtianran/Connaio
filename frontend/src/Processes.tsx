@@ -9,9 +9,10 @@ const sources: Record<string, string> = { app: "正在运行", network: "有网�
 
 // tools are command-line programs that ignore the system proxy; picking one captures it and what it
 // spawns (git's ssh and git-remote-https, pip's and npm's downloads) by PROCESS-ANCESTOR, which
-// matches the executable's name anywhere up the chain: claude and codex installed natively are
-// these names, installed through npm they run as node.
-const defaultTools = ["ssh", "scp", "sftp", "rsync", "git", "curl", "wget", "pip3", "python3", "npm", "node", "go", "brew", "kubectl", "conda", "claude", "codex"];
+// matches the executable's name anywhere up the chain, symlinks and shebangs resolved: pip and
+// conda run as macOS's framework Python, npm and npm-installed CLIs as node; native claude is a
+// file named for its version, so no name catches it.
+const defaultTools = ["ssh", "scp", "sftp", "rsync", "git", "curl", "wget", "python", "node", "go", "kubectl", "codex"];
 
 // Processes is the enhanced page: enhanced mode routes all traffic through TUN, partial enhancement
 // only the selected apps (and their child processes). They are chosen apart; enhanced mode covers
