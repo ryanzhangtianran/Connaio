@@ -1,4 +1,4 @@
-import { validPort } from "./format";
+import { plain, validPort } from "./format";
 import { useEffect, useState } from "react";
 import { CoreService, ProfileService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { Switch } from "./Settings";
@@ -114,7 +114,7 @@ export default function ProxyDialog({ groups, editing, onClose }: { groups: stri
     if (f.kind === "bool") return <Switch on={!!x} onChange={on} />;
     if (f.kind === "select") return <select value={x} onChange={(e) => on(e.target.value)}>{f.options!.map((o) => <option key={o} value={o}>{o || "无"}</option>)}</select>;
     if (f.kind === "password") return <PasswordInput placeholder={f.placeholder ?? "可选"} value={x} onChange={(e) => on(e.target.value)} />;
-    return <input placeholder={f.placeholder ?? "可选"} value={x} onChange={(e) => on(e.target.value)} />;
+    return <input {...plain} placeholder={f.placeholder ?? "可选"} value={x} onChange={(e) => on(e.target.value)} />;
   };
   const row = (label: string, control: React.ReactNode, key?: string) => (
     <div key={key ?? label} className="form-row"><span>{label}</span>{control}</div>

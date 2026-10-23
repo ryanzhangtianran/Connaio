@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { EasyConnectTunnel, Status, VPN } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import { errText, nonNull, openURL, validPort } from "./format";
+import { errText, nonNull, openURL, plain, validPort } from "./format";
 import { usePoll } from "./hooks";
 import PasswordInput from "./PasswordInput";
 
@@ -182,7 +182,7 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
   const [probing, setProbing] = useState(false);
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
-  const text = (k: string, placeholder: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => <input className="grow" placeholder={placeholder} value={form[k] ?? ""} onChange={set(k)} {...extra} />;
+  const text = (k: string, placeholder: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => <input {...plain} className="grow" placeholder={placeholder} value={form[k] ?? ""} onChange={set(k)} {...extra} />;
   const secret = (k: string, placeholder: string) => <PasswordInput className="grow" placeholder={placeholder} value={form[k] ?? ""} onChange={set(k)} />;
 
   const ready = (() => {

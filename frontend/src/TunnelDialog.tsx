@@ -1,4 +1,4 @@
-import { errText, validPort } from "./format";
+import { errText, plain, validPort } from "./format";
 import { useEffect, useState } from "react";
 import PasswordInput from "./PasswordInput";
 import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
@@ -189,7 +189,7 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
           </>}
           {login && !fingerprint && <>
             <div className="form-grid">
-              <label>SSH 用户</label><input value={login.user} placeholder="建议使用普通用户" onChange={(e) => setLogin({ ...login, user: e.target.value })} />
+              <label>SSH 用户</label><input {...plain} value={login.user} placeholder="建议使用普通用户" onChange={(e) => setLogin({ ...login, user: e.target.value })} />
               <label>SSH 端口</label><input value={login.port} onChange={(e) => setLogin({ ...login, port: e.target.value })} style={{ width: 90 }} />
               <label>登录密码</label><PasswordInput value={login.password} placeholder="仅用于这次安装，不保存" onChange={(e) => setLogin({ ...login, password: e.target.value })} />
               {installed && !installed.ok && <><span /><div className="small error">{installed.text}</div></>}

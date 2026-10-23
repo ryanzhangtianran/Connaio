@@ -18,6 +18,8 @@ export const openURL = (url: string) => (web ? void window.open(url, "_blank", "
 export const copyText = (text: string) => void (web ? navigator.clipboard?.writeText(text) : Clipboard.SetText(text))?.catch(() => {}); // Wails': navigator.clipboard is missing in some webviews
 
 // validPort accepts 1..65535 as typed.
+// plain marks a field for a username, host or the like: typed as is, not capitalised, corrected or underlined
+export const plain = { autoCapitalize: "off", autoCorrect: "off", spellCheck: false } as const;
 export const validPort = (s: string) => /^\d+$/.test(s) && Number(s) >= 1 && Number(s) <= 65535;
 
 // cidr reads an address range as typed, a bare IP becoming a range of one; null when it is neither.

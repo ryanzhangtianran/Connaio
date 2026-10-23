@@ -222,6 +222,9 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .install-box { padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
 .install-box > .form-grid { margin-top: 0; grid-template-columns: 83px 1fr; } /* the dialog's 96px less the box's padding and border: fields in line with the form above */
 .install-box > .actions.end { margin-top: 12px; }
+/* the dialog's buttons in line with the install box's above them: as wide, and in by its padding and border */
+.install-box .btn.small-btn, .install-box + .actions.end .btn { min-width: 84px; }
+.install-box + .actions.end { padding-right: 13px; }
 .install-head { display: flex; align-items: center; gap: 12px; }
 .install-head > .muted { flex: 1; }
 .install-result { margin-top: 8px; }
@@ -308,20 +311,20 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .client-cell .client-icon { width: 16px; height: 16px; }
 /* a tunnel connection's way as a band across its box: stops, and links sharing the room between them */
 .pathline { display: flex; align-items: center; margin-top: 12px; padding: 11px 16px; border-radius: 12px; background: var(--track); }
-.pl-stop { display: flex; align-items: center; flex: 0 1 auto; min-width: 0; }
-.pl-link { flex: 1 1 24px; min-width: 16px; height: 2px; margin: 0 14px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 40%, transparent); }
-.pl-dot { flex: none; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--accent); }
+.pl-stop { display: flex; align-items: flex-end; flex: 0 1 auto; min-width: 0; }
+.pl-link { flex: 1 1 24px; min-width: 16px; height: 2px; margin: 0 14px; align-self: flex-end; margin-bottom: 7px; border-radius: 1px; background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.pl-dot { flex: none; width: 8px; height: 8px; margin: 0 8px 4px 0; border-radius: 50%; background: var(--accent); }
 .pl-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .pl-label { font-size: 11px; color: var(--text-2); }
-.pl-value { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.pl-value { font-size: 12px; line-height: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .live-routes { display: flex; flex-direction: column; gap: 12px; }
 .live-card { padding: 16px 18px; }
 .live-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .live-stat { display: inline-flex; gap: 6px; margin-left: 14px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .live-head .client-icon { width: 22px; height: 22px; border-radius: 6px; }
 .live-table { margin-top: 14px; }
-.live-idle { margin-top: 12px; padding-left: 16px; } /* in line with the band's dots, as the table's first column */
-.live-table .table :is(th, td):first-child { padding-left: 16px; } /* in line with the band's dots */
+.live-idle { margin-top: 12px; padding-left: 32px; } /* in line with the band's text, as the table's first column */
+.live-table .table :is(th, td):first-child { padding-left: 32px; } /* in line with the band's text: its padding, dot and gap */
 .live-table .table :is(th, td):last-child { padding-right: 16px; }
 .live-table .table td { max-width: none; overflow: hidden; text-overflow: ellipsis; }
 .live-table .table { table-layout: fixed; }
