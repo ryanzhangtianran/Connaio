@@ -211,6 +211,7 @@ select { font: inherit; color: var(--text); background: var(--card); border: 1px
 tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .modal.wide { width: 860px; max-height: calc(100vh - 60px); overflow: auto; }
 .modal-title { margin: 0 0 8px; font-size: 18px; }
+.modal-sub { margin: -4px 0 12px; overflow-wrap: anywhere; } /* what the dialog is for, e.g. the connection a rule is added for */
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .section-title { font-weight: 600; margin: 16px 0 6px; }
 .form-grid input:not([type=checkbox]), .form-grid select { width: 100%; }

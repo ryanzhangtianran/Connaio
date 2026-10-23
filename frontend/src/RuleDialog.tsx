@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CoreService, ProfileService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Conn } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
+import { Switch } from "./Settings";
 
 const ruleTypes = ["DOMAIN-SUFFIX", "DOMAIN", "DOMAIN-KEYWORD", "IP-CIDR", "PROCESS-NAME", "PROCESS-ANCESTOR"];
 const isIP = (h: string) => /^[\d.]+$/.test(h) || h.includes(":");
@@ -43,7 +44,8 @@ export function RuleDialog({ conn, onClose }: { conn: Conn; onClose: () => void 
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal card" onClick={(e) => e.stopPropagation()}>
-        <div className="label">为 {conn.host} 添加规则</div>
+        <h2 className="modal-title">增加规则</h2>
+        <div className="muted small modal-sub">{conn.host}{conn.process && ` · ${conn.process}`}</div>
         <div className="form-grid">
           <label>规则类型</label>
           <select value={type} onChange={(e) => { setType(e.target.value); setValue(suggest(conn, e.target.value)); }}>
@@ -55,13 +57,21 @@ export function RuleDialog({ conn, onClose }: { conn: Conn; onClose: () => void 
           <select value={policy} onChange={(e) => setPolicy(e.target.value)}>
             {policies.map((p) => <option key={p}>{p}</option>)}
           </select>
-          <label />
-          <div>
-            <label className="radio"><input type="radio" checked={!permanent} onChange={() => setPermanent(false)} /> 临时规则</label>
-            <label className="radio"><input type="radio" checked={permanent} onChange={() => setPermanent(true)} /> 永久规则（写入覆写）</label>
-            <div className="muted small">临时规则不会写入配置，重载配置后消失。</div>
-            <label className="radio"><input type="checkbox" checked={reconnect} onChange={(e) => setReconnect(e.target.checked)} /> 断开现有连接以立即生效</label>
+          <label>有效期</label>
+          <div className="inline">
+            <div className="seg">
+              <button className={permanent ? "" : "on"} onClick={() => setPermanent(false)}>临时</button>
+              <button className={permanent ? "on" : ""} onClick={() => setPermanent(true)}>永久</button>
+            </div>
+            <span className="muted small">{permanent ? "写入覆写" : "不写入配置，重载配置后失效"}</span>
           </div>
+        </div>
+        <div className="setting-row option-row">
+          <div>
+            <div>立即生效</div>
+            <div className="muted small">断开现有连接，按新规则重新连接</div>
+          </div>
+          <Switch on={reconnect} onChange={setReconnect} />
         </div>
         <div className="actions end">
           <button className="btn" onClick={onClose}>取消</button>
