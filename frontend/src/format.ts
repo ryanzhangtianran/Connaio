@@ -1,14 +1,21 @@
+import { Browser, Clipboard } from "@wailsio/runtime";
 // platform is the OS the window runs on, read from the user agent: the runtime's System.IsWindows
 // is false while this module loads on Windows, where WebView2 hands the environment over only once
 // the page has loaded, and Windows got macOS's layout. words are what that OS calls its parts, one
 // row per phrase and a column per platform, so a new platform fills a column rather than every page.
+// web: the page runs in a browser, served by connaio-server (internal/app/web.go sets the cookie),
+// not in the app's window: no window, tray, file dialogs or desktop to drive, its platform "web".
+export const web = document.cookie.split("; ").includes("connaio_web=1");
 const ua = navigator.userAgent;
-export const platform = ua.includes("Windows") ? "windows" : ua.includes("Linux") ? "linux" : "macos";
+export const platform = web ? "web" : ua.includes("Windows") ? "windows" : ua.includes("Linux") ? "linux" : "macos";
 export const words = {
-  showInFiles: { macos: "在 Finder 中显示", linux: "在文件管理器中显示", windows: "在资源管理器中显示" }[platform],
-  pickApp: { macos: "从 Finder 添加…", linux: "选择应用…", windows: "选择应用…" }[platform],
-  tray: { macos: "菜单栏", linux: "托盘", windows: "通知区域" }[platform],
+  showInFiles: { macos: "在 Finder 中显示", linux: "在文件管理器中显示", windows: "在资源管理器中显示", web: "" }[platform],
+  pickApp: { macos: "从 Finder 添加…", linux: "选择应用…", windows: "选择应用…", web: "" }[platform],
+  tray: { macos: "菜单栏", linux: "托盘", windows: "通知区域", web: "托盘" }[platform],
 };
+// openURL and copyText act where the page is seen: on the web, in this browser, not on the server
+export const openURL = (url: string) => (web ? void window.open(url, "_blank", "noopener") : void Browser.OpenURL(url));
+export const copyText = (text: string) => void (web ? navigator.clipboard?.writeText(text) : Clipboard.SetText(text))?.catch(() => {}); // Wails': navigator.clipboard is missing in some webviews
 
 // validPort accepts 1..65535 as typed.
 export const validPort = (s: string) => /^\d+$/.test(s) && Number(s) >= 1 && Number(s) <= 65535;

@@ -37,6 +37,9 @@ func (s *SystemProxyService) Enabled() bool {
 }
 
 func (s *SystemProxyService) SetEnabled(on bool) error {
+	if headless {
+		return errors.New("无界面运行时没有系统代理可设置")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if on {

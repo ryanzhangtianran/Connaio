@@ -3,7 +3,7 @@ import { EnhancedService, SettingsService } from "../bindings/github.com/ryanzha
 import type { ProcessChoice, Status } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { ListSetting, Switch, useSetting } from "./Settings";
 import { useFlip, usePoll } from "./hooks";
-import { cidr, words } from "./format";
+import { cidr, web, words } from "./format";
 
 const sources: Record<string, string> = { app: "正在运行", network: "有网络连接" };
 
@@ -94,7 +94,7 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
           <div className="plist-tools">
             <input className="dash-search" placeholder="搜索" value={query} onChange={(e) => setQuery(e.target.value)} />
             <span className="grow" />
-            <button className="btn" onClick={pick}>{words.pickApp}</button>
+            {!web && <button className="btn" onClick={pick}>{words.pickApp}</button>}
             <button className="btn" onClick={load}>刷新</button>
           </div>
           {showTools && <details className="plist-group">

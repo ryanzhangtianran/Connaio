@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"os"
 	"time"
 
 	"github.com/ryanzhangtianran/Connaio/internal/core"
@@ -93,11 +94,24 @@ func (s *EnhancedService) set(full, partial bool) error {
 	return nil
 }
 
-func (s *EnhancedService) DaemonInstalled() bool { return daemon.Installed() }
+// DaemonInstalled reports whether the core may run as root: the daemon installed, or headless,
+// connaio-server itself running as root, its child core with it.
+func (s *EnhancedService) DaemonInstalled() bool {
+	if headless {
+		return os.Geteuid() == 0
+	}
+	return daemon.Installed()
+}
+
+// errHeadlessRoot answers granting root headless: connaio-server is run as root instead.
+var errHeadlessRoot = errors.New("以 root 运行 connaio-server 即可使用增强模式")
 
 // Grant installs the root daemon (one administrator prompt) and moves the GUI's core onto it;
 // enhanced mode can be turned on only after this.
 func (s *EnhancedService) Grant() error {
+	if headless {
+		return errHeadlessRoot
+	}
 	bin, err := core.Binary()
 	if err != nil {
 		return err
@@ -116,7 +130,10 @@ func (s *EnhancedService) Grant() error {
 }
 
 func (s *EnhancedService) SetEnabled(on bool) error {
-	if on && !s.core.Daemon() {
+	if on && headless && os.Geteuid() != 0 {
+		return errHeadlessRoot
+	}
+	if on && !headless && !s.core.Daemon() {
 		if !daemon.Installed() {
 			return errors.New("请先在「通用」中授予 root 权限")
 		}
@@ -150,6 +167,9 @@ func (s *EnhancedService) useDaemon() error {
 
 // Uninstall turns enhanced mode off, removes the daemon and goes back to a child core.
 func (s *EnhancedService) Uninstall() error {
+	if headless {
+		return errHeadlessRoot
+	}
 	restarting.Add(1) // the stream breaks as the daemon goes; the config is applied below
 	defer restarting.Add(-1)
 	if s.Enabled() {

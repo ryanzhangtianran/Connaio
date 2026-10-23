@@ -262,7 +262,13 @@ func (s *ProfileService) ImportOverride() error {
 	if err != nil {
 		return err
 	}
-	return s.edit(func() error { return s.store.ImportOverride(string(b)) })
+	return s.MergeOverride(string(b))
+}
+
+// MergeOverride merges YAML text into the override and applies it, as ImportOverride a file's:
+// the web UI's import, the browser reading the file.
+func (s *ProfileService) MergeOverride(text string) error {
+	return s.edit(func() error { return s.store.ImportOverride(text) })
 }
 
 // edit runs a change to the override and applies it; if the core rejects the result the override

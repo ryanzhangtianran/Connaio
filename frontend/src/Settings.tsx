@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CoreService, EnhancedService, ProfileService, SettingsService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { About, DNSLeak, LeakServer, Update, UpdateProgress } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { on } from "./hooks";
-import { errText, platform, sizeText, words, validPort } from "./format";
+import { errText, openURL, platform, sizeText, words, validPort, web } from "./format";
 
 
 // Row is one setting: title and description, the control at the right; a list row lists its items below.
@@ -88,14 +88,14 @@ export function General() {
         <Row title="重启内核" desc="重新启动内核进程并载入当前配置">
           <button className="btn ctl" disabled={!!busy} onClick={() => run(CoreService.Restart(), "restart")}>{busy === "restart" ? "重启中…" : "重启"}</button>
         </Row>
-        <Row title="root 权限" desc={daemon ? "已授予，内核以 root 运行" : "授予后才能开启增强模式"}>
+        {web ? <Row title="root 权限" desc={daemon ? "connaio-server 以 root 运行，可开启增强模式" : "以 root 运行 connaio-server 后可开启增强模式"}>{null}</Row> : <Row title="root 权限" desc={daemon ? "已授予，内核以 root 运行" : "授予后才能开启增强模式"}>
           {daemon
             ? <button className="btn ctl" disabled={!!busy} onClick={() => run(EnhancedService.Uninstall(), "root")}>{busy === "root" ? "移除中…" : "移除"}</button>
             : <button className="btn ctl" disabled={!!busy} onClick={() => run(EnhancedService.Grant(), "root")}>{busy === "root" ? "授予中…" : "授予"}</button>}
-        </Row>
+        </Row>}
       </div>
 
-      <div className="card settings-card">
+      {!web && <div className="card settings-card">
         <div className="section-title">应用</div>
         <Row title="开机时启动">
           <Switch on={login} onChange={(v) => { setLogin(v); run(SettingsService.SetLaunchAtLogin(v)); }} />
@@ -105,13 +105,15 @@ export function General() {
             <Switch on={traySpeed} onChange={(v) => { setTraySpeed(v); run(SettingsService.SetTraySpeed(v)); }} />
           </Row>
         )}
-      </div>
+      </div>}
 
       <div className="card settings-card">
         <div className="section-title">更新</div>
-        <Row title={`当前版本 ${version}`} desc={update ? (update.newer ? `发现新版本 ${update.latest}，从 GitHub Releases 下载安装后自动重启` : "已是最新版本") : undefined}>
+        <Row title={`当前版本 ${version}`} desc={update ? (update.newer ? (web ? `发现新版本 ${update.latest}，下载后替换 connaio-server 并重启服务` : `发现新版本 ${update.latest}，从 GitHub Releases 下载安装后自动重启`) : "已是最新版本") : undefined}>
           {update?.newer
-            ? <button className="btn ctl" disabled={!!busy} onClick={() => { setProgress(null); run(SettingsService.InstallUpdate(), "update"); }}>{busy === "update" ? updateLabel(progress) : "更新"}</button>
+            ? web // connaio-server doesn't replace itself: the release page, in this browser
+              ? <button className="btn ctl" onClick={() => openURL(update.url)}>下载</button>
+              : <button className="btn ctl" disabled={!!busy} onClick={() => { setProgress(null); run(SettingsService.InstallUpdate(), "update"); }}>{busy === "update" ? updateLabel(progress) : "更新"}</button>
             : <button className="btn ctl" disabled={!!busy} onClick={() => run(SettingsService.CheckUpdate().then(setUpdate), "check")}>{busy === "check" ? "检查中…" : "检查更新"}</button>}
         </Row>
         {busy === "update" && (
@@ -320,7 +322,7 @@ export function AboutPage() {
       <Row title="Connaio">{about.version}</Row>
       <Row title="内核">{about.coreVersion || "—"}</Row>
       <Row title="内核运行方式">{about.attached ? "root" : "当前用户"}</Row>
-      <Row title="数据目录" desc={about.dataDir}><button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button></Row>
+      <Row title="数据目录" desc={about.dataDir}>{!web && <button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button>}</Row>
     </div>
   );
 }

@@ -144,7 +144,9 @@ button { font: inherit; color: inherit; }
 .error { color: var(--bad); white-space: pre-wrap; user-select: text; -webkit-user-select: text; }
 .btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 8px; padding: 0 14px; background: var(--card); font-size: 13px; white-space: nowrap; }
 .btn:hover { background: var(--hover); }
-.btn:disabled { opacity: 0.5; }
+.btn:disabled, label.btn.disabled { opacity: 0.5; }
+label.btn { cursor: default; }
+label.btn.disabled { pointer-events: none; }
 .icon-btn { border: 0; background: none; padding: 0; color: var(--text-2); display: inline-flex; }
 
 .spark { position: relative; flex: 1; min-height: 40px; margin: 6px -18px -16px; } /* edge to edge along the card's foot */
@@ -546,6 +548,12 @@ tr.muted td.rule-actions { text-decoration: none; }
 .linux { --bg: #eef0f4; --panel: #ffffff; }
 @media (prefers-color-scheme: dark) { .linux { --bg: #1c1d21; --panel: #26272c; } }
 .linux .sidebar { padding-top: 10px; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* the web UI (connaio-server) looks as the Mac app: its window's gradient, opaque, a browser tab
+   having no desktop blur behind it, and the sidebar from the top, with no window buttons to leave room for */
+.web { --bg: linear-gradient(160deg, #e7ecf2 0%, #dfe5ed 45%, #e8e5ef 100%); }
+@media (prefers-color-scheme: dark) { .web { --bg: linear-gradient(160deg, #1d2026 0%, #202329 50%, #23212a 100%); } }
+.web body { background: var(--bg); }
+.web .sidebar { padding-top: 10px; }
 /* Noto Sans, Linux's usual fallback, has only regular and bold, so every 500 and 600 above came out
    bold; Ubuntu Sans has the whole weight range, Noto Sans CJK the Chinese */
 .linux { --sans: "Ubuntu Sans", "Noto Sans CJK SC", system-ui, sans-serif; --rounded: var(--sans); }
@@ -717,19 +725,19 @@ tr.muted td.rule-actions { text-decoration: none; }
 .list-card .head-actions > * { flex: none; }
 .list-card .head-actions > .link-chip { flex: 0 1 auto; min-width: 0; }
 .link-chip { overflow: hidden; }
-/* Linux and Windows: the switch drawn, WebKit's native one (<input switch>, see Switch) being macOS's
-   alone; WebView2, Chromium, would show a plain checkbox */
-:is(.linux, .windows) input[switch] {
+/* Linux, Windows and the web UI: the switch drawn, WebKit's native one (<input switch>, see Switch)
+   being macOS's alone; WebView2 and other browsers would show a plain checkbox */
+:is(.linux, .windows, .web) input[switch] {
   appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 36px; height: 20px; margin: 0;
   border-radius: 10px; background: var(--active); transition: background .2s; cursor: pointer;
 }
-:is(.linux, .windows) input[switch]::before {
+:is(.linux, .windows, .web) input[switch]::before {
   content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
   background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .2s;
 }
-:is(.linux, .windows) input[switch]:checked { background: var(--accent); }
-:is(.linux, .windows) input[switch]:checked::before { transform: translateX(16px); }
-:is(.linux, .windows) input[switch]:disabled { opacity: .5; cursor: default; }
+:is(.linux, .windows, .web) input[switch]:checked { background: var(--accent); }
+:is(.linux, .windows, .web) input[switch]:checked::before { transform: translateX(16px); }
+:is(.linux, .windows, .web) input[switch]:disabled { opacity: .5; cursor: default; }
 /* the groups beside the lists, a quarter wide: one tile a row */
 /* scrolls as the ranking does, whole tiles (useWholeRows); no padding under them, where the next tile would show */
 .activity .group-tiles { grid-template-columns: minmax(0, 1fr); padding-bottom: 0; margin-bottom: 0; }

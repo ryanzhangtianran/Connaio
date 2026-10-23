@@ -15,7 +15,7 @@ import { AboutPage, Dns, General } from "./Settings";
 import Profiles from "./Profiles";
 import ErrorBoundary from "./ErrorBoundary";
 import { Icon } from "./icons";
-import { platform } from "./format";
+import { platform, web } from "./format";
 import { on, usePoll, useClickAway } from "./hooks";
 import { start as startStore } from "./store";
 
@@ -134,18 +134,18 @@ export default function App() {
         <div className="topbar" onDoubleClick={(e) => platform === "linux" && (e.target === e.currentTarget || (e.target as Element).classList.contains("page-title")) && Window.ToggleMaximise()}>
           <h1 className="page-title">{pages.find((p) => p.key === current)?.title}</h1>
           <EventsButton />
-          <button
+          {!web && <button
             className="pill"
             disabled={!status.running}
             title="将系统代理指向本机代理端口"
             onClick={() => SystemProxyService.SetEnabled(!sysProxy)}
           >
             <span className={`dot ${sysProxy ? "on" : ""}`} />系统代理
-          </button>
+          </button>}
           <button
             className="pill"
             disabled={!status.running || enhancedBusy || !rooted}
-            title={!rooted ? "需先在「通用」中授予 root 权限" : enhanced === "process-tun" ? "TUN 只接管选中的应用；点击关闭部分增强" : "TUN 接管全部流量"}
+            title={!rooted ? (web ? "需以 root 运行 connaio-server" : "需先在「通用」中授予 root 权限") : enhanced === "process-tun" ? "TUN 只接管选中的应用；点击关闭部分增强" : "TUN 接管全部流量"}
             onClick={() => {
               // it turns off what it shows: partial enhancement when that runs, else enhanced mode
               setEnhancedBusy(true);

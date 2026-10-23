@@ -42,7 +42,7 @@ func (s *SettingsService) About() About {
 		CoreVersion: s.core.Status().Version,
 		DataDir:     s.core.core.Dir,
 		Daemon:      daemon.Installed(),
-		Attached:    s.core.core.Daemon(),
+		Attached:    s.core.core.Daemon() || headless && os.Geteuid() == 0, // headless as root: its own core runs as root
 	}
 }
 

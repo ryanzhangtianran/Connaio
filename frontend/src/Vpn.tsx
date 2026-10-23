@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Browser } from "@wailsio/runtime";
 import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { EasyConnectTunnel, Status, VPN } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import { errText, nonNull, validPort } from "./format";
+import { errText, nonNull, openURL, validPort } from "./format";
 import { usePoll } from "./hooks";
 import PasswordInput from "./PasswordInput";
 
@@ -283,7 +282,7 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
       <Fact label="状态"><span className={stateClass[live.state]}>{stateLabel[live.state]}</span></Fact>
       {live.ips?.length ? <Fact label="Tailnet 地址"><span className="selectable">{live.ips.join("、")}</span></Fact> : null}
       {live.state === "login" && (live.authURL
-        ? <button className="btn small-btn primary" onClick={() => Browser.OpenURL(live.authURL!)}>登录</button>
+        ? <button className="btn small-btn primary" onClick={() => openURL(live.authURL!)}>登录</button>
         : <span className="muted small">正在获取登录链接…</span>)}
     </div>
   ) : saved && form.type === "easyconnect" ? (<>
@@ -387,7 +386,7 @@ export default function Vpn({ status }: { status: Status }) {
   useEffect(() => {
     if (!awaiting) return;
     const v = vpns.find((x) => x.proxy?.name === awaiting.name);
-    if (v?.state === "login" && v.authURL) Browser.OpenURL(v.authURL);
+    if (v?.state === "login" && v.authURL) openURL(v.authURL);
     if (v?.state === "login" && v.authURL || v?.state === "up" || Date.now() > awaiting.until) setAwaiting(null);
   }, [vpns, awaiting]);
 

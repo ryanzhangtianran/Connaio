@@ -34,6 +34,20 @@
 - 订阅与本地配置管理，覆写叠加在配置之上，订阅更新不会覆盖。
 - 菜单栏 / 托盘：出站模式、策略组、VPN、网络质量、接管开关和配置切换。
 
+## 无界面版（Linux）
+
+`connaio-server` 是不带窗口的 Connaio，界面在浏览器中打开，适合服务器、NAS 等没有桌面的 Linux（amd64 / arm64，无需图形库）。
+
+```sh
+tar -xzf Connaio-*-linux-amd64-server.tar.gz -C /opt/connaio
+/opt/connaio/connaio-server --listen 127.0.0.1:9090
+```
+
+- 启动时输出带访问令牌的地址，首次用它打开即可登录；令牌保存在数据目录的 `web-token` 中，也可用 `--token` 指定。
+- 默认只监听本机，可经 `ssh -L 9090:127.0.0.1:9090 服务器` 访问；`--listen 0.0.0.0:9090` 对外开放时，建议在前面加 HTTPS 反向代理。
+- 以 root 运行时可开启增强模式（TUN）；系统代理、开机启动、托盘等桌面功能不提供。
+- 随附 `connaio-server.service`，可作为 systemd 服务常驻。
+
 ## Contributions
 
 Issue and PR welcome!

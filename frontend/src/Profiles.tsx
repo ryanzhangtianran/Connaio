@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ProfileService, SettingsService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { OverrideParts, Profiles as ProfilesData } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import { ago, sizeText, words } from "./format";
+import { ago, sizeText, web, words } from "./format";
 import { on } from "./hooks";
 
 const host = (url: string) => { try { return new URL(url).host; } catch { return url; } };
@@ -38,6 +38,19 @@ const partNote: Record<keyof OverrideParts, string> = {
   clash: "Clash（mihomo）通用的部分，可在其他客户端中使用",
   connaio: "仅 Connaio 支持的部分：反向隧道、接管方式、EasyConnect 节点、Subnet 策略组及相关规则；保存时此部分的规则排在前面",
 };
+
+// FilePick is the web UI's 导入…: the browser reads the chosen YAML file and hands its text, and
+// its name without the extension, to onText. The app's own dialog would pick a file on the machine
+// it runs on, which for the web UI is the server.
+function FilePick({ disabled, title, onText }: { disabled?: boolean; title?: string; onText: (name: string, text: string) => void }) {
+  return (
+    <label className={`btn ${disabled ? "disabled" : ""}`} title={title}>
+      导入…
+      <input type="file" accept=".yaml,.yml" hidden disabled={disabled}
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) f.text().then((t) => onText(f.name.replace(/\.ya?ml$/i, ""), t)); }} />
+    </label>
+  );
+}
 
 export default function Profiles() {
   const [data, setData] = useState<ProfilesData>({ current: "", profiles: [] });
@@ -136,7 +149,9 @@ export default function Profiles() {
           <button className="btn" disabled={!selected?.url || !!busy} onClick={() => selected && run("update", () => ProfileService.Update(selected.id))}>{busy === "update" ? "更新中…" : "更新"}</button>
           <button className="btn" disabled={!selected || !!busy} onClick={() => selected && ProfileService.Content(selected.id).then((text) => setEditing({ id: selected.id, name: selected.name, text, saved: text }))}>编辑</button>
           <button className="btn" disabled={!selected || !!busy} onClick={() => selected && setRenaming({ id: selected.id, name: selected.name })}>重命名</button>
-          <button className="btn" disabled={!!busy} onClick={() => run("import", () => ProfileService.ImportFile())}>导入…</button>
+          {web
+            ? <FilePick disabled={!!busy} onText={(name, text) => run("import", () => ProfileService.AddLocal(name, text))} />
+            : <button className="btn" disabled={!!busy} onClick={() => run("import", () => ProfileService.ImportFile())}>导入…</button>}
           <span className="grow" />
           <button className="btn" disabled={!selected || selected.id === data.current || !!busy} onClick={() => selected && use(selected.id)}>{busy === "use" ? "切换中…" : "使用"}</button>
         </div>
@@ -159,7 +174,9 @@ export default function Profiles() {
         </div>
         <textarea className="code override" rows={10} spellCheck={false} value={parts[part]} onChange={(e) => setParts({ ...parts, [part]: e.target.value })} />
         <div className="plist-tools">
-          <button className="btn" disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件到覆写：同名项以导入的为准，列表追加"} onClick={() => run("import", () => ProfileService.ImportOverride().then(loadParts))}>导入…</button>
+          {web
+            ? <FilePick disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件到覆写：同名项以导入的为准，列表追加"} onText={(_, text) => run("import", () => ProfileService.MergeOverride(text).then(loadParts))} />
+            : <button className="btn" disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件到覆写：同名项以导入的为准，列表追加"} onClick={() => run("import", () => ProfileService.ImportOverride().then(loadParts))}>导入…</button>}
           <button className="btn" disabled={!parts[part] || !!busy} onClick={() => setParts({ ...parts, [part]: "" })}>清除</button>
           <span className="grow" />
           <button className="btn" disabled={!dirty || !!busy} onClick={() => setParts(savedParts)}>还原</button>
@@ -195,7 +212,7 @@ export default function Profiles() {
       <div className="plist">
         <div className="plist-row static">
           <div className="plist-main"><div className="plist-name">数据目录</div><div className="muted small selectable">{dataDir}</div></div>
-          <button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button>
+          {!web && <button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button>}
         </div>
       </div>
     </>

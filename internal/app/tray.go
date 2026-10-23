@@ -680,3 +680,15 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, 
 	sectionHeaders(headers)
 	t.showRows()
 }
+
+// rate formats bytes per second for the menu bar, at most 9 characters: 0 KB/s, 512 KB/s, 3.4 MB/s.
+func rate(b int64) string {
+	switch mb := float64(b) / 1e6; {
+	case b < 1e6:
+		return fmt.Sprintf("%d KB/s", b/1000)
+	case mb < 99.95:
+		return fmt.Sprintf("%.1f MB/s", mb)
+	default:
+		return fmt.Sprintf("%.0f MB/s", mb)
+	}
+}

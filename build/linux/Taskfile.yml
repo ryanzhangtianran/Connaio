@@ -37,6 +37,35 @@ tasks:
       GOARCH: '{{.ARCH | default ARCH}}'
       VERSION: '{{.VERSION}}'
 
+  package:server:
+    summary: Builds connaio-server, the app with no window and its UI on a web port (-tags server, no cgo), for amd64 and arm64, each packed with connaio-core and its systemd unit as Connaio-<version>-linux-<arch>-server.tar.gz
+    deps:
+      - task: common:build:frontend
+        vars:
+          BUILD_FLAGS: '-tags production'
+          DEV: 'false'
+    cmds:
+      - task: common:build:relay # embedded: before the app's build
+      - for: [amd64, arm64]
+        task: server:arch
+        vars:
+          ARCH: '{{.ITEM}}'
+
+  server:arch:
+    internal: true
+    vars:
+      OUT: '{{.BIN_DIR}}/server-{{.ARCH}}'
+    cmds:
+      - mkdir -p "{{.OUT}}"
+      - GOOS=linux GOARCH={{.ARCH}} CGO_ENABLED=0 go build -tags server,production -trimpath -buildvcs=false -ldflags="-w -s -X github.com/ryanzhangtianran/Connaio/internal/app.appVersion={{.VERSION}}" -o "{{.OUT}}/connaio-server" .
+      - task: common:build:core
+        vars:
+          GOOS: linux
+          ARCH: '{{.ARCH}}'
+          BIN_DIR: '{{.OUT}}'
+      - cp build/linux/connaio-server.service "{{.OUT}}/"
+      - tar -czf "{{.BIN_DIR}}/Connaio-{{.VERSION}}-linux-{{.ARCH}}-server.tar.gz" -C "{{.OUT}}" connaio-server connaio-core connaio-server.service
+
   run:
     cmds:
       - '{{.BIN_DIR}}/{{.APP_NAME}}'

@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Clipboard } from "@wailsio/runtime";
 import { CoreService, DeviceService, EnhancedService, SettingsService, SystemProxyService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Activity as ActivityData, Conn, DiagSection, Group, IPInfo, LanInfo, Latency, Memory, RepairItem, Service, Status, Usage } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { delayClass, nodesOf } from "./Proxies";
-import { errText, platform, size, sizeText, speed } from "./format";
+import { copyText, errText, platform, size, sizeText, speed, web } from "./format";
 import { DiagLog } from "./ProxyDiagnose";
 import { on, usePoll, useCachedURL, useClickAway, useWholeRows } from "./hooks";
 import { Brand, Icon, hasBrand } from "./icons";
@@ -233,7 +232,7 @@ function useHeld(actual: boolean): [boolean, (v: boolean, p: Promise<unknown>) =
 function LanCard({ lan, reload, go }: { lan: LanInfo | null; reload: () => void; go: (page: string) => void }) {
   const [allow, setAllow] = useHeld(!!lan?.allowLan);
   const addrs = lan?.addresses ?? [];
-  const copy = () => { Clipboard.SetText(`${addrs[0]}:${lan?.port}`).catch(() => {}); }; // Wails': navigator.clipboard is missing in some webviews
+  const copy = () => copyText(`${addrs[0]}:${lan?.port}`);
   return (
     <div className="card" style={{ gridArea: "lan" }}>
       <Head icon="devices" title="局域网">
@@ -556,7 +555,7 @@ function ListCard({ activity, go }: { activity: ActivityData | null; go: (page: 
               <button className={proxyOnly ? "on" : ""} onClick={() => setProxyOnly(true)}>仅代理</button>
             </div>
           </> : <>
-            <IconButton icon="window" title="在悬浮窗中显示" onClick={() => SettingsService.OpenMonitor()} />
+            {!web && <IconButton icon="window" title="在悬浮窗中显示" onClick={() => SettingsService.OpenMonitor()} />}
             <Picker value={shown} options={procs} onChange={choose} />
           </>}
           <button className="chip link-chip" onClick={() => go("dashboard")} title="连接">{activity?.connections ?? 0} 个连接<Icon name="more" className="chip-icon" /></button>
@@ -710,14 +709,14 @@ export default function Activity({ status, activity, sysProxy, enhanced, rooted,
     return <div className="card"><div className="muted">{status.error ? "内核未运行" : "内核启动中…"}</div></div>;
   }
 
-  const tunSub = !rooted ? "需先在「通用」中授予 root 权限" : enhanced === "tun" ? "TUN 接管全部流量" : enhanced === "process-tun" ? "部分增强运行中" : "已关闭";
+  const tunSub = !rooted ? (web ? "需以 root 运行 connaio-server" : "需先在「通用」中授予 root 权限") : enhanced === "tun" ? "TUN 接管全部流量" : enhanced === "process-tun" ? "部分增强运行中" : "已关闭";
   return (
     <div className="activity">
       <StatusCard activity={activity} mode={mode} setMode={setMode} latency={latency} />
       <SpeedCard dir="up" values={history.map((t) => t.up)} />
       <SpeedCard dir="down" values={history.map((t) => t.down)} />
       <ModeCard mode={mode} setMode={setMode} />
-      <ToggleCard area="sys" icon="shuffle" title="系统代理" sub={proxyOn ? `端口 ${lan?.port ?? "—"}` : "已关闭"} on={proxyOn}
+      <ToggleCard area="sys" icon="shuffle" title="系统代理" sub={web ? "无界面运行时不适用" : proxyOn ? `端口 ${lan?.port ?? "—"}` : "已关闭"} on={proxyOn} disabled={web}
         onChange={(v) => setProxyOn(v, SystemProxyService.SetEnabled(v))} />
       <ToggleCard area="tun" icon="processes" title="增强模式" sub={tunSub} on={tunOn} part={enhanced === "process-tun"} disabled={!rooted}
         onChange={(v) => setTunOn(v, EnhancedService.SetFull(v))} more={() => go("processes")} />

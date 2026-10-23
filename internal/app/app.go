@@ -1,17 +1,15 @@
+//go:build !server
+
 package app
 
 import (
-	"fmt"
 	"io/fs"
-	"log"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
 
-	"github.com/ryanzhangtianran/Connaio/internal/core"
-	"github.com/ryanzhangtianran/Connaio/internal/profile"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -22,26 +20,15 @@ func Run(assets fs.FS, trayIcon []byte) error {
 	if err != nil {
 		return err
 	}
-	dataDir := filepath.Join(configDir, "Connaio")
-	store, err := profile.Open(dataDir)
+	sv, err := newServices(filepath.Join(configDir, "Connaio"))
 	if err != nil {
 		return err
 	}
-	settings := loadSettings(dataDir)
-	svc := &CoreService{core: core.New(dataDir), ledger: openLedger(filepath.Join(dataDir, "traffic.json")), settings: settings}
-	profiles := &ProfileService{store: store, core: svc.core, settings: settings}
-	svc.onReady = profiles.apply
-	sysProxy := &SystemProxyService{core: svc.core, settings: settings, enabled: settings.Get().SystemProxy} // known before the menu is built; applied by the guard once the core answers
-	enhanced := &EnhancedService{core: svc.core, profiles: profiles, settings: settings}
-	devices := &DeviceService{core: svc, profiles: profiles}
-	settingsSvc := &SettingsService{core: svc, settings: settings}
+	svc, profiles, sysProxy, enhanced, settingsSvc, settings := sv.core, sv.profiles, sv.sysProxy, sv.enhanced, sv.settings, sv.conf
 	if settingsSvc.LaunchAtLogin() {
 		// written afresh: the app may have moved or been renamed, and older entries lack what the
 		// system lists the item under (macOS 登录项与扩展)
 		_ = settingsSvc.SetLaunchAtLogin(true)
-	}
-	if err := profiles.WriteConfig(); err != nil {
-		log.Printf("build config: %v (keeping the previous config.yaml)", err)
 	}
 
 	// a closed window is freed, its web content process with it, and the app runs on in the menu bar
@@ -64,7 +51,7 @@ func Run(assets fs.FS, trayIcon []byte) error {
 	}
 	app := application.New(application.Options{
 		// the window shows no errors: whatever a call from it fails with is listed under the events button
-		MarshalError: func(err error) []byte { notify("error", "%v", err); return nil },
+		MarshalError: marshalError,
 		// a second copy would fight the first over the core's ports; bring the first forward instead
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID:               "com.ryanzhangtianran.connaio",
@@ -72,7 +59,7 @@ func Run(assets fs.FS, trayIcon []byte) error {
 		},
 		Name:        "Connaio",
 		Description: "Rule-based proxy with reverse tunnels",
-		Services:    []application.Service{application.NewService(svc), application.NewService(&ToolService{cs: svc}), application.NewService(profiles), application.NewService(sysProxy), application.NewService(enhanced), application.NewService(devices), application.NewService(settingsSvc)},
+		Services:    sv.list(),
 		Assets:      application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
 		// lives on in the menu bar
 		Mac:     application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: false},
@@ -157,16 +144,4 @@ func Run(assets fs.FS, trayIcon []byte) error {
 	})
 
 	return app.Run()
-}
-
-// rate formats bytes per second for the menu bar, at most 9 characters: 0 KB/s, 512 KB/s, 3.4 MB/s.
-func rate(b int64) string {
-	switch mb := float64(b) / 1e6; {
-	case b < 1e6:
-		return fmt.Sprintf("%d KB/s", b/1000)
-	case mb < 99.95:
-		return fmt.Sprintf("%.1f MB/s", mb)
-	default:
-		return fmt.Sprintf("%.0f MB/s", mb)
-	}
 }

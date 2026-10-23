@@ -28,7 +28,10 @@ type RepairItem struct {
 
 // RepairChecks runs every check and reports what it found, problems first.
 func (s *ToolService) RepairChecks() []RepairItem {
-	items := []RepairItem{s.checkProxy(), s.checkOrphans()}
+	items := []RepairItem{s.checkOrphans()}
+	if !headless { // no system proxy to check with no desktop
+		items = append([]RepairItem{s.checkProxy()}, items...)
+	}
 	items = append(items, platformChecks()...)
 	items = append(items, RepairItem{ID: "dns", Title: "DNS 缓存", Detail: "刷新系统 DNS 缓存", Fix: "刷新"})
 	var found, rest []RepairItem
