@@ -81,28 +81,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${GITHUB_REF_NAME}" "$DEB" --clobber -R "$GITHUB_REPOSITORY"
 
-      # connaio-server: the app with no window, its UI on a web port; no GUI libraries, so any Linux
-      - name: Build connaio-server, amd64 and arm64
+      # the headless build: no window, its UI on a web port; no GUI libraries, so any Linux
+      - name: Build the headless build, amd64 and arm64
         working-directory: Connaio
-        run: wails3 task linux:package:server
-      - name: Start connaio-server
+        run: wails3 task linux:package:headless
+      - name: Install it with install.sh, as curl | sudo sh does, and reach it
         working-directory: Connaio
         run: |
-          d=$(mktemp -d)
-          bin/server-amd64/connaio-server --listen 127.0.0.1:9090 --data-dir "$d" --token ci > "$d/out.log" 2>&1 &
-          for i in $(seq 30); do curl -sf --unix-socket "$d/core.sock" http://x/version && break; sleep 1; done
+          out=$(sudo CONNAIO_TARBALL="$(ls bin/Connaio-*-linux-amd64.tar.gz)" sh install.sh)
+          echo "$out"
+          url=$(echo "$out" | grep -o 'http://127.0.0.1:9090/?token=[^ ]*')
+          for i in $(seq 30); do sudo curl -sf --unix-socket /var/lib/connaio-web/core.sock http://x/version && break; sleep 1; done
           echo
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9090/)" = 401 # nothing without the token
-          curl -sf -c "$d/jar" -o /dev/null 'http://127.0.0.1:9090/?token=ci'
-          curl -sf -b "$d/jar" http://127.0.0.1:9090/ | grep -q 'id="root"' # the UI, behind the cookie
-          cat "$d/out.log"
-          kill %1
-      - name: Attach connaio-server to the release
+          curl -sf -c jar -o /dev/null "$url"
+          curl -sf -b jar http://127.0.0.1:9090/ | grep -q 'id="root"' # the UI, behind the cookie
+          sudo journalctl -u connaio --no-pager | tail -n 20
+      - name: Attach the headless build to the release
         if: startsWith(github.ref, 'refs/tags/')
         working-directory: Connaio
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" bin/Connaio-*-linux-*-server.tar.gz --clobber -R "$GITHUB_REPOSITORY"
+        run: gh release upload "${GITHUB_REF_NAME}" bin/Connaio-*-linux-*.tar.gz --clobber -R "$GITHUB_REPOSITORY"
 
   # the same .deb on the newer LTS releases: installs with their packages, starts and proxies
   install:

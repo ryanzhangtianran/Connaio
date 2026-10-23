@@ -15,7 +15,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// Run is connaio-server's: the app with no window, tray or desktop, its UI served to a browser at
+// Run is Connaio's: the app with no window, tray or desktop, its UI served to a browser at
 // --listen behind the access token (web.go), the core always this process's own child.
 func Run(assets fs.FS, _ []byte) error {
 	configDir, err := os.UserConfigDir()

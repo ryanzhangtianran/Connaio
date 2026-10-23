@@ -88,7 +88,7 @@ export function General() {
         <Row title="重启内核" desc="重新启动内核进程并载入当前配置">
           <button className="btn ctl" disabled={!!busy} onClick={() => run(CoreService.Restart(), "restart")}>{busy === "restart" ? "重启中…" : "重启"}</button>
         </Row>
-        {web ? <Row title="root 权限" desc={daemon ? "connaio-server 以 root 运行，可开启增强模式" : "以 root 运行 connaio-server 后可开启增强模式"}>{null}</Row> : <Row title="root 权限" desc={daemon ? "已授予，内核以 root 运行" : "授予后才能开启增强模式"}>
+        {web ? <Row title="root 权限" desc={daemon ? "Connaio 以 root 运行，可开启增强模式" : "以 root 运行 Connaio 后可开启增强模式"}>{null}</Row> : <Row title="root 权限" desc={daemon ? "已授予，内核以 root 运行" : "授予后才能开启增强模式"}>
           {daemon
             ? <button className="btn ctl" disabled={!!busy} onClick={() => run(EnhancedService.Uninstall(), "root")}>{busy === "root" ? "移除中…" : "移除"}</button>
             : <button className="btn ctl" disabled={!!busy} onClick={() => run(EnhancedService.Grant(), "root")}>{busy === "root" ? "授予中…" : "授予"}</button>}
@@ -109,9 +109,9 @@ export function General() {
 
       <div className="card settings-card">
         <div className="section-title">更新</div>
-        <Row title={`当前版本 ${version}`} desc={update ? (update.newer ? (web ? `发现新版本 ${update.latest}，下载后替换 connaio-server 并重启服务` : `发现新版本 ${update.latest}，从 GitHub Releases 下载安装后自动重启`) : "已是最新版本") : undefined}>
+        <Row title={`当前版本 ${version}`} desc={update ? (update.newer ? (web ? `发现新版本 ${update.latest}，重新运行安装命令即可更新` : `发现新版本 ${update.latest}，从 GitHub Releases 下载安装后自动重启`) : "已是最新版本") : undefined}>
           {update?.newer
-            ? web // connaio-server doesn't replace itself: the release page, in this browser
+            ? web // the headless build doesn't replace itself: the release page, in this browser
               ? <button className="btn ctl" onClick={() => openURL(update.url)}>下载</button>
               : <button className="btn ctl" disabled={!!busy} onClick={() => { setProgress(null); run(SettingsService.InstallUpdate(), "update"); }}>{busy === "update" ? updateLabel(progress) : "更新"}</button>
             : <button className="btn ctl" disabled={!!busy} onClick={() => run(SettingsService.CheckUpdate().then(setUpdate), "check")}>{busy === "check" ? "检查中…" : "检查更新"}</button>}

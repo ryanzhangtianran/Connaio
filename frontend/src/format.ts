@@ -3,7 +3,7 @@ import { Browser, Clipboard } from "@wailsio/runtime";
 // is false while this module loads on Windows, where WebView2 hands the environment over only once
 // the page has loaded, and Windows got macOS's layout. words are what that OS calls its parts, one
 // row per phrase and a column per platform, so a new platform fills a column rather than every page.
-// web: the page runs in a browser, served by connaio-server (internal/app/web.go sets the cookie),
+// web: the page runs in a browser, served by Connaio (internal/app/web.go sets the cookie),
 // not in the app's window: no window, tray, file dialogs or desktop to drive, its platform "web".
 export const web = document.cookie.split("; ").includes("connaio_web=1");
 const ua = navigator.userAgent;

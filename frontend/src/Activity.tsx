@@ -709,7 +709,7 @@ export default function Activity({ status, activity, sysProxy, enhanced, rooted,
     return <div className="card"><div className="muted">{status.error ? "内核未运行" : "内核启动中…"}</div></div>;
   }
 
-  const tunSub = !rooted ? (web ? "需以 root 运行 connaio-server" : "需先在「通用」中授予 root 权限") : enhanced === "tun" ? "TUN 接管全部流量" : enhanced === "process-tun" ? "部分增强运行中" : "已关闭";
+  const tunSub = !rooted ? (web ? "需以 root 运行 Connaio" : "需先在「通用」中授予 root 权限") : enhanced === "tun" ? "TUN 接管全部流量" : enhanced === "process-tun" ? "部分增强运行中" : "已关闭";
   return (
     <div className="activity">
       <StatusCard activity={activity} mode={mode} setMode={setMode} latency={latency} />

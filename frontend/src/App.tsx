@@ -145,7 +145,7 @@ export default function App() {
           <button
             className="pill"
             disabled={!status.running || enhancedBusy || !rooted}
-            title={!rooted ? (web ? "需以 root 运行 connaio-server" : "需先在「通用」中授予 root 权限") : enhanced === "process-tun" ? "TUN 只接管选中的应用；点击关闭部分增强" : "TUN 接管全部流量"}
+            title={!rooted ? (web ? "需以 root 运行 Connaio" : "需先在「通用」中授予 root 权限") : enhanced === "process-tun" ? "TUN 只接管选中的应用；点击关闭部分增强" : "TUN 接管全部流量"}
             onClick={() => {
               // it turns off what it shows: partial enhancement when that runs, else enhanced mode
               setEnhancedBusy(true);

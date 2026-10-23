@@ -36,17 +36,16 @@
 
 ## 无界面版（Linux）
 
-`connaio-server` 是不带窗口的 Connaio，界面在浏览器中打开，适合服务器、NAS 等没有桌面的 Linux（amd64 / arm64，无需图形库）。
+不带窗口的 Connaio，界面在浏览器中打开，适合服务器、NAS 等没有桌面的 Linux（amd64 / arm64，无需图形库）。一行安装：
 
 ```sh
-tar -xzf Connaio-*-linux-amd64-server.tar.gz -C /opt/connaio
-/opt/connaio/connaio-server --listen 127.0.0.1:9090
+curl -fsSL https://raw.githubusercontent.com/ryanzhangtianran/Connaio/main/install.sh | sudo sh
 ```
 
-- 启动时输出带访问令牌的地址，首次用它打开即可登录；令牌保存在数据目录的 `web-token` 中，也可用 `--token` 指定。
-- 默认只监听本机，可经 `ssh -L 9090:127.0.0.1:9090 服务器` 访问；`--listen 0.0.0.0:9090` 对外开放时，建议在前面加 HTTPS 反向代理。
-- 以 root 运行时可开启增强模式（TUN）；系统代理、开机启动、托盘等桌面功能不提供。
-- 随附 `connaio-server.service`，可作为 systemd 服务常驻。
+- 安装到 `/opt/connaio`，以 systemd 服务 `connaio` 运行，数据在 `/var/lib/connaio-web`；结束时输出带访问令牌的地址，首次用它打开即可登录。再次运行即更新。
+- 默认只监听本机，可经 `ssh -L 9090:127.0.0.1:9090 服务器` 访问；对外开放时（`--listen 0.0.0.0:9090`）建议在前面加 HTTPS 反向代理。
+- 以 root 运行，可开启增强模式（TUN）；系统代理、开机启动、托盘等桌面功能不提供。
+- 也可从 Releases 下载 `Connaio-<版本>-linux-<架构>.tar.gz` 手动运行：`./connaio --listen 127.0.0.1:9090`。
 
 ## Contributions
 

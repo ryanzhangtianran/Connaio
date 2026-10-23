@@ -1,0 +1,17 @@
+# Connaio with no window, its UI in a browser (the headless build). install.sh puts it in
+# /opt/connaio and this file in /etc/systemd/system/; then
+#   systemctl enable --now connaio
+#   journalctl -u connaio     # the web UI's address and access token
+# Run as root, enhanced mode (TUN) can be turned on.
+[Unit]
+Description=Connaio (web UI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/opt/connaio/connaio --listen 127.0.0.1:9090 --data-dir /var/lib/connaio-web
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

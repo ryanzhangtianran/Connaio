@@ -20,7 +20,7 @@ const (
 	webFlag   = "connaio_web"
 )
 
-// webHandler is connaio-server's front: every request, WebSockets included, needs the access token,
+// webHandler is Connaio's front: every request, WebSockets included, needs the access token,
 // from the cookie a first visit with ?token= (the address printed at start) or the login form sets,
 // and goes on to the Wails server at upstream.
 func webHandler(upstream, token string) http.Handler {
@@ -58,7 +58,7 @@ func webHandler(upstream, token string) http.Handler {
 func loginPage(w http.ResponseWriter, problem string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusUnauthorized)
-	note := "访问令牌见 connaio-server 启动时的输出，或数据目录中的 web-token 文件。"
+	note := "访问令牌见 Connaio 启动时的输出，或数据目录中的 web-token 文件。"
 	if problem != "" {
 		note = problem
 	}
