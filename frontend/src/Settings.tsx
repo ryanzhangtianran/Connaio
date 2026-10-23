@@ -44,6 +44,47 @@ export function useSetting<T>(path: string, fallback: T): [T, (v: T) => Promise<
   return [value, save];
 }
 
+declare function applyTheme(): void; // public/theme.js
+
+const accents = ["#0a84ff", "#5e5ce6", "#bf5af2", "#ff375f", "#ff453a", "#ff9f0a", "#30d158", "#40c8e0", "#8e8e93"]; // the first is style.css's --accent
+
+// Appearance is the 外观 card: light, dark or the system's, and each mode's accent colour, kept in
+// this browser's localStorage, which theme.js reads before the page paints; the windows' appearance
+// also goes to SetTheme, for the blur and window buttons to match.
+function Appearance() {
+  const get = (k: string) => { try { return localStorage.getItem(k); } catch { return null; } };
+  const [, redraw] = useState(0);
+  const set = (k: string, v: string) => {
+    try { localStorage.setItem(k, v); } catch { /* unavailable: the page keeps the system's look */ }
+    applyTheme();
+    redraw((n) => n + 1);
+    if (k === "theme" && !web) SettingsService.SetTheme(v);
+  };
+  const theme = get("theme") || "system";
+  const accent = (mode: string) => {
+    const now = get(`accent.${mode}`) || accents[0];
+    return (
+      <div className="swatches">
+        {accents.map((c) => <button key={c} className={c === now ? "swatch on" : "swatch"} style={{ "--c": c } as React.CSSProperties} onClick={() => set(`accent.${mode}`, c)} />)}
+        <input type="color" title="自定义" className={accents.includes(now) ? "" : "on"} style={accents.includes(now) ? undefined : { background: now }} value={now} onChange={(e) => set(`accent.${mode}`, e.target.value)} />
+      </div>
+    );
+  };
+  return (
+    <div className="card settings-card">
+      <div className="section-title">外观</div>
+      <Row title="外观模式">
+        <div className="seg">
+          {[["system", "跟随系统"], ["light", "浅色"], ["dark", "深色"]].map(([v, label]) =>
+            <button key={v} className={theme === v ? "on" : ""} onClick={() => set("theme", v)}>{label}</button>)}
+        </div>
+      </Row>
+      <Row title="浅色模式主题色">{accent("light")}</Row>
+      <Row title="深色模式主题色">{accent("dark")}</Row>
+    </div>
+  );
+}
+
 export function General() {
   const [daemon, setDaemon] = useState(false);
   const [busy, setBusy] = useState("");
@@ -106,6 +147,8 @@ export function General() {
           </Row>
         )}
       </div>}
+
+      <Appearance />
 
       <div className="card settings-card">
         <div className="section-title">更新</div>

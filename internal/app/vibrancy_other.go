@@ -13,6 +13,9 @@ func setDockVisible(bool) {}
 
 func makeFloating(*application.WebviewWindow) {}
 
+// setAppearance: a Windows window takes its theme only as it's built (app.go), Linux's has none.
+func setAppearance(application.Window, string) {}
+
 // freeWebView: closing a window frees its web view here already.
 // ponytail: assumed for WebView2 and WebKitGTK, not measured; check the process list if it shows up
 func freeWebView(*application.WebviewWindow) {}

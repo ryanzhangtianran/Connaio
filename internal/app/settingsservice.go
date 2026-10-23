@@ -18,7 +18,25 @@ var appVersion = "dev"
 type SettingsService struct {
 	core        *CoreService
 	settings    *settingsFile
-	openMonitor func() // app.go: shows the floating process monitor
+	openMonitor func()             // app.go: shows the floating process monitor
+	setTheme    func(theme string) // app.go: dresses the open windows
+}
+
+// SetTheme keeps the windows' appearance, "system", "light" or "dark", and applies it to those open.
+func (s *SettingsService) SetTheme(theme string) error {
+	if theme == "system" {
+		theme = ""
+	}
+	if s.settings.Get().Theme == theme { // sent by every page load
+		return nil
+	}
+	if err := s.settings.Update(func(st *Settings) { st.Theme = theme }); err != nil {
+		return err
+	}
+	if s.setTheme != nil {
+		s.setTheme(theme)
+	}
+	return nil
 }
 
 // OpenMonitor shows the floating process monitor, a small window kept above the others.

@@ -67,6 +67,15 @@ func Run(assets fs.FS, trayIcon []byte) error {
 		Linux:   application.LinuxOptions{DisableQuitOnLastWindowClosed: true},
 	})
 
+	// a window takes Settings.Theme as it's built, before its page paints; SetTheme changes the open ones
+	macAppearance := map[string]application.MacAppearanceType{"light": application.NSAppearanceNameAqua, "dark": application.NSAppearanceNameDarkAqua}
+	winTheme := map[string]application.Theme{"light": application.Light, "dark": application.Dark}
+	settingsSvc.setTheme = func(theme string) {
+		for _, w := range app.Window.GetAll() {
+			setAppearance(w, theme)
+		}
+	}
+
 	newWindow = func(page string) *application.WebviewWindow {
 		w := app.Window.NewWithOptions(application.WebviewWindowOptions{
 			Title:          "Connaio",
@@ -80,8 +89,9 @@ func Run(assets fs.FS, trayIcon []byte) error {
 				InvisibleTitleBarHeight: 52,
 				Backdrop:                application.MacBackdropTranslucent,
 				TitleBar:                application.MacTitleBarHiddenInset,
+				Appearance:              macAppearance[settings.Get().Theme],
 			},
-			Windows: application.WindowsWindow{BackdropType: application.Mica}, // the translucent background needs a backdrop behind it
+			Windows: application.WindowsWindow{BackdropType: application.Mica, Theme: winTheme[settings.Get().Theme]}, // the translucent background needs a backdrop behind it
 			URL:     "/?page=" + url.QueryEscape(page),
 		})
 		w.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { makeVibrant(w) })
@@ -114,8 +124,9 @@ func Run(assets fs.FS, trayIcon []byte) error {
 					Backdrop:           application.MacBackdropTranslucent,
 					WindowLevel:        application.MacWindowLevelFloating,
 					CollectionBehavior: application.MacWindowCollectionBehaviorCanJoinAllSpaces | application.MacWindowCollectionBehaviorFullScreenAuxiliary, // on every desktop, above full-screen apps
+					Appearance:         macAppearance[settings.Get().Theme],
 				},
-				Windows: application.WindowsWindow{BackdropType: application.Acrylic, HiddenOnTaskbar: true},
+				Windows: application.WindowsWindow{BackdropType: application.Acrylic, HiddenOnTaskbar: true, Theme: winTheme[settings.Get().Theme]},
 			}
 			if p := settings.Get().Monitor; len(p) == 2 {
 				opts.InitialPosition, opts.X, opts.Y = application.WindowXY, p[0], p[1]

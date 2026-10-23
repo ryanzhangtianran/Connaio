@@ -19,6 +19,9 @@ type Settings struct {
 	Partial bool `json:"partial,omitempty"`
 	// HideTraySpeed hides the upload/download speed next to the menu bar icon.
 	HideTraySpeed bool `json:"hideTraySpeed"`
+	// Theme is the windows' appearance, "light" or "dark"; "": the system's. The page keeps its own
+	// copy (theme.js) and the accent colours, and sends this one for windows built before it loads.
+	Theme string `json:"theme,omitempty"`
 	// VPNs are the VPN page's entries by name, kept while disconnected so 连接 needs no retyping.
 	VPNs map[string]VPN `json:"vpns,omitempty"`
 	// Monitor is where the floating process monitor was last closed, x and y, to open it there again.

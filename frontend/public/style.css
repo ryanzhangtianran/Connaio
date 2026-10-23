@@ -32,28 +32,29 @@
   --chrome: calc(52px + 14px + var(--gap)); /* topbar + .page's top padding + the sidebar's bottom margin: a full-height page ends level with the sidebar */
   --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
   --rounded: ui-rounded, "SF Pro Rounded", -apple-system, "PingFang SC", system-ui, sans-serif; /* numbers */
-  color-scheme: light dark;
+  color-scheme: light;
+  accent-color: var(--accent); /* the switches and checkboxes too */
   font: 13px/1.35 var(--sans);
   color: var(--text);
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: linear-gradient(160deg, rgba(29, 32, 38, 0.62) 0%, rgba(32, 35, 41, 0.62) 50%, rgba(35, 33, 42, 0.62) 100%);
-    --panel: rgba(255, 255, 255, 0.06);
-    --sheet: #1f2024;
-    --sheet-head: rgba(255, 255, 255, 0.04);
-    --panel-ring: rgba(255, 255, 255, 0.07);
-    --text: #f5f5f7;
-    --text-2: #8e8e93;
-    --card: rgba(44, 44, 48, 0.86);
-    --card-line: rgba(255, 255, 255, 0.06);
-    --line: rgba(255, 255, 255, 0.1);
-    --hover: rgba(255, 255, 255, 0.06);
-    --active: rgba(255, 255, 255, 0.1);
-    --pill: rgba(255, 255, 255, 0.08);
-    --track: rgba(255, 255, 255, 0.1);
-    --seg-on: #636366;
-  }
+/* theme.js sets .dark: the system's appearance, or the one chosen in 外观 */
+.dark {
+  color-scheme: dark;
+  --bg: linear-gradient(160deg, rgba(29, 32, 38, 0.62) 0%, rgba(32, 35, 41, 0.62) 50%, rgba(35, 33, 42, 0.62) 100%);
+  --panel: rgba(255, 255, 255, 0.06);
+  --sheet: #1f2024;
+  --sheet-head: rgba(255, 255, 255, 0.04);
+  --panel-ring: rgba(255, 255, 255, 0.07);
+  --text: #f5f5f7;
+  --text-2: #8e8e93;
+  --card: rgba(44, 44, 48, 0.86);
+  --card-line: rgba(255, 255, 255, 0.06);
+  --line: rgba(255, 255, 255, 0.1);
+  --hover: rgba(255, 255, 255, 0.06);
+  --active: rgba(255, 255, 255, 0.1);
+  --pill: rgba(255, 255, 255, 0.08);
+  --track: rgba(255, 255, 255, 0.1);
+  --seg-on: #636366;
 }
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
@@ -273,6 +274,12 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .setting-row:first-of-type { border-top: 0; }
 .setting-title { font-weight: 500; }
 .setting-control { flex: none; display: flex; align-items: center; gap: 8px; }
+.swatches { display: flex; align-items: center; gap: 8px; }
+.swatch, .swatches input { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.15); }
+.swatches .on { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--text-2); }
+.swatches input { background: conic-gradient(#ff453a, #ff9f0a, #ffd60a, #30d158, #40c8e0, #0a84ff, #bf5af2, #ff453a); } /* 自定义: the colour well hidden under a wheel */
+.swatches input::-webkit-color-swatch-wrapper { padding: 0; }
+.swatches input::-webkit-color-swatch { border: 0; opacity: 0; }
 .sidebar { overflow-y: auto; } /* short windows scroll the settings group into view */
 
 /* dashboard */
@@ -546,12 +553,12 @@ tr.muted td.rule-actions { text-decoration: none; }
 /* Linux: no native blur shows through the window, and the window is frameless, its buttons at the
    topbar's end as GNOME places them, round like Adwaita's and as tall as the pills */
 .linux { --bg: #eef0f4; --panel: #ffffff; }
-@media (prefers-color-scheme: dark) { .linux { --bg: #1c1d21; --panel: #26272c; } }
+.dark.linux { --bg: #1c1d21; --panel: #26272c; }
 .linux .sidebar { padding-top: 10px; -webkit-backdrop-filter: none; backdrop-filter: none; }
 /* the web UI (connaio-server) looks as the Mac app: its window's gradient, opaque, a browser tab
    having no desktop blur behind it, and the sidebar from the top, with no window buttons to leave room for */
 .web { --bg: linear-gradient(160deg, #e7ecf2 0%, #dfe5ed 45%, #e8e5ef 100%); }
-@media (prefers-color-scheme: dark) { .web { --bg: linear-gradient(160deg, #1d2026 0%, #202329 50%, #23212a 100%); } }
+.dark.web { --bg: linear-gradient(160deg, #1d2026 0%, #202329 50%, #23212a 100%); }
 .web body { background: var(--bg); }
 .web .sidebar { padding-top: 10px; }
 /* Noto Sans, Linux's usual fallback, has only regular and bold, so every 500 and 600 above came out

@@ -91,6 +91,14 @@ static void makeFloating(void *p) {
 	});
 }
 
+// setAppearance forces the window light (1) or dark (2), or back to the system's (0): the blur, the
+// traffic lights and the web view's prefers-color-scheme follow it.
+static void setAppearance(void *p, int kind) {
+	dispatch_async(dispatch_get_main_queue(), ^{
+		((NSWindow *)p).appearance = kind == 0 ? nil : [NSAppearance appearanceNamed:kind == 1 ? NSAppearanceNameAqua : NSAppearanceNameDarkAqua];
+	});
+}
+
 // pngOf draws img into a px×px PNG, centred and scaled so its longer side fills it, in a malloc'd
 // buffer of *n bytes, or NULL.
 static void *pngOf(NSImage *img, int px, int *n) {
@@ -169,6 +177,13 @@ func setDockVisible(visible bool) { C.setDockVisible(C.bool(visible)) }
 func makeVibrant(w *application.WebviewWindow) {
 	if p := w.NativeWindow(); p != nil {
 		C.makeVibrant(p)
+	}
+}
+
+// setAppearance applies Settings.Theme to an open window.
+func setAppearance(w application.Window, theme string) {
+	if p := w.NativeWindow(); p != nil {
+		C.setAppearance(p, C.int(map[string]int{"light": 1, "dark": 2}[theme]))
 	}
 }
 
