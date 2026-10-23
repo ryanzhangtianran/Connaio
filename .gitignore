@@ -10,3 +10,5 @@ build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 *.syso
 build/windows/info.gen.json
 .go
+# connaio-relay for the server, built by wails3 task common:build:relay and embedded in the app
+internal/app/relay/*.gz

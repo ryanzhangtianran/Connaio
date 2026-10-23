@@ -29,7 +29,7 @@ prepend-rules:
   - PROCESS-ANCESTOR,ghostty,N
 reverse-tunnels:
   - name: t
-    type: ssh
+    type: wireguard
 `); err != nil {
 		t.Fatal(err)
 	}

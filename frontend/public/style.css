@@ -212,6 +212,16 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .section-title { font-weight: 600; margin: 16px 0 6px; }
 .form-grid input:not([type=checkbox]), .form-grid select { width: 100%; }
 .inline { display: flex; align-items: center; gap: 6px; }
+.inline > .grow { flex: 1; min-width: 0; }
+.section-note { margin-left: 6px; font-size: 12px; font-weight: 400; color: var(--text-2); }
+/* the tunnel dialog's server section: a step at a time (install, SSH login, fingerprint) */
+.install-box { padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
+.install-box > .form-grid { margin-top: 0; grid-template-columns: 83px 1fr; } /* the dialog's 96px less the box's padding and border: fields in line with the form above */
+.install-box > .actions.end { margin-top: 12px; }
+.install-head { display: flex; align-items: center; gap: 12px; }
+.install-head > .muted { flex: 1; }
+.install-result { margin-top: 8px; }
+.fingerprint { font: 12px var(--mono); word-break: break-all; }
 /* a subnet group rule: kind, value, →, policy, ×, in columns that line up and fit the dialog */
 .subnet-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto 120px auto; gap: 6px; align-items: center; margin-bottom: 6px; }
 .subnet-row > input, .subnet-row > select { width: 100%; min-width: 0; }
@@ -247,7 +257,6 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .menu button.danger:hover { background: var(--bad); color: #fff; }
 .menu.detail { min-width: 320px; padding: 8px; }
 .menu.detail button { padding-inline: 8px; } /* in line with the rows above */
-.tunnel-test { margin-right: auto; align-self: center; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .detail-head { padding: 4px 8px 6px; font-size: 12px; color: var(--text-2); }
 .detail-row { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 6px 8px; border-top: 1px solid var(--line); font-size: 12px; }
 

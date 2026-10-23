@@ -20,7 +20,7 @@ import (
 type Conn struct {
 	ID       string `json:"id"`
 	Network  string `json:"network"`
-	Inbound  string `json:"inbound"` // TUN, HTTP, SSH, ...
+	Inbound  string `json:"inbound"` // TUN, HTTP, WireGuard, ...
 	Process  string `json:"process"`
 	Path     string `json:"path"`
 	App      string `json:"app"`            // the application it counts towards (clientOf): WeChat for WeChat Helper, macOS for apsd
@@ -39,7 +39,7 @@ type Conn struct {
 	// the process's ancestors' executables, nearest first, as the core read them when the
 	// connection opened; none from an older core, or on Windows, where the core can't read them
 	Ancestors []string `json:"-"`
-	// InName is the inbound's name: for a connection a reverse tunnel brought in (Inbound SSH), the
+	// InName is the inbound's name: for a connection a reverse tunnel brought in (Inbound WireGuard), the
 	// tunnel's
 	InName string `json:"inName,omitempty"`
 	// Tunnel is how a connection came in from a reverse tunnel's server: set on the tunnel's own
@@ -53,7 +53,7 @@ type Conn struct {
 // server, through which tunnel, to which local target.
 type TunnelHop struct {
 	Name   string `json:"name"`   // the tunnel's
-	Type   string `json:"type"`   // SSH
+	Type   string `json:"type"`   // WireGuard
 	From   string `json:"from"`   // the user at the server's end, address:port
 	Target string `json:"target"` // what the tunnel forwards to here, e.g. 127.0.0.1:7890
 }
@@ -178,7 +178,7 @@ func (s *CoreService) fetchConnections() ([]Conn, error) {
 			Host: cmp.Or(m.Host, m.DestIP), Port: m.DestPort, Rule: rule, Chain: strings.Join(chain, " → "),
 			Upload: c.Upload, Download: c.Download, Start: c.Start.Format(time.RFC3339), outLocal: m.OutLocal,
 		}
-		if conn.Inbound == "SSH" {
+		if conn.Inbound == "WireGuard" {
 			conn.Tunnel = &TunnelHop{conn.InName, conn.Inbound, net.JoinHostPort(conn.Source, conn.SrcPort), net.JoinHostPort(conn.Host, conn.Port)}
 		}
 		conns = append(conns, conn)

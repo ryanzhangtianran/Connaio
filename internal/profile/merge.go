@@ -47,9 +47,9 @@ func (s *Store) Build(enhanced bool) ([]byte, error) {
 		}
 	}
 	tunnelDirect(cfg)
-	// an FRP tunnel from before 0.1.27 (support removed) is left out, or the core would refuse the config
+	// an FRP or SSH tunnel from before (support removed) is left out, or the core would refuse the config
 	if tunnels, ok := cfg["reverse-tunnels"].([]any); ok {
-		cfg["reverse-tunnels"] = slices.DeleteFunc(slices.Clone(tunnels), func(t any) bool { m, _ := t.(map[string]any); return m["type"] == "frp" })
+		cfg["reverse-tunnels"] = slices.DeleteFunc(slices.Clone(tunnels), func(t any) bool { m, _ := t.(map[string]any); return m["type"] != "wireguard" })
 	}
 	return yaml.Marshal(cfg)
 }

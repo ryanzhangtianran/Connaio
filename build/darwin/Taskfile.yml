@@ -17,6 +17,7 @@ tasks:
       - task: common:generate:icons
     cmds:
       - wails3 tool prepare-macos-output --dir "{{.BIN_DIR}}"
+      - task: common:build:relay # embedded: before the app's build
       - go build {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.BUNDLE_NAME}}"
       - task: common:build:core
         vars:

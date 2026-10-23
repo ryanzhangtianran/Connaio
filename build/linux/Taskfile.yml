@@ -15,6 +15,7 @@ tasks:
           DEV:
             ref: .DEV
     cmds:
+      - task: common:build:relay # embedded: before the app's build
       - go build {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}"
       - task: common:build:core
         vars:

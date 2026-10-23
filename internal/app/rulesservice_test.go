@@ -14,14 +14,15 @@ func TestRulesService(t *testing.T) {
 	s, _, _ := startCore(t, `prepend-rules:
   - DOMAIN-SUFFIX,example.com,DIRECT
 reverse-tunnels:
-  - name: vps
-    type: ssh
+  - name: wg
+    type: wireguard
     server: 127.0.0.1
     port: 1
-    username: u
-    password: p
+    ip: 10.8.0.2
+    private-key: dwdtCnMYpX08FsFyUbJmRd9ML4frwJkqsXf7pR25LCo=
+    public-key: hSDwCYkwp1R0i33ctD73Wg2/Og0mOBr066SpjqqbTmo=
     forwards:
-      - {remote: 127.0.0.1:18080, local: 127.0.0.1:80}
+      - {remote: 0.0.0.0:8080, local: 127.0.0.1:80}
 `)
 
 	rules, err := s.Rules()
@@ -36,7 +37,7 @@ reverse-tunnels:
 	}
 
 	tunnels, err := s.ReverseTunnels()
-	if err != nil || len(tunnels) != 1 || tunnels[0].Name != "vps" || len(tunnels[0].Forwards) != 1 || tunnels[0].State == "running" {
+	if err != nil || len(tunnels) != 1 || tunnels[0].Name != "wg" || tunnels[0].Type != "wireguard" || len(tunnels[0].Forwards) != 1 || tunnels[0].State == "running" {
 		t.Fatalf("tunnels %+v %v", tunnels, err)
 	}
 
@@ -53,7 +54,7 @@ reverse-tunnels:
 		}
 	})
 	time.Sleep(200 * time.Millisecond)
-	_ = s.SetMode("global")                                                  // logs nothing by itself; a failing ssh retry logs a warning every 10s
+	_ = s.SetMode("global")                                                  // logs nothing by itself; a failing tunnel retry logs a warning
 	_ = s.core.Reload(ctx, []byte("mode: rule\nrules:\n  - MATCH,DIRECT\n")) // a reload logs at info
 	select {
 	case l := <-got:

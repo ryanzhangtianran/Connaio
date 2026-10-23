@@ -232,16 +232,16 @@ func TestUserItems(t *testing.T) {
 	if err := s.AddGroup(map[string]any{"name": "自动", "type": "url-test", "proxies": []any{"my-ss", "hk"}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddTunnel(map[string]any{"name": "vps", "type": "ssh", "server": "h", "port": 22}); err != nil {
+	if err := s.AddTunnel(map[string]any{"name": "vps", "type": "wireguard", "server": "h", "port": 51820}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddTunnel(map[string]any{"name": "old", "type": "ssh", "server": "h", "port": 22}); err != nil {
+	if err := s.AddTunnel(map[string]any{"name": "old", "type": "wireguard", "server": "h", "port": 51820}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.EditTunnel("old", map[string]any{"name": "vps", "type": "ssh"}); err == nil {
+	if err := s.EditTunnel("old", map[string]any{"name": "vps", "type": "wireguard"}); err == nil {
 		t.Fatal("rename onto an existing tunnel accepted")
 	}
-	if err := s.EditTunnel("old", map[string]any{"name": "new", "type": "ssh", "server": "h2", "port": 22}); err != nil {
+	if err := s.EditTunnel("old", map[string]any{"name": "new", "type": "wireguard", "server": "h2", "port": 51820}); err != nil {
 		t.Fatal(err)
 	}
 	if items, _ := s.UserItems(); len(items.Tunnels) != 2 || items.Tunnels[1]["name"] != "new" || items.Tunnels[1]["server"] != "h2" {
@@ -702,17 +702,17 @@ func TestMergeReplacesSameName(t *testing.T) {
 	}
 }
 
-// TestBuildDropsFRPTunnels: a tunnel of the removed FRP type in an old override doesn't reach the core.
-func TestBuildDropsFRPTunnels(t *testing.T) {
+// TestBuildDropsOldTunnels: a tunnel of the removed FRP or SSH types in an old override doesn't reach the core.
+func TestBuildDropsOldTunnels(t *testing.T) {
 	s, _ := Open(t.TempDir())
-	if err := s.SetOverride("reverse-tunnels:\n  - {name: old, type: frp, config: {serverAddr: x}}\n  - {name: vps, type: ssh, server: h, port: 22, username: u, private-key: k, forwards: [{remote: '127.0.0.1:1', local: '127.0.0.1:2'}]}\n"); err != nil {
+	if err := s.SetOverride("reverse-tunnels:\n  - {name: old, type: frp, config: {serverAddr: x}}\n  - {name: ssh-vps, type: ssh, server: h, port: 22, username: u, private-key: k, forwards: [{remote: '127.0.0.1:1', local: '127.0.0.1:2'}]}\n  - {name: vps, type: wireguard, server: h, port: 51820, ip: 10.8.0.2, forwards: [{remote: '0.0.0.0:1', local: '127.0.0.1:2'}]}\n"); err != nil {
 		t.Fatal(err)
 	}
 	b, err := s.Build(false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if text := string(b); strings.Contains(text, "frp") || !strings.Contains(text, "name: vps") {
+	if text := string(b); strings.Contains(text, "frp") || strings.Contains(text, "ssh-vps") || !strings.Contains(text, "name: vps") {
 		t.Fatalf("built config:\n%s", text)
 	}
 }

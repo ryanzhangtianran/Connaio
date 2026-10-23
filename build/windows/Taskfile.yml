@@ -21,6 +21,7 @@ tasks:
             ref: .DEV
     cmds:
       - task: generate:syso
+      - task: common:build:relay # embedded: before the app's build
       - go build {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}.exe"
       - task: common:build:core
         vars:

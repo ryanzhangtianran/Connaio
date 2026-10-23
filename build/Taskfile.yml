@@ -88,6 +88,16 @@ tasks:
       GOOS: '{{.GOOS}}'
       GOARCH: '{{.ARCH | default ARCH}}'
 
+  build:relay:
+    summary: Builds connaio-relay, the server's end of a reverse tunnel, for Linux amd64 and arm64 from CORE_DIR, gzipped into internal/app/relay, which the app embeds
+    # -buildvcs=false: its version is its sha256, which a core commit outside the relay mustn't change
+    cmds:
+      - for: [amd64, arm64]
+        # gzip in Go: Windows hosts have no gzip; GOOS only on the build, so go run's helper runs here
+        cmd: GOOS=linux GOARCH={{.ITEM}} go -C "{{.CORE_DIR}}" build -trimpath -buildvcs=false -ldflags="-w -s" -o "{{.ROOT_DIR}}/internal/app/relay/connaio-relay-linux-{{.ITEM}}" ./cmd/connaio-relay && go run "{{.ROOT_DIR}}/build/gzip.go" "{{.ROOT_DIR}}/internal/app/relay/connaio-relay-linux-{{.ITEM}}"
+    env:
+      CGO_ENABLED: 0
+
   dev:frontend:
     summary: Runs the frontend in development mode
     dir: frontend

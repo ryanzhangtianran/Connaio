@@ -36,6 +36,7 @@ type Tunnel struct {
 	Error    string    `json:"error"`
 	Since    string    `json:"since"`
 	Forwards []Forward `json:"forwards"`
+	Relay    string    `json:"relay"` // connaio-relay's version at the server, when it answers (ToolService.RelayVersions)
 }
 
 // EasyConnectTunnel is one EasyConnect (campus VPN) outbound's state, from the core.

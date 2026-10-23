@@ -102,14 +102,14 @@ func TestClientOf(t *testing.T) {
 	if n, i := clientOf(Conn{Source: "192.168.1.9"}); n != "192.168.1.9" || i != "" {
 		t.Fatalf("%q %q", n, i)
 	}
-	if n, i := clientOf(Conn{Inbound: "SSH", InName: "vps", Source: "127.0.0.1", Tunnel: &TunnelHop{Name: "vps"}}); n != "vps" || i != "tunnel" {
+	if n, i := clientOf(Conn{Inbound: "WireGuard", InName: "vps", Source: "127.0.0.1", Tunnel: &TunnelHop{Name: "vps"}}); n != "vps" || i != "tunnel" {
 		t.Errorf("a connection a reverse tunnel brought in: %q %q", n, i) // not this machine's, though its source is loopback
 	}
 	// the tunnel's connection to the proxy port and the request it carried there: one connection,
 	// the request's, with the tunnel's hop
-	hop := &TunnelHop{Name: "vps", Type: "SSH", From: "203.0.113.5:40000", Target: "127.0.0.1:7890"}
+	hop := &TunnelHop{Name: "vps", Type: "WireGuard", From: "203.0.113.5:40000", Target: "127.0.0.1:7890"}
 	conns := linkTunnels([]Conn{
-		{ID: "carrier", Inbound: "SSH", InName: "vps", Tunnel: hop, outLocal: "127.0.0.1:51000"},
+		{ID: "carrier", Inbound: "WireGuard", InName: "vps", Tunnel: hop, outLocal: "127.0.0.1:51000"},
 		{ID: "request", Inbound: "Mixed", Source: "127.0.0.1", SrcPort: "51000", Host: "example.com"},
 		{ID: "other", Inbound: "Mixed", Source: "127.0.0.1", SrcPort: "51001"},
 	})

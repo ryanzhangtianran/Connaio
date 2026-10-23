@@ -89,7 +89,8 @@ func TestUserItemsApplied(t *testing.T) {
 	if err := s.AddRule("DOMAIN-SUFFIX,example.com,自动"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddTunnel(map[string]any{"name": "vps", "type": "ssh", "server": "127.0.0.1", "port": 1, "username": "u", "password": "p",
+	if err := s.AddTunnel(map[string]any{"name": "vps", "type": "wireguard", "server": "127.0.0.1", "port": 1, "ip": "10.8.0.2",
+		"password": "correct horse battery",
 		"forwards": []any{map[string]any{"remote": "127.0.0.1:18080", "local": "127.0.0.1:80"}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -138,13 +139,16 @@ func TestFormShapes(t *testing.T) {
 	if err := s.AddProxy(ws, "", nil); err != nil {
 		t.Fatalf("trojan ws form: %v", err)
 	}
-	ssh := map[string]any{"name": "vps", "type": "ssh", "server": "127.0.0.1", "port": 1, "username": "u", "password": "p",
+	wg := map[string]any{"name": "vps", "type": "wireguard", "server": "127.0.0.1", "port": 1, "ip": "10.8.0.2",
+		"password": "correct horse battery",
 		"forwards": []any{map[string]any{"remote": "0.0.0.0:8080", "local": "127.0.0.1:80"}}}
-	if err := s.AddTunnel(ssh); err != nil {
-		t.Fatalf("ssh form: %v", err)
+	if err := s.AddTunnel(wg); err != nil {
+		t.Fatalf("wireguard form: %v", err)
 	}
-	if err := s.AddTunnel(map[string]any{"name": "bad", "type": "ssh", "server": "h", "port": 22, "username": "u"}); err == nil {
-		t.Fatal("ssh tunnel without forwards must be rejected")
+	delete(wg, "forwards")
+	wg["name"] = "bad"
+	if err := s.AddTunnel(wg); err == nil {
+		t.Fatal("tunnel without forwards must be rejected")
 	}
 }
 
