@@ -19,10 +19,9 @@ jobs:
         with:
           path: Connaio
           fetch-depth: 0 # the latest tag is the package version
-      - name: Install GTK 3 and WebKit2GTK 4.1
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev xvfb dbus
+      - uses: ./Connaio/.github/actions/apt # GTK 3 and WebKit2GTK 4.1
+        with:
+          packages: libgtk-3-dev libwebkit2gtk-4.1-dev xvfb dbus
       - uses: ./Connaio/.github/actions/setup
         with:
           wails-tags: gtk3 # the CLI links the GUI stack too, GTK 4 unless told otherwise; 22.04 only has GTK 3

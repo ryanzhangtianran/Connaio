@@ -15,10 +15,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: Connaio
-      - name: Install GTK 3 and WebKit2GTK 4.1
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - uses: ./Connaio/.github/actions/apt # GTK 3 and WebKit2GTK 4.1
+        with:
+          packages: libgtk-3-dev libwebkit2gtk-4.1-dev
       - uses: ./Connaio/.github/actions/setup
         with:
           wails-tags: gtk3

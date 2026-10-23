@@ -1,0 +1,27 @@
+# Installs Ubuntu packages with their downloads cached between runs: a slow mirror once took the
+# install from 25 s to 20 min. Only the .debs are cached; apt still installs them, so dpkg knows
+# them (a later apt-get install ./connaio.deb finds its libraries there), and a stuck mirror times
+# out and is retried rather than waited on.
+name: apt
+description: Install Ubuntu packages, their downloads cached
+
+inputs:
+  packages:
+    description: the packages, space-separated
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v4
+      with:
+        path: ~/apt-cache
+        key: apt-${{ env.ImageOS }}-${{ runner.arch }}-${{ inputs.packages }}
+    - name: Install ${{ inputs.packages }}
+      shell: bash
+      run: |
+        mkdir -p ~/apt-cache/partial
+        apt="sudo apt-get -o Dir::Cache::Archives=$HOME/apt-cache -o Acquire::Retries=3 -o Acquire::http::Timeout=30"
+        $apt update
+        $apt install -y ${{ inputs.packages }}
+        sudo chown -R "$USER" ~/apt-cache # apt wrote it as root; the cache saves it as this user
