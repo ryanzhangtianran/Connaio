@@ -96,6 +96,7 @@ jobs:
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9090/)" = 401 # nothing without the token
           curl -sf -c jar -o /dev/null "$url"
           curl -sf -b jar http://127.0.0.1:9090/ | grep -q 'id="root"' # the UI, behind the cookie
+          /opt/connaio/connaio status # its commands, without sudo: install.sh gave this user the token
           sudo journalctl -u connaio --no-pager | tail -n 20
       - name: Attach the headless build to the release
         if: startsWith(github.ref, 'refs/tags/')

@@ -48,8 +48,19 @@ i=0
 while [ ! -s "$data/web-token" ] && [ $i -lt 30 ]; do sleep 1; i=$((i + 1)); done
 [ -s "$data/web-token" ] || fail "服务没有启动，请查看：journalctl -u connaio"
 
+# the user who ran sudo gets the token too, in their own config directory (where connaio's commands
+# look after the service's), so the commands work for them without sudo
+cli="sudo connaio"
+if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] && command -v getent >/dev/null 2>&1; then
+  home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+  if [ -n "$home" ] && [ -d "$home" ] && sudo -u "$SUDO_USER" mkdir -p "$home/.config/Connaio"; then
+    install -m 600 -o "$SUDO_USER" "$data/web-token" "$home/.config/Connaio/web-token" && cli=connaio
+  fi
+fi
+
 echo
 echo "Connaio 已安装并以服务 connaio 运行。"
 echo "  打开：http://127.0.0.1:9090/?token=$(cat "$data/web-token")"
 echo "  从其他电脑访问：ssh -L 9090:127.0.0.1:9090 <这台机器>，再在本机浏览器打开上面的地址"
-echo "  查看状态：systemctl status connaio；卸载：systemctl disable --now connaio && rm -rf $dir /etc/systemd/system/connaio.service"
+echo "  命令行：$cli status、$cli help"
+echo "  查看服务：systemctl status connaio；卸载：systemctl disable --now connaio && rm -rf $dir /etc/systemd/system/connaio.service"

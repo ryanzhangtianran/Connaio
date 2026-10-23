@@ -11,13 +11,24 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/ryanzhangtianran/Connaio/internal/cli"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // Run is Connaio's: the app with no window, tray or desktop, its UI served to a browser at
 // --listen behind the access token (web.go), the core always this process's own child.
 func Run(assets fs.FS, _ []byte) error {
+	// any first word is a command to the running instance, an unknown one an error: never a second
+	// instance started on the default data directory by a typo
+	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
+		if err := cli.Main(os.Args[1:], os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "connaio:", err)
+			os.Exit(1)
+		}
+		return nil
+	}
 	listen := flag.String("listen", "127.0.0.1:9090", "address of the web UI; 0.0.0.0:9090 to reach it from other machines")
 	dataDir := flag.String("data-dir", "", "data directory: profiles, override, settings (default: Connaio in the user's config directory)")
 	given := flag.String("token", "", "access token of the web UI (default: made once, kept in the data directory as web-token)")

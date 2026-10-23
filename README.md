@@ -46,6 +46,16 @@ curl -fsSL https://raw.githubusercontent.com/ryanzhangtianran/Connaio/main/insta
 - 默认只监听本机，可经 `ssh -L 9090:127.0.0.1:9090 服务器` 访问；对外开放时（`--listen 0.0.0.0:9090`）建议在前面加 HTTPS 反向代理。
 - 以 root 运行，可开启增强模式（TUN）；系统代理、开机启动、托盘等桌面功能不提供。
 - 也可从 Releases 下载 `Connaio-<版本>-linux-<架构>.tar.gz` 手动运行：`./connaio --listen 127.0.0.1:9090`。
+- 命令行控制运行中的 Connaio。安装时执行 sudo 的用户会获得访问令牌（`~/.config/Connaio/web-token`），无需 sudo；其他用户需 sudo 或 `--token`：
+
+  ```sh
+  connaio status                 # 运行状态
+  connaio mode global            # 出站模式：rule / global / direct
+  connaio groups -a              # 策略组与节点；select <策略组> <节点> 切换，test <策略组> 测延迟
+  connaio profiles               # 配置；profile use|update <名称>，profile add <URL>
+  connaio tunnels                # 反向隧道；tunnel start|stop <名称>
+  connaio help                   # 全部命令
+  ```
 
 ## Contributions
 
