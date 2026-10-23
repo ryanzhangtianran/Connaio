@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Conn, Status, Tunnel } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import TunnelDialog from "./TunnelDialog";
 import { ExitCell } from "./Activity";
 import { Icon } from "./icons";
-import { nonNull, sizeText } from "./format";
+import { nonNull, sizeText, speed } from "./format";
 import { usePoll } from "./hooks";
 
 const stateLabel: Record<string, string> = { running: "运行中", connecting: "连接中", retrying: "重试中", stopped: "已停止" };
@@ -98,7 +98,7 @@ export function useMixedPort() {
 
 // LiveRoutes is what comes in through the tunnels now, a card per tunnel and target: its fixed
 // stretch drawn once, then the flows on it, by user, host and policy, with how many and how much.
-function LiveRoutes({ conns, tunnels, mine, mixedPort }: { conns: Conn[]; tunnels: Tunnel[]; mine: Record<string, any>[]; mixedPort: number }) {
+function LiveRoutes({ conns, tunnels, mine, mixedPort, rates }: { conns: Conn[]; tunnels: Tunnel[]; mine: Record<string, any>[]; mixedPort: number; rates: Map<string, [number, number]> }) {
   // a card per tunnel and forward, there with no traffic too; the connections fill in its flows
   const byTunnel = new Map<string, { hop: NonNullable<Conn["tunnel"]>; cs: Conn[] }>();
   for (const t of tunnels) {
@@ -115,7 +115,8 @@ function LiveRoutes({ conns, tunnels, mine, mixedPort }: { conns: Conn[]; tunnel
   const total = (cs: Conn[]) => cs.reduce((n, x) => n + x.upload + x.download, 0);
   return (
     <div className="live-routes">
-      {[...byTunnel.values()].map(({ hop, cs }) => {
+      {[...byTunnel.entries()].map(([key, { hop, cs }]) => {
+        const [up, down] = rates.get(key) ?? [0, 0];
         const flows = new Map<string, Conn[]>();
         for (const c of cs) {
           const key = [hostOf(c.tunnel!.from), c.host, c.port, c.rule, c.chain].join("\n");
@@ -129,6 +130,8 @@ function LiveRoutes({ conns, tunnels, mine, mixedPort }: { conns: Conn[]; tunnel
               <b>{hop.name}</b>
               <span className="chip">{hop.type}</span>
               <span className="grow" />
+              <span className="live-stat"><span className="muted">下载</span>{speed(down).join(" ")}</span>
+              <span className="live-stat"><span className="muted">上传</span>{speed(up).join(" ")}</span>
               <span className="live-stat"><span className="muted">连接数</span>{cs.length}</span>
               <span className="live-stat"><span className="muted">流量</span>{sizeText(total(cs))}</span>
             </div>
@@ -180,6 +183,24 @@ export default function Tunnels({ status }: { status: Status }) {
   useEffect(() => { if (status.running) loadMine(); }, [status.running]);
   usePoll(poll, 2000, status.running);
   usePoll(() => CoreService.Connections().then((c) => setConns(c ?? [])), 2000, status.running);
+  // rates: each card's speed (by tunnel and target), [up, down] bytes a second, from what its
+  // connections moved since the last poll, as the floating monitor's; download is the visitor's
+  const last = useRef({ at: 0, bytes: new Map<string, [number, number]>() });
+  const [rates, setRates] = useState(new Map<string, [number, number]>());
+  useEffect(() => {
+    const now = Date.now(), secs = (now - last.current.at) / 1000;
+    const bytes = new Map<string, [number, number]>(), next = new Map<string, [number, number]>();
+    for (const c of conns) {
+      if (!c.tunnel) continue;
+      const was = last.current.bytes.get(c.id);
+      bytes.set(c.id, [c.upload, c.download]);
+      if (!was) continue;
+      const key = `${c.tunnel.name}\n${c.tunnel.target}`, [u, d] = next.get(key) ?? [0, 0];
+      next.set(key, [u + Math.max(0, c.upload - was[0]) / secs, d + Math.max(0, c.download - was[1]) / secs]);
+    }
+    last.current = { at: now, bytes };
+    setRates(next);
+  }, [conns]);
 
   const remove = (name: string) => ProfileService.RemoveTunnel(name).then(() => ProfileService.RemoveRule(localRule(name))).then(load);
 
@@ -226,7 +247,7 @@ export default function Tunnels({ status }: { status: Status }) {
       </div>
 
       <div className="tile-head"><span className="tile-title groups">实时链路</span></div>
-      <LiveRoutes conns={conns} tunnels={tunnels} mine={mine} mixedPort={mixedPort} />
+      <LiveRoutes conns={conns} tunnels={tunnels} mine={mine} mixedPort={mixedPort} rates={rates} />
 
       {dialog && <TunnelDialog editing={dialog === true ? undefined : dialog} onClose={() => { setDialog(null); load(); }} />}
     </>
