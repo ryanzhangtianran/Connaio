@@ -88,7 +88,7 @@ jobs:
       - name: Install it with install.sh, as curl | sudo sh does, and reach it
         working-directory: Connaio
         run: |
-          out=$(sudo CONNAIO_TARBALL="$(ls bin/Connaio-*-linux-amd64.tar.gz)" sh install.sh)
+          out=$(sudo CONNAIO_TARBALL="$(ls bin/Connaio-*-linux-amd64.tar.gz)" sh install.sh) || { sudo journalctl -u connaio --no-pager | tail -n 40; exit 1; }
           echo "$out"
           url=$(echo "$out" | grep -o 'http://127.0.0.1:9090/?token=[^ ]*')
           for i in $(seq 30); do sudo curl -sf --unix-socket /var/lib/connaio-web/core.sock http://x/version && break; sleep 1; done

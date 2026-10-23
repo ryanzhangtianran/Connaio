@@ -18,14 +18,17 @@ import (
 // Run is Connaio's: the app with no window, tray or desktop, its UI served to a browser at
 // --listen behind the access token (web.go), the core always this process's own child.
 func Run(assets fs.FS, _ []byte) error {
-	configDir, err := os.UserConfigDir()
-	if err != nil {
-		return err
-	}
 	listen := flag.String("listen", "127.0.0.1:9090", "address of the web UI; 0.0.0.0:9090 to reach it from other machines")
-	dataDir := flag.String("data-dir", filepath.Join(configDir, "Connaio"), "data directory: profiles, override, settings")
+	dataDir := flag.String("data-dir", "", "data directory: profiles, override, settings (default: Connaio in the user's config directory)")
 	given := flag.String("token", "", "access token of the web UI (default: made once, kept in the data directory as web-token)")
 	flag.Parse()
+	if *dataDir == "" { // asked only now: a systemd service has no $HOME, and gives --data-dir
+		configDir, err := os.UserConfigDir()
+		if err != nil {
+			return fmt.Errorf("give --data-dir: %w", err)
+		}
+		*dataDir = filepath.Join(configDir, "Connaio")
+	}
 
 	sv, err := newServices(*dataDir)
 	if err != nil {
