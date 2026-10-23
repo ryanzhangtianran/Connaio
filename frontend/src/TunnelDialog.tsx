@@ -2,8 +2,9 @@ import { errText, validPort } from "./format";
 import { useEffect, useState } from "react";
 import PasswordInput from "./PasswordInput";
 import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import { localRule } from "./Tunnels";
+import { localRule, useMixedPort } from "./Tunnels";
 import { useDirty } from "./hooks";
+import { Switch } from "./Settings";
 
 type Row = Record<string, string>;
 
@@ -17,7 +18,7 @@ function Rows({ cols, rows, setRows, addr = [], locked }: { cols: [string, strin
   const update = (i: number, k: string, value: string) => setRows(rows.map((r, j) => (j === i ? { ...r, [k]: value } : r)));
   return (
     <table className="table">
-      <thead><tr>{cols.flatMap(([k, l]) => (addr.includes(k) ? [<th key={k}>{l} IP</th>, <th key={k + ":port"}>{l}端口</th>] : [<th key={k}>{l}</th>]))}<th /></tr></thead>
+      <thead><tr>{cols.flatMap(([k, l]) => (addr.includes(k) ? [<th key={k}>{l} IP</th>, <th key={k + ":port"} style={{ width: 110 }}>{l}端口</th>] : [<th key={k}>{l}</th>]))}<th style={{ width: 40 }} /></tr></thead>
       <tbody>
         {rows.map((r, i) => (
           <tr key={i}>
@@ -76,7 +77,7 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
   const init = editing && formOf(editing);
   const [v, setV] = useState<Record<string, string>>(init?.v ?? { port: "51820" });
   const pwOK = (v.password ?? "").length >= 8;
-  const [rows, setRows] = useState<Row[]>(init?.rows ?? [{ remote: `${publicHost}:8080`, local: "127.0.0.1:80" }]);
+  const [rows, setRows] = useState<Row[]>(init?.rows ?? []);
   const [names, setNames] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   // login: the one-off SSH login that sets connaio-relay up on the server (ToolService.InstallRelay), as
@@ -105,8 +106,7 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
     })).then((m) => { setInstalled({ ok: true, text: m }); stopInstall(); }, fail).finally(() => setBusy(false));
   };
   const dirty = useDirty([v, rows]);
-  const [mixedPort, setMixedPort] = useState(0);
-  useEffect(() => { ProfileService.Value("mixed-port").then((p) => setMixedPort(Number(p) || 0)); }, []);
+  const mixedPort = useMixedPort();
   // viaRules: a forward from the server to Connaio's proxy port, so devices using it as a proxy
   // through the tunnel get their traffic routed by the rules
   const proxyTarget = `127.0.0.1:${mixedPort}`;
@@ -114,7 +114,8 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
   const setViaRules = (on: boolean) => setRows(on ? [...rows, { remote: `${serverOnly}:`, local: proxyTarget }] : rows.filter((r) => r.local !== proxyTarget));
   const viaPort = splitAddr(rows.find((r) => r.local === proxyTarget)?.remote)[1];
   const lockedCell = (r: Row, k: string) => r.local === proxyTarget && k === "local";
-  useEffect(() => { CoreService.ProxyNames().then((n) => setNames((n ?? []).filter((x) => x !== "DIRECT"))); }, []); // DIRECT is 直连
+  // the jump proxy: DIRECT (none) or a policy group, not a single node
+  useEffect(() => { CoreService.Groups().then((g) => setNames((g ?? []).map((x) => x.name).filter((n) => n !== "GLOBAL"))); }, []);
   const field = input(v, setV);
 
   const build = (): Record<string, any> => ({
@@ -129,7 +130,9 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
   // it), so saving again edits it
   const [saved, setSaved] = useState<string | undefined>(editing?.name);
   const persist = () =>
-    (saved ? ProfileService.EditTunnel(saved, build()).then(() => ProfileService.RemoveRule(localRule(saved))) : ProfileService.AddTunnel(build()))
+    (saved ? ProfileService.EditTunnel(saved, build()) : ProfileService.AddTunnel(build()))
+      // the name's rule goes first: an edit's, or one an old SSH tunnel left that this one took the name of
+      .then(() => ProfileService.RemoveRule(localRule(saved ?? v.name)))
       .then(() => (viaRules ? ProfileService.AddRule(localRule(v.name)) : undefined)).then(() => setSaved(v.name));
   const save = () => {
     setBusy(true);
@@ -138,6 +141,7 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
   // every port the form sends must be a real one; a blank optional port is fine
   const ports = [v.port, ...rows.flatMap((r) => [splitAddr(r.remote)[1], splitAddr(r.local)[1]])];
   const filled = validName(v.name ?? "") && ports.every((p) => !p || validPort(p)) && !!v.server && validIP(v.ip) && pwOK
+    && rows.length > 0 // the core takes no tunnel without a forward
     && (!viaRules || validPort(viaPort)); // the via-rules forward's port has no default
 
   return (
@@ -146,7 +150,8 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
         <h2 className="modal-title">{editing ? `编辑 ${editing.name}` : "增加隧道"}</h2>
         <div className="form-grid">
           <label>名称</label>{field("name", v.name && !validName(v.name) ? "只能用字母、数字、. _ -" : "必填")}
-          <label>服务器</label><div className="inline">{field("server", "vps.example.com")} : <span style={{ width: 90 }}>{field("port", "51820")}</span></div>
+          <label>服务器</label>
+          <div className="inline">{field("server", "vps.example.com")} : <span style={{ width: 90, flex: "none" }}>{field("port", "51820")}</span><span className="muted small" title="服务器程序接收 WireGuard 的端口，与 SSH 端口无关">UDP</span></div>
           <label>本机隧道地址</label>{field("ip", v.ip && !validIP(v.ip) ? "须为 IPv4 地址" : "10.8.0.2")}
           <label>密码</label>
           <div className="inline">
@@ -156,18 +161,22 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
           </div>
           <label>跳板代理</label>
           <select value={v.dialer ?? ""} onChange={(e) => setV({ ...v, dialer: e.target.value })}>
-            <option value="">直连</option>
+            <option value="">DIRECT</option>
+            {v.dialer && !names.includes(v.dialer) && <option>{v.dialer}</option>}{/* a node set before, kept until another is picked */}
             {names.map((n) => <option key={n}>{n}</option>)}
           </select>
         </div>
 
         <div className="section-title">转发 <span className="section-note">服务器监听 → 本地目标，仅 TCP</span></div>
-        <label className="radio">
-          <input type="checkbox" checked={viaRules} disabled={!mixedPort} onChange={(e) => setViaRules(e.target.checked)} /> 按规则分流
-          <span className="muted small" style={{ marginLeft: 8 }}>{viaRules ? `服务器本机 ${viaPort || "（在下方填写）"} 端口作为 HTTP / SOCKS5 代理，接入 Connaio 的 ${mixedPort} 端口` : "服务器本机的一个端口作为 HTTP / SOCKS5 代理，接入 Connaio"}</span>
-        </label>
+        <div className="setting-row option-row">
+          <div>
+            <div>按规则分流</div>
+            <div className="muted small">{viaRules ? `服务器本机 ${viaPort || "（在下方填写）"} 端口作为 HTTP / SOCKS5 代理，接入 Connaio 的 ${mixedPort} 端口` : "服务器本机的一个端口作为 HTTP / SOCKS5 代理，接入 Connaio"}</div>
+          </div>
+          <Switch on={viaRules} disabled={!mixedPort} onChange={setViaRules} />
+        </div>
         <Rows cols={[["remote", "服务器"], ["local", "本地"]]} rows={rows} setRows={setRows} addr={["remote", "local"]} locked={lockedCell} />
-        <button className="btn" style={{ marginTop: 8 }} onClick={() => setRows([...rows, { remote: `${publicHost}:` }])}>添加转发</button>
+        <button className="btn small-btn" style={{ marginTop: 8 }} onClick={() => setRows([...rows, { remote: `${publicHost}:` }])}>添加转发</button>
 
         <div className="section-title">服务器程序</div>
         <div className="install-box">
@@ -183,17 +192,17 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
               <label>SSH 用户</label><input value={login.user} placeholder="建议使用普通用户" onChange={(e) => setLogin({ ...login, user: e.target.value })} />
               <label>SSH 端口</label><input value={login.port} onChange={(e) => setLogin({ ...login, port: e.target.value })} style={{ width: 90 }} />
               <label>登录密码</label><PasswordInput value={login.password} placeholder="仅用于这次安装，不保存" onChange={(e) => setLogin({ ...login, password: e.target.value })} />
-              <span />
+              {installed && !installed.ok && <><span /><div className="small error">{installed.text}</div></>}
+            </div>
+            <div className="setting-row option-row">
               <div>
-                <label className="radio">
-                  <input type="checkbox" checked={admin} onChange={(e) => setAdmin(e.target.checked)} /> 同时开启 BBR 并放行防火墙端口
-                </label>
+                <div>同时开启 BBR 并放行防火墙端口</div>
                 <div className="muted small">
                   {admin ? "需 sudo 或 root：仅写入 BBR 设置，并在运行中的 ufw 或 firewalld 中放行本隧道的端口，不保留任何权限。" : "以管理员权限执行一次，提升弱网下的速度。"}
                   {login.user === "root" && " 以 root 登录时，服务器程序也将以 root 运行。"}
                 </div>
               </div>
-              {installed && !installed.ok && <><span /><div className="small error">{installed.text}</div></>}
+              <Switch on={admin} onChange={setAdmin} />
             </div>
             <div className="actions end">
               <button className="btn small-btn" onClick={stopInstall}>返回</button>

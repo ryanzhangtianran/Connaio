@@ -235,11 +235,25 @@ func (s *Store) AddTunnel(tunnel map[string]any) error {
 		return errors.New("隧道名称不能为空")
 	}
 	return s.editOverride(func(root *yaml.Node) error {
-		if findNamed(listOf(root, "reverse-tunnels"), name) >= 0 {
-			return fmt.Errorf("已存在名为 %s 的隧道", name)
+		if err := takeName(listOf(root, "reverse-tunnels"), name); err != nil {
+			return err
 		}
 		return appendItem(root, "reverse-tunnels", tunnel)
 	})
+}
+
+// takeName fails when a tunnel already has name, unless it is an SSH or FRP one from before: no
+// longer run nor listed (Build skips it), it gives the name up to the new one.
+func takeName(seq *yaml.Node, name string) error {
+	i := findNamed(seq, name)
+	if i < 0 {
+		return nil
+	}
+	if t := valueOf(seq.Content[i], "type"); t != nil && t.Value == "wireguard" {
+		return fmt.Errorf("已存在名为 %s 的隧道", name)
+	}
+	seq.Content = slices.Delete(seq.Content, i, i+1)
+	return nil
 }
 
 // EditTunnel replaces the GUI-added tunnel named name with tunnel, in place; it may rename it.
@@ -250,12 +264,14 @@ func (s *Store) EditTunnel(name string, tunnel map[string]any) error {
 	}
 	return s.editOverride(func(root *yaml.Node) error {
 		seq := listOf(root, "reverse-tunnels")
+		if newName != name {
+			if err := takeName(seq, newName); err != nil {
+				return err
+			}
+		}
 		i := findNamed(seq, name)
 		if i < 0 {
 			return fmt.Errorf("没有名为 %s 的隧道", name)
-		}
-		if j := findNamed(seq, newName); j >= 0 && j != i {
-			return fmt.Errorf("已存在名为 %s 的隧道", newName)
 		}
 		var n yaml.Node
 		if err := n.Encode(tunnel); err != nil {

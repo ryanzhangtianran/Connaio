@@ -46,28 +46,27 @@ const clientOf = (from: string) => {
 
 // hopsTo are the fixed stretch of a tunnel's way: the server and port the user reached, the tunnel,
 // and its target here (Connaio's proxy port, whose requests then follow the rules, or a local service).
-function hopsTo(hop: NonNullable<Conn["tunnel"]>, tunnels: Tunnel[], mine: Record<string, any>[]): [string, string][] {
+function hopsTo(hop: NonNullable<Conn["tunnel"]>, tunnels: Tunnel[], mine: Record<string, any>[], mixedPort: number): [string, string][] {
   const forward = tunnels.find((t) => t.name === hop.name)?.forwards?.find((f) => f.local === hop.target);
   const server = serverOf(mine.find((m) => m.name === hop.name));
   return [
     ["服务器", `${server || "远端"}${forward?.remote ? ":" + portOf(forward.remote) : ""}`],
     [`${hop.type} 隧道`, hop.name],
-    [isProxyPort(hop.target) ? "代理端口" : "本机服务", hop.target],
+    [isProxyPort(hop.target, mixedPort) ? "代理端口" : "本机服务", hop.target],
   ];
 }
-// isProxyPort: the target is a port on this machine, as the dialog's 经规则转发 forward to the proxy
-// port is, rather than a service elsewhere on the LAN.
-// ponytail: any loopback port counts; compare with mixed-port if local services show up here
-const isProxyPort = (target: string) => /^127\.0\.0\.1:\d+$/.test(target);
+// isProxyPort: the target is Connaio's proxy port, as the dialog's 按规则分流 forward's is, whose
+// requests then follow the rules, rather than a service of its own.
+const isProxyPort = (target: string, mixedPort: number) => !!mixedPort && target === `127.0.0.1:${mixedPort}`;
 
 // TunnelPath is one connection's whole way, for its detail on the connections page: the user, the
 // fixed stretch, the rule, the policy, the host and where it comes out.
-export function TunnelPath({ c, tunnels, mine }: { c: Conn; tunnels: Tunnel[]; mine: Record<string, any>[] }) {
+export function TunnelPath({ c, tunnels, mine, mixedPort }: { c: Conn; tunnels: Tunnel[]; mine: Record<string, any>[]; mixedPort: number }) {
   const hop = c.tunnel!;
   const policy = c.chain.split(" → ").pop() ?? "";
   const hops: [string, React.ReactNode, string?][] = [
     ["客户端", clientOf(hop.from), hop.from],
-    ...hopsTo(hop, tunnels, mine),
+    ...hopsTo(hop, tunnels, mine, mixedPort),
     ["匹配规则", c.rule || "—"],
     ["策略", c.chain || "DIRECT"],
     ["目标", `${c.host}:${c.port}`],
@@ -76,40 +75,53 @@ export function TunnelPath({ c, tunnels, mine }: { c: Conn; tunnels: Tunnel[]; m
   return <PathLine hops={hops} />;
 }
 
-// useTunnelSites is what TunnelPath reads besides the connection: the tunnels' forwards and the
-// GUI's own tunnels' servers.
+// useTunnelSites is what TunnelPath reads besides the connection: the tunnels' forwards, the
+// GUI's own tunnels' servers and Connaio's proxy port.
 export function useTunnelSites(running: boolean) {
   const [tunnels, setTunnels] = useState<Tunnel[]>([]);
   const [mine, setMine] = useState<Record<string, any>[]>([]);
+  const mixedPort = useMixedPort();
   useEffect(() => {
     if (!running) return;
     CoreService.ReverseTunnels().then((t) => setTunnels(t ?? []));
     ProfileService.UserItems().then((u) => setMine(nonNull(u.tunnels)));
   }, [running]);
-  return { tunnels, mine };
+  return { tunnels, mine, mixedPort };
+}
+
+// useMixedPort is Connaio's proxy port, 0 until read.
+export function useMixedPort() {
+  const [port, setPort] = useState(0);
+  useEffect(() => { ProfileService.Value("mixed-port").then((p) => setPort(Number(p) || 0)); }, []);
+  return port;
 }
 
 // LiveRoutes is what comes in through the tunnels now, a card per tunnel and target: its fixed
 // stretch drawn once, then the flows on it, by user, host and policy, with how many and how much.
-function LiveRoutes({ conns, tunnels, mine }: { conns: Conn[]; tunnels: Tunnel[]; mine: Record<string, any>[] }) {
-  const byTunnel = new Map<string, Conn[]>();
+function LiveRoutes({ conns, tunnels, mine, mixedPort }: { conns: Conn[]; tunnels: Tunnel[]; mine: Record<string, any>[]; mixedPort: number }) {
+  // a card per tunnel and forward, there with no traffic too; the connections fill in its flows
+  const byTunnel = new Map<string, { hop: NonNullable<Conn["tunnel"]>; cs: Conn[] }>();
+  for (const t of tunnels) {
+    for (const f of t.forwards ?? []) byTunnel.set(`${t.name}\n${f.local}`, { hop: { name: t.name, type: "WireGuard", from: "", target: f.local }, cs: [] });
+  }
   for (const c of conns) {
     if (!c.tunnel) continue;
     const key = `${c.tunnel.name}\n${c.tunnel.target}`;
-    byTunnel.set(key, [...(byTunnel.get(key) ?? []), c]);
+    const entry = byTunnel.get(key) ?? { hop: c.tunnel, cs: [] };
+    entry.cs.push(c);
+    byTunnel.set(key, entry);
   }
-  if (byTunnel.size === 0) return <div className="live-empty muted small">当前没有经隧道进入的连接</div>;
+  if (byTunnel.size === 0) return <div className="live-empty muted small">暂无隧道</div>;
   const total = (cs: Conn[]) => cs.reduce((n, x) => n + x.upload + x.download, 0);
   return (
     <div className="live-routes">
-      {[...byTunnel.values()].map((cs) => {
-        const hop = cs[0].tunnel!;
+      {[...byTunnel.values()].map(({ hop, cs }) => {
         const flows = new Map<string, Conn[]>();
         for (const c of cs) {
           const key = [hostOf(c.tunnel!.from), c.host, c.port, c.rule, c.chain].join("\n");
           flows.set(key, [...(flows.get(key) ?? []), c]);
         }
-        const proxied = isProxyPort(hop.target);
+        const proxied = isProxyPort(hop.target, mixedPort);
         return (
           <div key={`${hop.name}-${hop.target}`} className="card live-card">
             <div className="live-head">
@@ -120,8 +132,8 @@ function LiveRoutes({ conns, tunnels, mine }: { conns: Conn[]; tunnels: Tunnel[]
               <span className="live-stat"><span className="muted">连接数</span>{cs.length}</span>
               <span className="live-stat"><span className="muted">流量</span>{sizeText(total(cs))}</span>
             </div>
-            <PathLine hops={[...hopsTo(hop, tunnels, mine), ["分流", proxied ? "规则匹配" : "本机服务"]]} />
-            <div className="table-wrap live-table">
+            <PathLine hops={[...hopsTo(hop, tunnels, mine, mixedPort), ["分流", proxied ? "规则匹配" : "本机服务"]]} />
+            {cs.length === 0 ? <div className="live-idle muted small">当前没有连接</div> : <div className="table-wrap live-table">
               <table className="table">
                 <colgroup><col style={{ width: "14%" }} /><col /><col style={{ width: "19%" }} /><col style={{ width: "16%" }} /><col style={{ width: "20%" }} /><col style={{ width: 64 }} /><col style={{ width: 88 }} /></colgroup>
                 <thead><tr><th>客户端</th><th>目标</th><th>匹配规则</th><th>策略</th><th>出口</th><th className="num">连接数</th><th className="num">流量</th></tr></thead>
@@ -142,7 +154,7 @@ function LiveRoutes({ conns, tunnels, mine }: { conns: Conn[]; tunnels: Tunnel[]
                   })}
                 </tbody>
               </table>
-            </div>
+            </div>}
           </div>
         );
       })}
@@ -156,6 +168,7 @@ export default function Tunnels({ status }: { status: Status }) {
   const [dialog, setDialog] = useState<Record<string, any> | true | null>(null); // true: a new tunnel; else the one edited
   const [open, setOpen] = useState("");
   const [conns, setConns] = useState<Conn[]>([]);
+  const mixedPort = useMixedPort();
   // relays: the connaio-relay versions this app carries; a tunnel's relay reporting another is outdated
   const [relays, setRelays] = useState<string[]>([]);
   useEffect(() => { ToolService.RelayVersions().then((v) => setRelays(v ?? [])); }, []);
@@ -213,7 +226,7 @@ export default function Tunnels({ status }: { status: Status }) {
       </div>
 
       <div className="tile-head"><span className="tile-title groups">实时链路</span></div>
-      <LiveRoutes conns={conns} tunnels={tunnels} mine={mine} />
+      <LiveRoutes conns={conns} tunnels={tunnels} mine={mine} mixedPort={mixedPort} />
 
       {dialog && <TunnelDialog editing={dialog === true ? undefined : dialog} onClose={() => { setDialog(null); load(); }} />}
     </>

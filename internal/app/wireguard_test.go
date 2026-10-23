@@ -19,6 +19,28 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// TestFingerprintNotSSH: a port that closes at once, not SSH, says so.
+func TestFingerprintNotSSH(t *testing.T) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	go func() {
+		for {
+			c, err := l.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	var s ToolService
+	if _, err := s.HostFingerprint("127.0.0.1", l.Addr().(*net.TCPAddr).Port); err == nil || !strings.Contains(err.Error(), "不是 SSH 服务") {
+		t.Fatalf("%v", err)
+	}
+}
+
 func TestRelayArch(t *testing.T) {
 	for uname, want := range map[string]string{"Linux x86_64\n": "amd64", "Linux aarch64": "arm64", "Linux arm64": "arm64", "Darwin arm64": "", "Linux armv7l": ""} {
 		if got, err := relayArch(uname); got != want || (want == "") != (err != nil) {

@@ -221,6 +221,10 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .install-head { display: flex; align-items: center; gap: 12px; }
 .install-head > .muted { flex: 1; }
 .install-result { margin-top: 8px; }
+/* an option in a dialog: what it does on the left, its switch on the right, as on the settings page */
+.option-row { padding: 10px 0; }
+.option-row .muted { margin-top: 2px; }
+.install-box > .option-row { margin-top: 10px; } /* below the login fields, not on their edge */
 .fingerprint { font: 12px var(--mono); word-break: break-all; }
 /* a subnet group rule: kind, value, →, policy, ×, in columns that line up and fit the dialog */
 .subnet-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto 120px auto; gap: 6px; align-items: center; margin-bottom: 6px; }
@@ -306,6 +310,7 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .live-stat { display: inline-flex; gap: 6px; margin-left: 14px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .live-head .client-icon { width: 22px; height: 22px; border-radius: 6px; }
 .live-table { margin-top: 14px; }
+.live-idle { margin-top: 12px; padding-left: 16px; } /* in line with the band's dots, as the table's first column */
 .live-table .table :is(th, td):first-child { padding-left: 16px; } /* in line with the band's dots */
 .live-table .table :is(th, td):last-child { padding-right: 16px; }
 .live-table .table td { max-width: none; overflow: hidden; text-overflow: ellipsis; }

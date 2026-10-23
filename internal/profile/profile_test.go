@@ -702,6 +702,31 @@ func TestMergeReplacesSameName(t *testing.T) {
 	}
 }
 
+// TestOldTunnelGivesUpName: a WireGuard tunnel takes the name of an SSH one from before, which
+// isn't run or listed any more; a WireGuard one keeps its name.
+func TestOldTunnelGivesUpName(t *testing.T) {
+	s, _ := Open(t.TempDir())
+	if err := s.SetOverride("reverse-tunnels:\n  - {name: OLA, type: ssh, server: h, port: 9000}\n  - {name: old, type: ssh, server: h, port: 22}\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddTunnel(map[string]any{"name": "OLA", "type": "wireguard", "server": "h", "port": 51820}); err != nil {
+		t.Fatalf("an SSH tunnel's name: %v", err)
+	}
+	if err := s.AddTunnel(map[string]any{"name": "OLA", "type": "wireguard"}); err == nil {
+		t.Fatal("a WireGuard tunnel's name taken twice")
+	}
+	if err := s.AddTunnel(map[string]any{"name": "wg", "type": "wireguard"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.EditTunnel("wg", map[string]any{"name": "old", "type": "wireguard"}); err != nil {
+		t.Fatalf("renamed onto an SSH tunnel's name: %v", err)
+	}
+	items, _ := s.UserItems()
+	if len(items.Tunnels) != 2 || items.Tunnels[0]["name"] != "OLA" || items.Tunnels[0]["type"] != "wireguard" || items.Tunnels[1]["name"] != "old" || items.Tunnels[1]["type"] != "wireguard" {
+		t.Fatalf("tunnels %+v", items.Tunnels)
+	}
+}
+
 // TestBuildDropsOldTunnels: a tunnel of the removed FRP or SSH types in an old override doesn't reach the core.
 func TestBuildDropsOldTunnels(t *testing.T) {
 	s, _ := Open(t.TempDir())

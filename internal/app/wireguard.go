@@ -153,6 +153,11 @@ func (s *ToolService) HostFingerprint(host string, port int) (string, error) {
 		return errors.New("done")
 	}}
 	_, err := ssh.Dial("tcp", net.JoinHostPort(host, strconv.Itoa(cmp.Or(port, 22))), cfg)
+	// connected, then cut off before SSH's first words: EOF, or a failed read (a reset, on any OS)
+	var opErr *net.OpError
+	if got == "" && (errors.Is(err, io.EOF) || errors.As(err, &opErr) && opErr.Op == "read") {
+		return "", fmt.Errorf("端口 %d 上不是 SSH 服务，或连接被拒绝，请检查 SSH 端口", cmp.Or(port, 22))
+	}
 	if got == "" {
 		return "", fmt.Errorf("无法读取服务器指纹：%w", err)
 	}
