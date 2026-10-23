@@ -107,7 +107,9 @@ func Run(assets fs.FS, trayIcon []byte) error {
 		})
 		return w
 	}
-	window = newWindow("")
+	// the first window too is built once the app runs: on macOS one built before app.Run is never
+	// freed when closed, left behind as an invisible window (alpha 0, off screen) in Mission Control
+	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) { show("") })
 
 	// the floating process monitor: built when opened, kept above other windows, freed when closed
 	// and opened again where it was left
