@@ -124,7 +124,7 @@ func restoreBackup(dir string, data []byte) error {
 // ExportBackup saves a backup where the user picks.
 func (s *SettingsService) ExportBackup() error {
 	path, err := application.Get().Dialog.SaveFile().
-		SetFilename("Connaio-" + time.Now().Format("20060102") + ".zip").
+		SetFilename("Connaio-"+time.Now().Format("20060102")+".zip").
 		AddFilter("Connaio 备份", "*.zip").
 		PromptForSingleSelection()
 	if err != nil || path == "" {
