@@ -66,13 +66,41 @@ type TempRule struct {
 	Hits    uint64 `json:"hits"`
 }
 
-// winDir is Windows' own directory, lowercased with a trailing separator; "" elsewhere.
-var winDir = func() string {
-	if d := os.Getenv("SystemRoot"); runtime.GOOS == "windows" && d != "" {
-		return strings.ToLower(strings.TrimRight(d, `\`)) + `\`
+// systemDirs are the path prefixes of a platform's own components, which partial enhancement
+// doesn't offer and the activity page counts as the system. Windows (lowercased): its own directory,
+// Defender, Office's and Edge's updaters, its own Store components (not Microsoft.WindowsTerminal).
+// Linux: the desktop session's daemons, run as the user; root's and service accounts' are told by
+// their uid. Not the web views apps run in (WebView2, WebKitGTK's processes): their traffic is the app's.
+var systemDirs = func() []string {
+	switch runtime.GOOS {
+	case "windows":
+		var dirs []string
+		add := func(env string, subs ...string) {
+			if d := os.Getenv(env); d != "" {
+				for _, sub := range subs {
+					dirs = append(dirs, strings.ToLower(strings.TrimRight(d, `\`)+`\`+sub))
+				}
+			}
+		}
+		add("SystemRoot", "")
+		add("ProgramData", `Microsoft\`)
+		add("ProgramFiles", `Windows Defender\`, `Common Files\microsoft shared\`, `WindowsApps\Microsoft.Windows.`, `WindowsApps\MicrosoftWindows.`)
+		add("ProgramFiles(x86)", `Microsoft\EdgeUpdate\`)
+		return dirs
+	case "linux":
+		return []string{"/usr/libexec/", "/usr/lib/systemd/", "/usr/lib/x86_64-linux-gnu/libexec/", "/usr/lib/aarch64-linux-gnu/libexec/",
+			"/usr/lib/evolution/", "/usr/lib/gnome-", "/usr/lib/tracker", "/usr/lib/snapd/", "/usr/bin/gnome-shell", "/snap/snapd-desktop-integration/"}
 	}
-	return ""
+	return nil
 }()
+
+// systemPath says whether path is under one of systemDirs.
+func systemPath(path string) bool {
+	if runtime.GOOS == "windows" {
+		path = strings.ToLower(path)
+	}
+	return slices.ContainsFunc(systemDirs, func(d string) bool { return strings.HasPrefix(path, d) })
+}
 
 // Connections lists the live connections Connaio manages, newest first: not those partial
 // enhancement's capture filter passes straight through, which go through the core only because
@@ -158,9 +186,8 @@ func (s *CoreService) fetchConnections() ([]Conn, error) {
 		}
 		// a system service's: on Linux one run below UID_MIN (1000), by root or a service's own account
 		// (a connection with no local process, a LAN device's or the core's own, carries uid 0 too);
-		// on Windows one from the Windows directory (svchost.exe and its like)
-		system := m.ProcessPath != "" && (runtime.GOOS == "linux" && m.UID != nil && *m.UID < 1000 ||
-			runtime.GOOS == "windows" && winDir != "" && strings.HasPrefix(strings.ToLower(m.ProcessPath), winDir))
+		// on either one from systemDirs (svchost.exe and its like, the desktop's own daemons)
+		system := m.ProcessPath != "" && (runtime.GOOS == "linux" && m.UID != nil && *m.UID < 1000 || systemPath(m.ProcessPath))
 		if m.ProcessPath != "" && m.ProcessPath == ownExe {
 			process = "Connaio" // not the executable's lowercase name, so it lists with the core's own connections
 		}

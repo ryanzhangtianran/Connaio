@@ -42,3 +42,17 @@ func TestRate(t *testing.T) {
 		}
 	}
 }
+
+// Partial enhancement doesn't offer Connaio itself, browsers or the listed Chinese apps, on any platform.
+func TestLeftOut(t *testing.T) {
+	for _, exec := range []string{"Connaio", "Google Chrome", "chrome.exe", "WeChat", "Feishu", "企业微信"} {
+		if !leftOut(exec, "Connaio") {
+			t.Errorf("%s offered", exec)
+		}
+	}
+	for _, exec := range []string{"ghostty", "Code", "curl", "Telegram.exe"} {
+		if leftOut(exec, "Connaio") {
+			t.Errorf("%s left out", exec)
+		}
+	}
+}

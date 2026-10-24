@@ -116,3 +116,23 @@ func TestTrayProcessRows(t *testing.T) {
 		t.Fatalf("rows idle for over %v drop out: %+v", trayRecent, rows)
 	}
 }
+
+// A desktop session's own daemons count as the system; the user's programs, under /usr/lib too, don't.
+func TestSystemPath(t *testing.T) {
+	saved := systemDirs
+	defer func() { systemDirs = saved }()
+	systemDirs = []string{"/usr/libexec/", "/usr/lib/systemd/", "/usr/lib/x86_64-linux-gnu/libexec/", "/usr/lib/gnome-", "/usr/bin/gnome-shell"}
+	for path, want := range map[string]bool{
+		"/usr/libexec/gsd-housekeeping":      true,
+		"/usr/lib/systemd/systemd":           true,
+		"/usr/lib/gnome-online-accounts/goa": true,
+		"/usr/bin/gnome-shell":               true,
+		"/usr/lib/slack/slack":               false,
+		"/usr/bin/ssh":                       false,
+		"/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess": false, // an app's web view: its traffic is the app's
+	} {
+		if systemPath(path) != want {
+			t.Errorf("systemPath(%s) = %v", path, !want)
+		}
+	}
+}

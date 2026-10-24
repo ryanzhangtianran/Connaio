@@ -144,7 +144,7 @@ func (s *SettingsService) ProcessChoices() []ProcessChoice {
 	if conns, err := s.core.connections(true); err == nil { // processes outside the scope are the ones to add
 		var network []ProcessChoice
 		for _, c := range conns {
-			if systemDaemon(c.Path) || c.System {
+			if systemDaemon(c.Path) || c.System || bundleOf(c.Path) != "" { // a bundle's helper: its app's capture covers it
 				continue
 			}
 			if c.Process != "" && !seen[strings.ToLower(c.Process)] {
@@ -160,5 +160,21 @@ func (s *SettingsService) ProcessChoices() []ProcessChoice {
 		}
 		choices = append(choices, network...)
 	}
-	return choices
+	self := filepath.Base(ownExe)
+	return slices.DeleteFunc(choices, func(c ProcessChoice) bool { return leftOut(c.Exec, self) })
+}
+
+// unneeded are apps partial enhancement doesn't offer: browsers follow the system proxy, and these
+// Chinese apps go direct anyway (not Arc: arc is also Phabricator's command line). Executable names, as macOS, Windows (less .exe) and Linux name them.
+var unneeded = []string{
+	"google chrome", "chrome", "google-chrome", "chromium", "safari", "firefox", "microsoft edge", "msedge",
+	"brave browser", "brave", "opera", "vivaldi",
+	"wechat", "weixin", "feishu", "lark", "dingtalk", "qq", "企业微信", "wework", "wemeetapp", "tencentmeeting", "neteasemusic", "cloudmusic",
+}
+
+// leftOut says whether partial enhancement's choices leave exec out: Connaio itself (self, its own
+// executable), whose capture would loop, or one of unneeded.
+func leftOut(exec, self string) bool {
+	name := strings.ToLower(strings.TrimSuffix(exec, ".exe"))
+	return strings.EqualFold(exec, self) || slices.Contains(unneeded, name)
 }

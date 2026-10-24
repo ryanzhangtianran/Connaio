@@ -605,7 +605,9 @@ tr.muted td.rule-actions { text-decoration: none; }
 .activity > .card { display: flex; flex-direction: column; min-height: 0; }
 .activity .head { min-height: 22px; }
 .activity .head-actions { gap: 8px; min-width: 0; }
-/* the status card: a wavy pale-blue field at the right holding the pause button, a scalloped disc */
+/* the status card: a pale field at the right holding the pause button, a scalloped disc; its edge one
+   S-curve, upright where it meets the card's edges and smooth at its widest, by the button, so it stays
+   smooth however the card stretches it */
 .hero > :not(.hero-wave) { position: relative; }
 .hero > .card-title { max-width: 66%; } /* the stats and the address's row (the button at its end) run across the field */
 .hero-wave { position: absolute; top: 0; right: 0; width: 34%; height: 100%; fill: color-mix(in srgb, var(--accent) 13%, transparent); pointer-events: none; }

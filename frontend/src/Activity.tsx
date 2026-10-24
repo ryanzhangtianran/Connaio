@@ -160,7 +160,7 @@ function StatusCard({ activity, mode, setMode, latency }: { activity: ActivityDa
   const lat = latency && [latency.router && `路由 ${latency.router} ms`, latency.dns && `DNS ${latency.dns} ms`, latency.proxy && `${latency.group} ${latency.proxy} ms`].filter(Boolean).join(" · ");
   return (
     <div className="card hero" style={{ gridArea: "hero" }}>
-      <svg className="hero-wave" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M34,0 C14,14 40,30 20,50 C2,68 30,82 12,100 L100,100 L100,0 Z" /></svg>
+      <svg className="hero-wave" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M40,0 C40,24 6,26 6,52 C6,78 30,80 30,100 L100,100 L100,0 Z" /></svg>
       <div className="card-title"><Icon name="activity" className="card-icon" />状态
         {paused ? <span className="chip warn"><i className="dot warn" />已暂停</span> : <span className="chip good"><i className="dot on" />运行中</span>}
       </div>
