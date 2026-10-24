@@ -106,7 +106,7 @@ button { font: inherit; color: inherit; }
 .pill .dot { width: 6px; height: 6px; }
 .page { flex: 1; overflow: auto; padding: 14px 28px 28px; } /* a wider margin beside the sidebar than between cards */
 /* full-height pages end level with the sidebar; the margin takes back .page's bottom padding, which would scroll them */
-.activity, .dash, .rules-page, .profiles-page, .logs-card { height: calc(100vh - var(--chrome)); margin-bottom: calc(var(--gap) - 28px); }
+.activity, .dash, .rules-page, .logs-card { height: calc(100vh - var(--chrome)); margin-bottom: calc(var(--gap) - 28px); }
 .hint { margin-top: 10px; max-width: 640px; font-size: 12px; line-height: 1.5; color: var(--text-2); text-wrap: pretty; }
 .hint:first-child { margin-top: 0; } /* a page that opens with its hint starts it where other pages start their first card */
 
@@ -330,7 +330,7 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .live-stat { display: inline-flex; gap: 6px; margin-left: 14px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .live-head .client-icon { width: 22px; height: 22px; border-radius: 6px; }
 .live-table { margin-top: 14px; }
-.live-idle { margin-top: 12px; padding-left: 32px; } /* in line with the band's text, as the table's first column */
+.live-idle { margin-top: 12px; } /* from the card's content edge, under the icon and the band */
 .live-table .table :is(th, td):first-child { padding-left: 32px; } /* in line with the band's text: its padding, dot and gap */
 .live-table .table :is(th, td):last-child { padding-right: 16px; }
 .live-table .table td { max-width: none; overflow: hidden; text-overflow: ellipsis; }
@@ -413,7 +413,6 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .plist-tools { display: flex; align-items: center; gap: 6px; padding: 8px 10px; }
 .plist-tools .btn { height: 24px; padding: 0 10px; font-size: 12px; }
 .plist-error { padding: 6px 12px; border-top: 1px solid var(--line); } /* a failed action, under the toolbar that ran it */
-.resource-rows { max-height: 260px; overflow: auto; } /* a config can fetch dozens of rule sets */
 .plist textarea.override { margin: 0; border: 0; border-radius: 0; background: none; padding: 12px 16px; }
 
 /* form sheets (add proxy): grouped rows, label left and control right, in two columns */
@@ -455,6 +454,8 @@ tr.muted td.rule-actions { text-decoration: none; }
 .list-items { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .list-item { display: flex; align-items: center; gap: 16px; padding: 6px 6px 6px 12px; }
 .list-item + .list-item, .list-item + .list-add { border-top: 1px solid var(--line); }
+.sheet .list-items { margin-top: 16px; } /* a list in a sheet of its own (不经代理) */
+.list-error { margin-top: 12px; }
 .list-value { font: 12px/1.5 var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list-item .list-value:first-child { flex: 0 1 40%; }
 .list-item .list-value:only-of-type { flex: 1; }
@@ -491,10 +492,11 @@ tr.muted td.rule-actions { text-decoration: none; }
 .rules-card .table-wrap { flex: 1; min-height: 0; }
 .rules-card .table th { position: sticky; top: 0; z-index: 1; background: var(--card); }
 /* profiles: one window high; the override editor takes the height the other groups leave and scrolls inside */
-.profiles-page { display: flex; flex-direction: column; }
-.profiles-page .plist-rows { max-height: 40vh; overflow: auto; } /* a long profile list scrolls in place instead of squeezing the override */
-.profiles-page .override-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.profiles-page .override-card textarea.override { flex: 1; min-height: 0; resize: none; overflow: auto; }
+/* 配置 scrolls as the other settings pages do: four sections don't fit a window, and fitting them
+   squeezed the override to nothing; long lists scroll in place */
+.profiles-page .plist-rows { max-height: 40vh; overflow: auto; }
+.profiles-page .plist-rows.resource-rows { max-height: 260px; } /* dozens of rule sets */
+.profiles-page .override-card textarea.override { height: 260px; resize: vertical; overflow: auto; }
 /* proxy diagnostics: a compact utility window, white log under a toolbar */
 .sheet.diag-sheet { width: min(560px, calc(100vw - 60px)); }
 .diag-sheet .sheet-head { padding: 12px 16px 10px; }

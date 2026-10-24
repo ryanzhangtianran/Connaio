@@ -128,13 +128,13 @@ export default function Proxies({ status }: { status: Status }) {
 
       <div className="tile-head">
         <span className="tile-title proxies">代理</span>
-        <button className="btn small-btn" disabled={testing || !status.running} onClick={testAll}>{testing ? "测试中…" : "测试全部"}</button>
         <span className="grow" />
         <input data-search className="small-input" placeholder="搜索节点…" value={query} onChange={(e) => setQuery(e.target.value)} />
         <div className="seg small-seg">
           {[["", "默认"], ["delay", "延迟"], ["name", "名称"]].map(([k, l]) => <button key={k} className={order === k ? "on" : ""} onClick={() => setOrder(k)}>{l}</button>)}
         </div>
         <button className={`btn small-btn ${hideDead ? "on" : ""}`} onClick={() => setHideDead(!hideDead)}>{hideDead ? "显示超时" : "隐藏超时"}</button>
+        <button className="btn small-btn" disabled={testing || !status.running} onClick={testAll}>{testing ? "测试中…" : "测试全部"}</button>
       </div>
       <div className="tiles">
         {shownNodes.map((p) => {

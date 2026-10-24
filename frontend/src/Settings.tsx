@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CoreService, EnhancedService, ProfileService, SettingsService, SystemProxyService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { About, DNSLeak, LeakServer, Update, UpdateProgress } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { on } from "./hooks";
+import Dialog from "./Dialog";
 import { copyText, errText, openURL, platform, plain, sizeText, words, validPort, web } from "./format";
 
 
@@ -89,6 +90,7 @@ function Appearance() {
 // at the proxy port, and the address latency tests fetch.
 function ProxySettings({ port }: { port: number }) {
   const [bypass, setBypass] = useState<string[]>([]);
+  const [editingBypass, setEditingBypass] = useState(false);
   const [testURL, setTestURL] = useState("");
   const [urlText, setURLText] = useState("");
   const [error, setError] = useState("");
@@ -109,8 +111,15 @@ function ProxySettings({ port }: { port: number }) {
   return (
     <div className="card settings-card">
       <div className="section-title">代理</div>
-      {!web && <ListEditor title="不经代理" desc="系统代理之外的主机与网段，本机与局域网地址已包含在内" placeholder="如 *.corp.example、10.1.0.0/16"
-        items={bypass} save={(next) => SystemProxyService.SetBypass(next).then(() => setBypass(next))} />}
+      {!web && <Row title="不经代理" desc={bypass.length ? `${bypass.slice(0, 3).join("、")}${bypass.length > 3 ? ` 等 ${bypass.length} 项` : ""}` : "本机与局域网地址默认直连"}>
+        <button className="btn ctl" onClick={() => setEditingBypass(true)}>编辑…</button>
+      </Row>}
+      {editingBypass && (
+        <Dialog title="不经代理" sub="这些主机与网段直连，不经系统代理；本机与局域网地址默认直连" className="narrow" onClose={() => setEditingBypass(false)}
+          foot={<button className="btn primary" onClick={() => setEditingBypass(false)}>完成</button>}>
+          <ListEditor title="" items={bypass} placeholder="如 *.corp.example、10.1.0.0/16" save={(next) => SystemProxyService.SetBypass(next).then(() => setBypass(next))} />
+        </Dialog>
+      )}
       <Row title="终端代理命令" desc="在终端中执行，使命令行程序经代理端口访问">
         <button className="btn ctl" onClick={() => { copyText(command); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? "已复制" : "复制"}</button>
       </Row>
@@ -238,15 +247,16 @@ function ListEditor({ title, desc, items, save: keep, placeholder, fix = (v) => 
     if (v === null) return setError(invalid);
     if (v && !items.includes(v)) save([...items, v]).then(() => setItem(""), () => {});
   };
-  return (
-    <Row list title={title} desc={error ? <span className="error">{error}</span> : desc}>
-      {items.map((v, i) => <ListItem key={v} onRemove={() => save(items.filter((_, j) => j !== i)).catch(() => {})}><span className="list-value">{v}</span></ListItem>)}
-      <div className="list-add">
-        <input {...plain} className="code-input" placeholder={placeholder} value={item} onChange={(e) => setItem(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
-        <button className="btn" disabled={!item.trim()} onClick={add}>添加</button>
-      </div>
-    </Row>
-  );
+  const list = <>
+    {items.map((v, i) => <ListItem key={v} onRemove={() => save(items.filter((_, j) => j !== i)).catch(() => {})}><span className="list-value">{v}</span></ListItem>)}
+    <div className="list-add">
+      <input {...plain} autoFocus={!title} className="code-input" placeholder={placeholder} value={item} onChange={(e) => setItem(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+      <button className="btn" disabled={!item.trim()} onClick={add}>添加</button>
+    </div>
+  </>;
+  // no title: the list alone, for a sheet that has its own
+  if (!title) return <>{error && <div className="small error list-error">{error}</div>}<div className="list-items">{list}</div></>;
+  return <Row list title={title} desc={error ? <span className="error">{error}</span> : desc}>{list}</Row>;
 }
 
 // PolicySetting edits dns.nameserver-policy: a domain (or geosite:, rule-set:) per row and its servers.
