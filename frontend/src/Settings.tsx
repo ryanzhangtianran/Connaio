@@ -49,7 +49,7 @@ declare function applyTheme(): void; // public/theme.js
 
 const accents = ["#0a84ff", "#5e5ce6", "#bf5af2", "#ff375f", "#ff453a", "#ff9f0a", "#30d158", "#40c8e0", "#8e8e93"]; // the first is style.css's --accent
 
-// Appearance is the 外观 card: light, dark or the system's, and each mode's accent colour, kept in
+// Appearance is the 外观 card: light, dark or the system's, and the accent colour, kept in
 // this browser's localStorage, which theme.js reads before the page paints; the windows' appearance
 // also goes to SetTheme, for the blur and window buttons to match.
 function Appearance() {
@@ -62,15 +62,7 @@ function Appearance() {
     if (k === "theme" && !web) SettingsService.SetTheme(v);
   };
   const theme = get("theme") || "system";
-  const accent = (mode: string) => {
-    const now = get(`accent.${mode}`) || accents[0];
-    return (
-      <div className="swatches">
-        {accents.map((c) => <button key={c} className={c === now ? "swatch on" : "swatch"} style={{ "--c": c } as React.CSSProperties} onClick={() => set(`accent.${mode}`, c)} />)}
-        <input type="color" title="自定义" className={accents.includes(now) ? "" : "on"} style={accents.includes(now) ? undefined : { background: now }} value={now} onChange={(e) => set(`accent.${mode}`, e.target.value)} />
-      </div>
-    );
-  };
+  const now = get("accent") || get("accent.light") || accents[0]; // accent.light: the light mode's, when each mode had its own
   return (
     <div className="card settings-card">
       <div className="section-title">外观</div>
@@ -80,8 +72,12 @@ function Appearance() {
             <button key={v} className={theme === v ? "on" : ""} onClick={() => set("theme", v)}>{label}</button>)}
         </div>
       </Row>
-      <Row title="浅色模式主题色">{accent("light")}</Row>
-      <Row title="深色模式主题色">{accent("dark")}</Row>
+      <Row title="主题色">
+        <div className="swatches">
+          {accents.map((c) => <button key={c} className={c === now ? "swatch on" : "swatch"} style={{ "--c": c } as React.CSSProperties} onClick={() => set("accent", c)} />)}
+          <input type="color" title="自定义" className={accents.includes(now) ? "" : "on"} style={accents.includes(now) ? undefined : { background: now }} value={now} onChange={(e) => set("accent", e.target.value)} />
+        </div>
+      </Row>
     </div>
   );
 }
@@ -112,7 +108,7 @@ function ProxySettings({ port }: { port: number }) {
     <div className="card settings-card">
       <div className="section-title">代理</div>
       {!web && <Row title="不经代理" desc={bypass.length ? `${bypass.slice(0, 3).join("、")}${bypass.length > 3 ? ` 等 ${bypass.length} 项` : ""}` : "本机与局域网地址默认直连"}>
-        <button className="btn ctl" onClick={() => setEditingBypass(true)}>编辑…</button>
+        <button className="btn ctl" onClick={() => setEditingBypass(true)}>编辑</button>
       </Row>}
       {editingBypass && (
         <Dialog title="不经代理" sub="这些主机与网段直连，不经系统代理；本机与局域网地址默认直连" className="narrow" onClose={() => setEditingBypass(false)}
@@ -168,7 +164,7 @@ export function General() {
         </Row>
         <Row title="日志级别">
           <select className="ctl" value={logLevel} onChange={(e) => setLogLevel(e.target.value)}>
-            {[["debug", "调试"], ["info", "信息"], ["warning", "警告"], ["error", "错误"], ["silent", "静默"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            {["debug", "info", "warning", "error", "silent"].map((l) => <option key={l}>{l}</option>)}
           </select>
         </Row>
         <Row title="重启内核" desc="重新启动内核进程并载入当前配置">

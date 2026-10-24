@@ -49,8 +49,6 @@ export default function Proxies({ status }: { status: Status }) {
   const [pending, setPending] = useState<Set<string>>(new Set()); // nodes being tested
   const [open, setOpen] = useState(""); // group whose members are shown
   const [menu, setMenu] = useState<Menu | null>(null);
-  const [query, setQuery] = useState("");
-  const [order, setOrder] = useState(""); // "": the config's order, "delay" or "name"
   const [hideDead, setHideDead] = useState(false); // leave out nodes whose last test failed
   const [dead, setDead] = useState<Set<string>>(new Set()); // nodes whose own test just failed: 超时, not blank
   const [armed, confirm] = useConfirm();
@@ -80,10 +78,7 @@ export default function Proxies({ status }: { status: Status }) {
   useClickAway(!!menu || !!open, () => { setMenu(null); setOpen(""); });
 
   const nodes = nodesOf(groups);
-  const q = query.trim().toLowerCase();
-  const shownNodes = nodes
-    .filter((p) => (!q || p.name.toLowerCase().includes(q) || p.type.toLowerCase().includes(q)) && (!hideDead || p.delay > 0 || pending.has(p.name)))
-    .sort(order === "name" ? (a, b) => a.name.localeCompare(b.name, "zh") : order === "delay" ? (a, b) => (a.delay || 1e9) - (b.delay || 1e9) : () => 0);
+  const shownNodes = hideDead ? nodes.filter((p) => p.delay > 0 || pending.has(p.name)) : nodes;
   const shownGroups = groups.filter((g) => g.name !== "GLOBAL");
   const global = groups.find((g) => g.name === "GLOBAL");
 
@@ -129,10 +124,6 @@ export default function Proxies({ status }: { status: Status }) {
       <div className="tile-head">
         <span className="tile-title proxies">代理</span>
         <span className="grow" />
-        <input data-search className="small-input" placeholder="搜索节点…" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <div className="seg small-seg">
-          {[["", "默认"], ["delay", "延迟"], ["name", "名称"]].map(([k, l]) => <button key={k} className={order === k ? "on" : ""} onClick={() => setOrder(k)}>{l}</button>)}
-        </div>
         <button className={`btn small-btn ${hideDead ? "on" : ""}`} onClick={() => setHideDead(!hideDead)}>{hideDead ? "显示超时" : "隐藏超时"}</button>
         <button className="btn small-btn" disabled={testing || !status.running} onClick={testAll}>{testing ? "测试中…" : "测试全部"}</button>
       </div>
@@ -151,8 +142,7 @@ export default function Proxies({ status }: { status: Status }) {
             </button>
           );
         })}
-        {!query && <button className="tile add" disabled={!status.running} onClick={() => setDialog("proxy")} title="增加代理">＋</button>}
-        {query && shownNodes.length === 0 && <div className="muted tiles-empty">没有匹配的节点</div>}
+        <button className="tile add" disabled={!status.running} onClick={() => setDialog("proxy")} title="增加代理">＋</button>
         {!loaded && status.running && <div className="muted tiles-empty">加载中…</div>}
       </div>
 

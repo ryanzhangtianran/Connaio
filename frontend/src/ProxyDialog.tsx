@@ -128,7 +128,7 @@ export default function ProxyDialog({ groups, editing, onClose }: { groups: stri
 
   return (
     <Dialog title={editing ? `编辑 ${editing.name}` : "增加代理"} className="wide" bodyClass="two-col" locked={dirty || busy} onClose={onClose} foot={<>
-      <button className="btn" onClick={() => setMore(!more)}>{more ? "收起更多设置" : "更多设置…"}</button>
+      <button className="btn" onClick={() => setMore(!more)}>{more ? "收起更多设置" : "更多设置"}</button>
       <span className="grow" />
       {error && <span className="small error foot-error">{error}</span>}
       <button className="btn" onClick={onClose}>取消</button>

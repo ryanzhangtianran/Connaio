@@ -42,13 +42,13 @@ const partNote: Record<keyof OverrideParts, string> = {
   connaio: "仅 Connaio 支持的部分，保存时其中的规则排在前面",
 };
 
-// FilePick is the web UI's 导入…: the browser reads the chosen YAML file and hands its text, and
+// FilePick is the web UI's 导入: the browser reads the chosen YAML file and hands its text, and
 // its name without the extension, to onText. The app's own dialog would pick a file on the machine
 // it runs on, which for the web UI is the server.
 function FilePick({ disabled, title, onText }: { disabled?: boolean; title?: string; onText: (name: string, text: string) => void }) {
   return (
     <label className={`btn ${disabled ? "disabled" : ""}`} title={title}>
-      导入…
+      导入
       <input type="file" accept=".yaml,.yml" hidden disabled={disabled}
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) f.text().then((t) => onText(f.name.replace(/\.ya?ml$/i, ""), t)); }} />
     </label>
@@ -74,6 +74,7 @@ export default function Profiles() {
   const [armed, confirm] = useConfirm();
   const [resources, setResources] = useState<Resource[]>([]); // the config's proxy and rule sets
   const [updating, setUpdating] = useState(""); // the resource being fetched again
+  const [showRes, setShowRes] = useState(false); // 资源 folded to its summary, so the page stays one window tall
   const loadResources = () => CoreService.Resources().then((r) => setResources(r ?? []), () => setResources([]));
 
   const load = useCallback(() => ProfileService.Profiles().then(setData), []);
@@ -162,7 +163,7 @@ export default function Profiles() {
           <button className="btn" disabled={!selected || !!busy} onClick={() => selected && setSetting(selected)}>设置</button>
           {web
             ? <FilePick disabled={!!busy} onText={(name, text) => run("import", () => ProfileService.AddLocal(name, text))} />
-            : <button className="btn" disabled={!!busy} onClick={() => run("import", () => ProfileService.ImportFile())}>导入…</button>}
+            : <button className="btn" disabled={!!busy} onClick={() => run("import", () => ProfileService.ImportFile())}>导入</button>}
           <span className="grow" />
           <button className="btn" disabled={!selected || selected.id === data.current || !!busy} onClick={() => selected && use(selected.id)}>{busy === "use" ? "切换中…" : "使用"}</button>
         </div>
@@ -188,7 +189,7 @@ export default function Profiles() {
         <div className="plist-tools">
           {web
             ? <FilePick disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件到覆写：同名项以导入的为准，列表追加"} onText={(_, text) => run("import", () => ProfileService.MergeOverride(text).then(loadParts))} />
-            : <button className="btn" disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件到覆写：同名项以导入的为准，列表追加"} onClick={() => run("import", () => ProfileService.ImportOverride().then(loadParts))}>导入…</button>}
+            : <button className="btn" disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件到覆写：同名项以导入的为准，列表追加"} onClick={() => run("import", () => ProfileService.ImportOverride().then(loadParts))}>导入</button>}
           <button className={`btn ${armed === "clear" ? "armed" : ""}`} disabled={!parts[part] || !!busy} onClick={() => confirm("clear", () => setParts({ ...parts, [part]: "" }))}>{armed === "clear" ? "确认清除" : "清除"}</button>
           <span className="grow" />
           <button className="btn" disabled={!dirty || !!busy} onClick={() => setParts(savedParts)}>还原</button>
@@ -201,10 +202,19 @@ export default function Profiles() {
 
       <div className="group-title">资源</div>
       <div className="plist">
-        <div className="plist-rows resource-rows">
-          {resources.length === 0 && <div className="plist-empty muted">当前配置没有规则集或节点集</div>}
+        <div className="plist-row static">
+          <div className="plist-main">
+            <div className="plist-name">规则集与节点集</div>
+            <div className="muted small">{resources.length ? `${resources.filter((r) => r.kind === "rule").length} 个规则集 · ${resources.filter((r) => r.kind === "proxy").length} 个节点集` : "当前配置没有规则集或节点集"}</div>
+          </div>
+          {resources.length > 0 && <button className="btn small-btn" onClick={() => setShowRes(!showRes)}>{showRes ? "收起" : "展开"}</button>}
+          <button className="btn small-btn" disabled={!resources.some((r) => r.vehicle === "HTTP") || !!busy}
+            onClick={() => run("res", () => Promise.all(resources.filter((r) => r.vehicle === "HTTP").map((r) => CoreService.UpdateResource(r.kind, r.name))).then(loadResources))}>{busy === "res" && !updating ? "更新中…" : "全部更新"}</button>
+          <button className="btn small-btn" disabled={!!busy} onClick={() => run("geo", () => CoreService.UpdateGeo())}>{busy === "geo" ? "更新中…" : "更新 GeoIP 数据库"}</button>
+        </div>
+        {showRes && <div className="plist-rows resource-rows">
           {resources.map((r) => (
-            <div key={`${r.kind}:${r.name}`} className="plist-row static">
+            <div key={`${r.kind}:${r.name}`} className="plist-row static sub">
               <div className="plist-main">
                 <div className="plist-name">{r.name}</div>
                 <div className="muted small">{r.kind === "proxy" ? `节点集 · ${r.count} 个节点` : `规则集 · ${r.count} 条规则`}{r.vehicle === "HTTP" ? ` · 更新于 ${ago(r.updatedAt)}` : r.vehicle === "File" ? " · 本地文件" : " · 内联"}</div>
@@ -213,13 +223,7 @@ export default function Profiles() {
                 onClick={() => { setUpdating(r.name); run("res", () => CoreService.UpdateResource(r.kind, r.name).then(loadResources).finally(() => setUpdating(""))); }}>{updating === r.name ? "更新中…" : "更新"}</button>}
             </div>
           ))}
-        </div>
-        <div className="plist-tools">
-          <button className="btn" disabled={!resources.some((r) => r.vehicle === "HTTP") || !!busy}
-            onClick={() => run("res", () => Promise.all(resources.filter((r) => r.vehicle === "HTTP").map((r) => CoreService.UpdateResource(r.kind, r.name))).then(loadResources))}>{busy === "res" && !updating ? "更新中…" : "全部更新"}</button>
-          <span className="grow" />
-          <button className="btn" disabled={!!busy} onClick={() => run("geo", () => CoreService.UpdateGeo())}>{busy === "geo" ? "更新中…" : "更新 GeoIP 数据库"}</button>
-        </div>
+        </div>}
         {failed("res", "geo")}
       </div>
 
@@ -234,8 +238,8 @@ export default function Profiles() {
         </div>
         {!web && <div className="plist-row static">
           <div className="plist-main"><div className="plist-name">备份与恢复</div><div className="muted small">配置、覆写与 VPN 设置，含密码，请妥善保管；恢复后 Connaio 将重新启动</div></div>
-          <button className="btn" disabled={!!busy} onClick={() => run("backup", () => SettingsService.ExportBackup())}>导出…</button>
-          <button className={`btn ${armed === "restore" ? "armed" : ""}`} disabled={!!busy} onClick={() => confirm("restore", () => run("backup", () => SettingsService.ImportBackup()))}>{armed === "restore" ? "确认覆盖当前配置" : "恢复…"}</button>
+          <button className="btn" disabled={!!busy} onClick={() => run("backup", () => SettingsService.ExportBackup())}>导出</button>
+          <button className={`btn ${armed === "restore" ? "armed" : ""}`} disabled={!!busy} onClick={() => confirm("restore", () => run("backup", () => SettingsService.ImportBackup()))}>{armed === "restore" ? "确认覆盖当前配置" : "恢复"}</button>
         </div>}
         {failed("backup")}
       </div>

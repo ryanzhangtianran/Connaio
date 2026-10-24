@@ -10,7 +10,7 @@ const ua = navigator.userAgent;
 export const platform = web ? "web" : ua.includes("Windows") ? "windows" : ua.includes("Linux") ? "linux" : "macos";
 export const words = {
   showInFiles: { macos: "在 Finder 中显示", linux: "在文件管理器中显示", windows: "在资源管理器中显示", web: "" }[platform],
-  pickApp: { macos: "从 Finder 添加…", linux: "选择应用…", windows: "选择应用…", web: "" }[platform],
+  pickApp: { macos: "从 Finder 添加", linux: "选择应用", windows: "选择应用", web: "" }[platform],
   tray: { macos: "菜单栏", linux: "托盘", windows: "通知区域", web: "托盘" }[platform],
 };
 // openURL and copyText act where the page is seen: on the web, in this browser, not on the server

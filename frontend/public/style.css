@@ -104,9 +104,9 @@ button { font: inherit; color: inherit; }
 .event-text { margin-top: 3px; font-size: 13px; line-height: 1.45; word-break: break-word; }
 .topbar .events { position: relative; --wails-draggable: no-drag; }
 .pill .dot { width: 6px; height: 6px; }
-.page { flex: 1; overflow: auto; padding: 14px 28px 28px; } /* a wider margin beside the sidebar than between cards */
+.page { flex: 1; overflow: auto; padding: 14px 28px var(--gap); } /* a wider margin beside the sidebar than between cards; at the foot the sidebar's, so a page scrolled to its end ends level with it */
 /* full-height pages end level with the sidebar; the margin takes back .page's bottom padding, which would scroll them */
-.activity, .dash, .rules-page, .logs-card { height: calc(100vh - var(--chrome)); margin-bottom: calc(var(--gap) - 28px); }
+.activity, .dash, .rules-page, .profiles-page, .logs-card { height: calc(100vh - var(--chrome)); }
 .hint { margin-top: 10px; max-width: 640px; font-size: 12px; line-height: 1.5; color: var(--text-2); text-wrap: pretty; }
 .hint:first-child { margin-top: 0; } /* a page that opens with its hint starts it where other pages start their first card */
 
@@ -243,8 +243,6 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .big-seg button { flex: 1; padding: 4px 0; font-size: 12px; border-radius: 7px; }
 .big-seg button.on.accent { background: var(--accent); color: #fff; }
 .tile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 22px 0 8px; }
-.tile-head .small-input { width: 180px; height: 24px; font-size: 12px; }
-.small-seg button { padding: 2px 10px; }
 .btn.on { background: var(--active); } /* a toggle that is on, e.g. 隐藏超时 */
 .tiles-empty { padding: 8px 4px; }
 .tile-title { font-weight: 600; font-size: 13px; }
@@ -372,16 +370,17 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .btn.armed, .link-btn.armed { color: var(--bad); border-color: var(--bad); visibility: visible !important; }
 .menu button.armed { background: var(--bad); color: #fff; }
 .grouped .settings-card { padding: 0; margin: 0; background: none; border: 0; box-shadow: none; overflow: visible; }
-.grouped .settings-card > .section-title { margin: 18px 4px 8px; }
+.grouped .settings-card > .section-title { margin: 14px 4px 8px; }
 /* the page's first heading starts where other pages start their first card */
-.grouped > .settings-card:first-child > .section-title:first-child, .grouped > .group-title:first-child { margin-top: 0; }
+.page > :is(.grouped:first-child, .core-down + .grouped) > :is(.settings-card:first-child > .section-title:first-child, .group-title:first-child),
+.page > :is(.group-title:first-child, .core-down + .group-title) { margin-top: 0; } /* the page's first, not a block further down (增强's 路由排除) */
 .grouped .settings-card:first-child > .setting-row:first-child { margin-top: 16px; }
-.grouped .setting-row { padding: 12px 16px; background: var(--card); }
+.grouped .setting-row { padding: 10px 16px; background: var(--card); } /* 通用 fits one window at the smallest size */
 .grouped .section-title + .setting-row, .grouped .settings-card > .setting-row:first-child { border-top: 0; border-top-left-radius: 12px; border-top-right-radius: 12px; }
 .grouped .settings-card > .setting-row:last-child { border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; }
 
 /* profiles: grouped lists with a toolbar, as in the settings sheet */
-.group-title { margin: 18px 4px 8px; font-weight: 600; }
+.group-title { margin: 14px 4px 8px; font-weight: 600; }
 .plist { border-radius: 12px; background: var(--card); overflow: hidden; }
 .plist-row { display: flex; align-items: center; gap: 12px; padding: 10px 16px; }
 .plist-row + .plist-row, .plist-add, .plist-tools { border-top: 1px solid var(--line); }
@@ -492,11 +491,13 @@ tr.muted td.rule-actions { text-decoration: none; }
 .rules-card .table-wrap { flex: 1; min-height: 0; }
 .rules-card .table th { position: sticky; top: 0; z-index: 1; background: var(--card); }
 /* profiles: one window high; the override editor takes the height the other groups leave and scrolls inside */
-/* 配置 scrolls as the other settings pages do: four sections don't fit a window, and fitting them
-   squeezed the override to nothing; long lists scroll in place */
-.profiles-page .plist-rows { max-height: 40vh; overflow: auto; }
-.profiles-page .plist-rows.resource-rows { max-height: 260px; } /* dozens of rule sets */
-.profiles-page .override-card textarea.override { height: 260px; resize: vertical; overflow: auto; }
+/* 配置 is one window tall: the override takes what the rest leaves, 资源 folded to one row unless
+   opened, long lists scrolling in place, so the override keeps room even in the smallest window */
+.profiles-page { display: flex; flex-direction: column; }
+.profiles-page .plist-rows { max-height: 170px; overflow: auto; } /* three profiles, or rule sets, then it scrolls */
+.resource-rows { border-top: 1px solid var(--line); }
+.profiles-page .override-card { flex: 1; min-height: 200px; display: flex; flex-direction: column; }
+.profiles-page .override-card textarea.override { flex: 1; min-height: 0; resize: none; overflow: auto; }
 /* proxy diagnostics: a compact utility window, white log under a toolbar */
 .sheet.diag-sheet { width: min(560px, calc(100vw - 60px)); }
 .diag-sheet .sheet-head { padding: 12px 16px 10px; }
@@ -632,11 +633,10 @@ tr.muted td.rule-actions { text-decoration: none; }
 .activity .head { min-height: 22px; }
 .activity .head-actions { gap: 8px; min-width: 0; }
 /* the status card: a pale field at the right holding the pause button, a scalloped disc; its edge one
-   S-curve, upright where it meets the card's edges and smooth at its widest, by the button, so it stays
-   smooth however the card stretches it */
+   gentle diagonal, top right to bottom left, clear of the button at its height */
 .hero > :not(.hero-wave) { position: relative; }
 .hero > .card-title { max-width: 66%; } /* the stats and the address's row (the button at its end) run across the field */
-.hero-wave { position: absolute; top: 0; right: 0; width: 34%; height: 100%; fill: color-mix(in srgb, var(--accent) 13%, transparent); pointer-events: none; }
+.hero-wave { position: absolute; top: 0; right: 0; width: 38%; height: 100%; fill: color-mix(in srgb, var(--accent) 13%, transparent); pointer-events: none; }
 .hero-btn { position: relative; flex: none; width: 104px; height: 104px; margin: -14px 4% -14px auto; padding: 0; /* in the address's row, centred with it */ border: 0; background: none; color: #fff; transition: transform .2s; }
 .hero-btn:hover { transform: rotate(12deg) scale(1.04); }
 .hero-btn:active { transform: scale(.96); }

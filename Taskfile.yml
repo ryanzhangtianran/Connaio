@@ -11,9 +11,10 @@ vars:
     sh: git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' | grep . || echo 0.0.0
   # the version less a test build's suffix (1.0.0 of 1.0.0-rc.1): Windows' version fields take numbers only
   VERSION_NUM: '{{splitList "-" .VERSION | first}}'
-  # the mihomo release connaio-core is based on (common:build:core adds its commit on macOS)
+  # the mihomo release connaio-core is based on (common:build:core adds its commit on macOS): a v tag,
+  # not upstream's moving Prerelease-Alpha, which a merge can bring nearer
   CORE_VERSION:
-    sh: git -C "{{.CORE_DIR}}" describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' | grep . || echo unknown
+    sh: git -C "{{.CORE_DIR}}" describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null | sed 's/^v//' | grep . || echo unknown
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
   # Target OS for build/package/run. Defaults to the host OS, and is overridden
   # by `wails3 build GOOS=...` (or the GOOS env var) for cross-compilation. The
