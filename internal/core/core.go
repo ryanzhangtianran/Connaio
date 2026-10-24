@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/ryanzhangtianran/Connaio/internal/run"
 	"io"
@@ -88,9 +89,9 @@ func (c *Core) wait(ctx context.Context, exited <-chan struct{}, logPath, socket
 		}
 		select {
 		case <-exited:
-			return fmt.Errorf("内核已退出: %s（日志 %s）", problems(tail(logPath)), logPath)
+			return fmt.Errorf("内核已退出：%s", problems(tail(logPath))) // its log's problem lines; the path is no help shown
 		case <-deadline:
-			return fmt.Errorf("connaio-core at %s did not answer within 15s", socket)
+			return errors.New("内核 15 秒内未响应")
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-time.After(200 * time.Millisecond):

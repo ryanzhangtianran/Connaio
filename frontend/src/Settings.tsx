@@ -353,7 +353,7 @@ export function Dns() {
             {["fake-ip", "redir-host"].map((m) => <button key={m} className={mode === m ? "on" : ""} onClick={() => setMode(m)}>{m.toUpperCase()}</button>)}
           </div>
         </Row>
-        <Row title="IP 版本" desc="仅 IPv4 时增强模式不再接管 IPv6 流量；若本机网络有 IPv6，应用会绕过代理直接走 IPv6，需同时在系统网络设置里关闭 IPv6。">
+        <Row title="IP 版本" desc="仅 IPv4 时增强模式不接管 IPv6；本机有 IPv6 时需在系统中关闭，否则应用会绕过代理。">
           <div className="seg">
             <button className={dual ? "on" : ""} onClick={() => setDual(true)}>双栈</button>
             <button className={!dual ? "on" : ""} onClick={() => setDual(false)}>仅 IPv4</button>

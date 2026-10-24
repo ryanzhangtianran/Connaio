@@ -577,6 +577,7 @@ func (s *CoreService) streamTraffic(ctx context.Context) {
 		if !s.core.Daemon() && s.core.Exited() {
 			s.setStatus(Status{Error: "内核已退出，正在重启"})
 			if err := s.core.Start(ctx); err != nil {
+				s.setStatus(Status{Error: err.Error()}) // why, for the banner over every page
 				notify("error", "内核重启失败：%v", err)
 			}
 		}

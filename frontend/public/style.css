@@ -108,6 +108,7 @@ button { font: inherit; color: inherit; }
 /* full-height pages end level with the sidebar; the margin takes back .page's bottom padding, which would scroll them */
 .activity, .dash, .rules-page, .profiles-page, .logs-card { height: calc(100vh - var(--chrome)); margin-bottom: calc(var(--gap) - 28px); }
 .hint { margin-top: 10px; max-width: 640px; font-size: 12px; line-height: 1.5; color: var(--text-2); text-wrap: pretty; }
+.hint:first-child { margin-top: 0; } /* a page that opens with its hint starts it where other pages start their first card */
 
 .menu { position: absolute; z-index: 10; margin-top: 4px; padding: 4px; border-radius: 10px; background: var(--card); backdrop-filter: blur(30px); box-shadow: 0 8px 30px rgba(0,0,0,.18); border: 1px solid var(--line); }
 .menu button { display: flex; justify-content: space-between; gap: 16px; width: 100%; padding: 6px 12px; border: 0; border-radius: 6px; background: none; text-align: left; font-size: 13px; }
@@ -222,7 +223,7 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .install-box > .actions.end { margin-top: 12px; }
 /* the dialog's buttons in line with the install box's above them: as wide, and in as far */
 .install-box .btn.small-btn, .tunnel-sheet .sheet-foot .btn { min-width: 84px; }
-.tunnel-sheet .sheet-foot { padding-right: 33px; } /* the body's 20px, the box's border and padding: under the box's buttons */
+.sheet.wide.tunnel-sheet .sheet-foot { padding-right: 33px; } /* the body's 20px, the box's border and padding: under the box's buttons (over .sheet.wide's 16px) */
 .install-head { display: flex; align-items: center; gap: 12px; }
 .install-head > .muted { flex: 1; }
 .install-result { margin-top: 8px; }
@@ -295,7 +296,7 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 /* dashboard */
 .dash { display: flex; flex-direction: column; }
 .dash-top { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
-.dash-side .seg { display: flex; margin-bottom: 8px; }
+.dash-side .seg { display: flex; height: var(--control-h); margin-bottom: 8px; } /* as tall as the search box beside it, centred with it */
 .dash-side .seg button { flex: 1; padding-inline: 0; }
 .dash-search {
   width: 220px; padding-left: 28px;
@@ -362,7 +363,7 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .sheet-head { padding: 18px 24px 14px; background: var(--sheet-head); }
 .sheet-title { font-size: 17px; font-weight: 700; margin-bottom: 2px; }
 .sheet-body { flex: 1; overflow: auto; padding: 4px 24px 20px; }
-.sheet-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
+.sheet-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 24px; border-top: 1px solid var(--line); } /* inset as the body: its buttons line up with the content above */
 .sheet-foot .btn { min-width: 88px; }
 .sheet.narrow { width: min(480px, calc(100vw - 80px)); }
 .foot-error { align-self: center; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* a save's failure, beside the buttons that tried */
@@ -372,6 +373,8 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .menu button.armed { background: var(--bad); color: #fff; }
 .grouped .settings-card { padding: 0; margin: 0; background: none; border: 0; box-shadow: none; overflow: visible; }
 .grouped .settings-card > .section-title { margin: 18px 4px 8px; }
+/* the page's first heading starts where other pages start their first card */
+.grouped > .settings-card:first-child > .section-title:first-child, .grouped > .group-title:first-child { margin-top: 0; }
 .grouped .settings-card:first-child > .setting-row:first-child { margin-top: 16px; }
 .grouped .setting-row { padding: 12px 16px; background: var(--card); }
 .grouped .section-title + .setting-row, .grouped .settings-card > .setting-row:first-child { border-top: 0; border-top-left-radius: 12px; border-top-right-radius: 12px; }
@@ -418,7 +421,7 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .sheet.wide .group-title { margin: 12px 4px 6px; font-size: 12px; }
 .sheet.wide .sheet-head { padding: 14px 20px 10px; }
 .sheet.wide .sheet-body { padding: 0 20px 14px; }
-.sheet.wide .sheet-foot { padding: 10px 16px; }
+.sheet.wide .sheet-foot { padding: 10px 20px; }
 .sheet-body.two-col { gap: 16px; }
 .form-row { display: grid; grid-template-columns: minmax(84px, 38%) minmax(0, 1fr); align-items: center; gap: 12px; padding: 5px 12px; min-height: 34px; font-size: 12px; }
 .form-row input:not([type=checkbox]), .form-row select { height: 24px; font-size: 12px; }
