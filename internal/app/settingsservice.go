@@ -1,7 +1,9 @@
 package app
 
 import (
-	"github.com/ryanzhangtianran/Connaio/internal/run"
+	"cmp"
+	"errors"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -9,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/ryanzhangtianran/Connaio/internal/daemon"
+	"github.com/ryanzhangtianran/Connaio/internal/run"
 )
 
 // appVersion is set at build time from the git tag (-ldflags -X); "dev" in a plain go build.
@@ -96,6 +99,19 @@ func (s *SettingsService) SetSites(list []Site) error {
 		return err
 	}
 	return s.settings.Update(func(st *Settings) { st.Sites = list })
+}
+
+// TestURL is what latency tests fetch through a node; SetTestURL takes an http(s) address, "" for the default.
+func (s *SettingsService) TestURL() string { return cmp.Or(s.settings.Get().TestURL, defaultTestURL) }
+
+func (s *SettingsService) SetTestURL(u string) error {
+	if u = strings.TrimSpace(u); u == defaultTestURL {
+		u = ""
+	}
+	if p, err := url.Parse(u); u != "" && (err != nil || (p.Scheme != "http" && p.Scheme != "https") || p.Host == "") {
+		return errors.New("测速地址须为 http 或 https 地址")
+	}
+	return s.settings.Update(func(st *Settings) { st.TestURL = u })
 }
 
 func (s *SettingsService) TraySpeed() bool { return !s.settings.Get().HideTraySpeed }

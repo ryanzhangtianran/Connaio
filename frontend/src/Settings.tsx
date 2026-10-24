@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { CoreService, EnhancedService, ProfileService, SettingsService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
+import { CoreService, EnhancedService, ProfileService, SettingsService, SystemProxyService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { About, DNSLeak, LeakServer, Update, UpdateProgress } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { on } from "./hooks";
-import { errText, openURL, platform, sizeText, words, validPort, web } from "./format";
+import { copyText, errText, openURL, platform, plain, sizeText, words, validPort, web } from "./format";
 
 
 // Row is one setting: title and description, the control at the right; a list row lists its items below.
@@ -85,6 +85,42 @@ function Appearance() {
   );
 }
 
+// ProxySettings is the 代理 card: what the system proxy leaves alone, the command that points a shell
+// at the proxy port, and the address latency tests fetch.
+function ProxySettings({ port }: { port: number }) {
+  const [bypass, setBypass] = useState<string[]>([]);
+  const [testURL, setTestURL] = useState("");
+  const [urlText, setURLText] = useState("");
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!web) SystemProxyService.Bypass().then((b) => setBypass(b ?? []));
+    SettingsService.TestURL().then((u) => { setTestURL(u); setURLText(u); });
+  }, []);
+  const saveURL = () => {
+    if (urlText.trim() === testURL) return;
+    setError("");
+    SettingsService.SetTestURL(urlText).then(() => SettingsService.TestURL()).then((u) => { setTestURL(u); setURLText(u); }, (e) => setError(errText(e)));
+  };
+  // the shell's own syntax: PowerShell on Windows, sh elsewhere
+  const command = platform === "windows"
+    ? `$env:HTTP_PROXY="http://127.0.0.1:${port}"; $env:HTTPS_PROXY="http://127.0.0.1:${port}"; $env:ALL_PROXY="socks5://127.0.0.1:${port}"`
+    : `export http_proxy=http://127.0.0.1:${port} https_proxy=http://127.0.0.1:${port} all_proxy=socks5://127.0.0.1:${port}`;
+  return (
+    <div className="card settings-card">
+      <div className="section-title">代理</div>
+      {!web && <ListEditor title="不经代理" desc="系统代理之外的主机与网段，本机与局域网地址已包含在内" placeholder="如 *.corp.example、10.1.0.0/16"
+        items={bypass} save={(next) => SystemProxyService.SetBypass(next).then(() => setBypass(next))} />}
+      <Row title="终端代理命令" desc="在终端中执行，使命令行程序经代理端口访问">
+        <button className="btn ctl" onClick={() => { copyText(command); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? "已复制" : "复制"}</button>
+      </Row>
+      <Row title="测速地址" desc={error ? <span className="error">{error}</span> : "测试节点延迟时访问的地址"}>
+        <input {...plain} className="ctl url-ctl" value={urlText} onChange={(e) => setURLText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveURL()} onBlur={saveURL} />
+      </Row>
+    </div>
+  );
+}
+
 export function General() {
   const [daemon, setDaemon] = useState(false);
   const [busy, setBusy] = useState("");
@@ -123,7 +159,7 @@ export function General() {
         </Row>
         <Row title="日志级别">
           <select className="ctl" value={logLevel} onChange={(e) => setLogLevel(e.target.value)}>
-            {["debug", "info", "warning", "error", "silent"].map((l) => <option key={l}>{l}</option>)}
+            {[["debug", "调试"], ["info", "信息"], ["warning", "警告"], ["error", "错误"], ["silent", "静默"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </Row>
         <Row title="重启内核" desc="重新启动内核进程并载入当前配置">
@@ -135,6 +171,8 @@ export function General() {
             : <button className="btn ctl" disabled={!!busy} onClick={() => run(EnhancedService.Grant(), "root")}>{busy === "root" ? "授予中…" : "授予"}</button>}
         </Row>}
       </div>
+
+      <ProxySettings port={port} />
 
       {!web && <div className="card settings-card">
         <div className="section-title">应用</div>
@@ -183,12 +221,17 @@ function updateLabel(p: UpdateProgress | null) {
 // input to add one; every change is saved right away.
 // fix, when given, completes an entry before it is added (e.g. a bare IP into a CIDR), or refuses it
 // with null, and invalid says why.
-export function ListSetting({ title, desc, path, placeholder, fix = (v) => v, invalid = "格式无效" }: { title: string; desc?: string; path: string; placeholder: string; fix?: (v: string) => string | null; invalid?: string }) {
+export function ListSetting({ path, ...rest }: { title: string; desc?: string; path: string; placeholder: string; fix?: (v: string) => string | null; invalid?: string }) {
   const [list, setList] = useSetting<string[]>(path, []);
+  return <ListEditor items={list ?? []} save={setList} {...rest} />;
+}
+
+// ListEditor is a list setting's row: its items, each removable, and a box to add one; save keeps
+// the new list, and a failure says why in place of the description, so nothing below moves.
+function ListEditor({ title, desc, items, save: keep, placeholder, fix = (v) => v, invalid = "格式无效" }: { title: string; desc?: string; items: string[]; save: (next: string[]) => Promise<void>; placeholder: string; fix?: (v: string) => string | null; invalid?: string }) {
   const [item, setItem] = useState("");
-  const [error, setError] = useState(""); // in place of the description, so nothing below moves
-  const items = list ?? [];
-  const save = (next: string[]) => { setError(""); return setList(next).catch((e) => { setError(errText(e)); throw e; }); };
+  const [error, setError] = useState("");
+  const save = (next: string[]) => { setError(""); return keep(next).catch((e) => { setError(errText(e)); throw e; }); };
   const add = () => {
     if (!item.trim()) return;
     const v = fix(item.trim());
@@ -199,7 +242,7 @@ export function ListSetting({ title, desc, path, placeholder, fix = (v) => v, in
     <Row list title={title} desc={error ? <span className="error">{error}</span> : desc}>
       {items.map((v, i) => <ListItem key={v} onRemove={() => save(items.filter((_, j) => j !== i)).catch(() => {})}><span className="list-value">{v}</span></ListItem>)}
       <div className="list-add">
-        <input className="code-input" placeholder={placeholder} value={item} onChange={(e) => setItem(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
+        <input {...plain} className="code-input" placeholder={placeholder} value={item} onChange={(e) => setItem(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} />
         <button className="btn" disabled={!item.trim()} onClick={add}>添加</button>
       </div>
     </Row>
@@ -365,7 +408,7 @@ export function AboutPage() {
       <Row title="Connaio">{about.version}</Row>
       <Row title="内核">{about.coreVersion || "—"}</Row>
       <Row title="内核运行方式">{about.attached ? "root" : "当前用户"}</Row>
-      <Row title="数据目录" desc={about.dataDir}>{!web && <button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button>}</Row>
+      <Row title="数据目录" desc={web ? "保存在运行 Connaio 的服务器上" : undefined}>{!web && <button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button>}</Row>
     </div>
   );
 }

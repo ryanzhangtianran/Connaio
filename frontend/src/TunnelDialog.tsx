@@ -5,6 +5,7 @@ import { CoreService, ProfileService, ToolService } from "../bindings/github.com
 import { localRule, useMixedPort } from "./Tunnels";
 import { useDirty } from "./hooks";
 import { Switch } from "./Settings";
+import Dialog from "./Dialog";
 
 type Row = Record<string, string>;
 
@@ -145,9 +146,10 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
     && (!viaRules || validPort(viaPort)); // the via-rules forward's port has no default
 
   return (
-    <div className="modal-bg" onClick={dirty ? undefined : onClose}>
-      <div className="modal card wide" onClick={(e) => e.stopPropagation()}>
-        <h2 className="modal-title">{editing ? `编辑 ${editing.name}` : "增加隧道"}</h2>
+    <Dialog title={editing ? `编辑 ${editing.name}` : "增加隧道"} className="wide tunnel-sheet" locked={dirty || busy} onClose={onClose} foot={<>
+      <button className="btn" onClick={onClose}>取消</button>
+      <button className="btn primary" disabled={!filled || busy} onClick={save}>完成</button>
+    </>}>
         <div className="form-grid">
           <label>名称</label>{field("name", v.name && !validName(v.name) ? "只能用字母、数字、. _ -" : "必填")}
           <label>服务器</label>
@@ -222,11 +224,6 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
             </div>
           </>}
         </div>
-        <div className="actions end">
-          <button className="btn" onClick={onClose}>取消</button>
-          <button className="btn primary" disabled={!filled || busy} onClick={save}>完成</button>
-        </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

@@ -83,6 +83,7 @@ export default function App() {
   const [enhanced, setEnhanced] = useState(""); // EnhancedService.Mode: "", "tun" or "process-tun"
   const [rooted, setRooted] = useState(false); // root granted: enhancing needs it
   const [enhancedBusy, setEnhancedBusy] = useState(false);
+  const [restarting, setRestarting] = useState(false);
 
   useEffect(() => {
     CoreService.Status().then(setStatus);
@@ -104,6 +105,17 @@ export default function App() {
   // after it with the stale "starting"; ask again until the core has settled either way
   usePoll(() => CoreService.Status().then(setStatus), 1000, !status.running && !status.error);
   usePoll(() => CoreService.Activity().then(setActivity), 1000, status.running && current === "activity");
+
+  // ⌘F or Ctrl+F (the web UI runs on any OS) goes to the page's search box, when it has one
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "f" || !(e.metaKey || e.ctrlKey)) return;
+      const box = document.querySelector<HTMLInputElement>(".page [data-search]");
+      if (box) { e.preventDefault(); box.focus(); box.select(); }
+    };
+    document.addEventListener("keydown", key);
+    return () => document.removeEventListener("keydown", key);
+  }, []);
 
   // one list, from what you check most to what you touch least; only the page shown is mounted
   const pages: { key: string; title: string; page: React.ReactNode }[] = [
@@ -158,6 +170,14 @@ export default function App() {
           {platform === "linux" && <WindowButtons />}
         </div>
         <div className="page">
+          {/* the core stopped: why, and the way back, above whichever page is shown */}
+          {!status.running && status.error && (
+            <div className="card core-down">
+              <div className="grow"><div className="setting-title">内核未运行</div><div className="small error">{status.error}</div></div>
+              <button className="btn" onClick={() => setCurrent("logs")}>查看日志</button>
+              <button className="btn primary" disabled={restarting} onClick={() => { setRestarting(true); CoreService.Restart().finally(() => setRestarting(false)); }}>{restarting ? "重启中…" : "重启内核"}</button>
+            </div>
+          )}
           <ErrorBoundary key={current} onReset={() => setCurrent("activity")}>
           {pages.find((p) => p.key === current)?.page}
           </ErrorBoundary>

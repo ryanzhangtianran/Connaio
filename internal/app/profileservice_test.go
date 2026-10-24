@@ -186,3 +186,16 @@ func TestDeleteRule(t *testing.T) {
 		t.Fatal("with MATCH,DIRECT there is no proxy whose DNS could leak")
 	}
 }
+
+// A provider's 一键导入 link offers its http(s) subscription; anything else offers nothing.
+func TestInstallConfig(t *testing.T) {
+	o, ok := installConfig("clash://install-config?url=https%3A%2F%2Fsub.example.com%2Fapi%3Ftoken%3Dx&name=%E6%9C%BA%E5%9C%BA")
+	if !ok || o.URL != "https://sub.example.com/api?token=x" || o.Name != "机场" {
+		t.Fatalf("got %+v %v", o, ok)
+	}
+	for _, raw := range []string{"clash://install-config?url=file%3A%2F%2F%2Fetc%2Fpasswd", "https://install-config?url=https%3A%2F%2Fa.com", "clash://other?url=https%3A%2F%2Fa.com", "clash://install-config"} {
+		if _, ok := installConfig(raw); ok {
+			t.Errorf("%s offered", raw)
+		}
+	}
+}

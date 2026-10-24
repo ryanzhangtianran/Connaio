@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -37,8 +38,10 @@ type Profile struct {
 	URL       string    `json:"url,omitempty"` // empty for a local profile
 	UpdatedAt time.Time `json:"updatedAt"`
 	Interval  int       `json:"interval"` // auto-update hours, 0 = never
-	Usage     *Usage    `json:"usage,omitempty"`
-	LastTried time.Time `json:"lastTried,omitempty"` // last failed auto-update, so it waits a full interval before the next
+	// IntervalSet: the user chose Interval, which a subscription's own header then no longer sets
+	IntervalSet bool      `json:"intervalSet,omitempty"`
+	Usage       *Usage    `json:"usage,omitempty"`
+	LastTried   time.Time `json:"lastTried,omitempty"` // last failed auto-update, so it waits a full interval before the next
 }
 
 type Store struct {
@@ -150,10 +153,10 @@ func (s *Store) Update(id string, clients ...*http.Client) (Profile, error) {
 		s.mu.Unlock()
 		return Profile{}, fmt.Errorf("profile %s is not a subscription", id)
 	}
-	url := s.index.Profiles[i].URL
+	link := s.index.Profiles[i].URL
 	s.mu.Unlock()
 
-	content, usage, interval, err := download(url, clients)
+	content, usage, interval, err := download(link, clients)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if i = slices.IndexFunc(s.index.Profiles, func(p Profile) bool { return p.ID == id }); i < 0 {
@@ -169,7 +172,7 @@ func (s *Store) Update(id string, clients ...*http.Client) (Profile, error) {
 		return Profile{}, err
 	}
 	p.UpdatedAt, p.Usage, p.LastTried = time.Now(), usage, time.Time{}
-	if interval > 0 && p.Interval == 0 {
+	if interval > 0 && !p.IntervalSet {
 		p.Interval = interval
 	}
 	return *p, s.save()
@@ -202,6 +205,33 @@ func (s *Store) Rename(id, name string) error {
 		return fmt.Errorf("profile %s not found", id)
 	}
 	s.index.Profiles[i].Name = name
+	return s.save()
+}
+
+// Edit sets a profile's name and, for a subscription, its link and auto-update hours (0: never), which
+// its provider's header no longer overrides; the new link is fetched at the next update.
+func (s *Store) Edit(id, name, link string, interval int) error {
+	name, link = strings.TrimSpace(name), strings.TrimSpace(link)
+	if name == "" {
+		return errors.New("名称不能为空")
+	}
+	if interval < 0 {
+		return errors.New("更新间隔不能为负")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := slices.IndexFunc(s.index.Profiles, func(p Profile) bool { return p.ID == id })
+	if i < 0 {
+		return fmt.Errorf("profile %s not found", id)
+	}
+	p := &s.index.Profiles[i]
+	if p.URL != "" {
+		if u, err := url.Parse(link); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return errors.New("订阅链接须为 http 或 https 地址")
+		}
+		p.URL, p.Interval, p.IntervalSet = link, interval, true
+	}
+	p.Name = name
 	return s.save()
 }
 

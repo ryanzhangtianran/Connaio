@@ -3,7 +3,7 @@ import { EnhancedService, SettingsService } from "../bindings/github.com/ryanzha
 import type { ProcessChoice, Status } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { ListSetting, Switch, useSetting } from "./Settings";
 import { useFlip, usePoll } from "./hooks";
-import { cidr, web, words } from "./format";
+import { cidr, plain, web, words } from "./format";
 
 const sources: Record<string, string> = { app: "正在运行", network: "有网络连接" };
 
@@ -63,7 +63,7 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
   const q = query.toLowerCase();
   const matches = (r: ProcessChoice) => `${r.name} ${r.exec}`.toLowerCase().includes(q);
   const shown = rows.filter((r) => !q || matches(r) || kids(r.exec).some(matches));
-  const showTools = !q || "shell tools".includes(q) || toolNames.some((t) => t.includes(q));
+  const showTools = !q || "命令行工具".includes(q) || toolNames.some((t) => t.includes(q));
   const off = !status.running || !!busy || !rooted;
   const partialState = busy === "partial" ? "切换中…" : !rooted ? "需先在「通用」中授予 root 权限" : !partial ? "选中的应用及其子进程经 TUN 按规则分流，其他应用照常遵循系统代理" : mode === "tun" ? "增强模式已接管全部流量，关闭后恢复部分增强" : picked.length === 0 ? "尚未选择应用，暂不接管" : `已增强 ${picked.length} 个应用`;
 
@@ -93,14 +93,14 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
       {partial && <>
         <div className="plist tree" style={{ marginTop: 12 }} ref={flip.ref}>
           <div className="plist-tools">
-            <input className="dash-search" placeholder="搜索" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <input data-search className="dash-search" placeholder="搜索" value={query} onChange={(e) => setQuery(e.target.value)} />
             <span className="grow" />
             {!web && <button className="btn" onClick={pick}>{words.pickApp}</button>}
             <button className="btn" onClick={load}>刷新</button>
           </div>
           {showTools && <details className="plist-group">
             <summary className="plist-row static">
-              <div className="plist-main"><div className="plist-name">Shell Tools</div></div>
+              <div className="plist-main"><div className="plist-name">命令行工具</div></div>
               <Switch on={pickedTools.length > 0} onChange={setTools} />
             </summary>
             {toolNames.map((t) => (
@@ -110,7 +110,7 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
               </div>
             ))}
             <form className="plist-row static sub" onSubmit={(e) => { e.preventDefault(); const t = newTool.trim(); if (!has(t)) toggle(t, true); setNewTool(""); }}>
-              <input className="grow" placeholder="添加命令名，如 codex、uv；也可直接勾选终端应用接管其中启动的一切" value={newTool} onChange={(e) => setNewTool(e.target.value)} />
+              <input className="grow" {...plain} placeholder="命令名，如 codex、uv" value={newTool} onChange={(e) => setNewTool(e.target.value)} />
               <button className="btn" type="submit" disabled={!newTool.trim()}>添加</button>
             </form>
           </details>}

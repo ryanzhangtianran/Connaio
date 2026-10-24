@@ -1,9 +1,10 @@
-import { plain, validPort } from "./format";
+import { errText, plain, validPort } from "./format";
 import { useEffect, useState } from "react";
 import { CoreService, ProfileService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { Switch } from "./Settings";
 import PasswordInput from "./PasswordInput";
 import { useDirty } from "./hooks";
+import Dialog from "./Dialog";
 
 type Field = {
   key: string; // mihomo key; dots nest: "ws-opts.path"
@@ -74,6 +75,7 @@ export default function ProxyDialog({ groups, editing, onClose }: { groups: stri
   const [extra, setExtra] = useState("");
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const dirty = useDirty([v, type, extra, join]);
   useEffect(() => { CoreService.ProxyNames().then((n) => setNames((n ?? []).filter((x) => x !== "DIRECT"))); }, []); // DIRECT is 不使用
 
@@ -105,7 +107,9 @@ export default function ProxyDialog({ groups, editing, onClose }: { groups: stri
   };
   const save = () => {
     setBusy(true);
-    (editing ? ProfileService.EditProxy(editing.name, patch(), extra) : ProfileService.AddProxy(build(), extra, join)).then(onClose).finally(() => setBusy(false));
+    setError("");
+    (editing ? ProfileService.EditProxy(editing.name, patch(), extra) : ProfileService.AddProxy(build(), extra, join))
+      .then(onClose, (e) => setError(errText(e, "保存失败"))).finally(() => setBusy(false));
   };
 
   const input = (f: Field) => {
@@ -123,10 +127,13 @@ export default function ProxyDialog({ groups, editing, onClose }: { groups: stri
   const ready = !!(v.name && v.server) && validPort(v.port ?? "") && !duplicate;
 
   return (
-    <div className="modal-bg" onClick={dirty ? undefined : onClose}>
-      <div className="sheet wide" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-head"><div className="sheet-title">{editing ? `编辑 ${editing.name}` : "增加代理"}</div></div>
-        <div className="sheet-body two-col">
+    <Dialog title={editing ? `编辑 ${editing.name}` : "增加代理"} className="wide" bodyClass="two-col" locked={dirty || busy} onClose={onClose} foot={<>
+      <button className="btn" onClick={() => setMore(!more)}>{more ? "收起更多设置" : "更多设置…"}</button>
+      <span className="grow" />
+      {error && <span className="small error foot-error">{error}</span>}
+      <button className="btn" onClick={onClose}>取消</button>
+      <button className="btn primary" disabled={!ready || busy} onClick={save}>完成</button>
+    </>}>
           <div>
             <div className="group-title">基本信息</div>
             <div className="plist">
@@ -187,14 +194,6 @@ export default function ProxyDialog({ groups, editing, onClose }: { groups: stri
               </>
             )}
           </div>
-        </div>
-        <div className="sheet-foot">
-          <button className="btn" onClick={() => setMore(!more)}>{more ? "收起更多设置" : "更多设置…"}</button>
-          <span className="grow" />
-          <button className="btn" onClick={onClose}>取消</button>
-          <button className="btn primary" disabled={!ready || busy} onClick={save}>完成</button>
-        </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

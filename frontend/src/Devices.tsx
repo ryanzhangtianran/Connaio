@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { CoreService, DeviceService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Device, LanInfo, Status } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import { sizeText } from "./format";
+import { errText, sizeText } from "./format";
 import { Switch } from "./Settings";
 import { usePoll } from "./hooks";
 
 function PolicyMenu({ device, policies, onDone }: { device: Device; policies: string[]; onDone: () => void }) {
   const [policy, setPolicy] = useState(device.policy || "DIRECT");
   const [permanent, setPermanent] = useState(!device.temporary && !!device.policy);
+  const [error, setError] = useState("");
+  // the menu closes once a change took; a failure stays in it, said
+  const act = (p: Promise<unknown>) => { setError(""); p.then(onDone, (e) => setError(errText(e, "操作失败"))); };
   return (
     <div className="menu members detail" onClick={(e) => e.stopPropagation()}>
       <div className="detail-head">{device.ip}{device.mac && ` · ${device.mac}`} · {device.connections} 个连接</div>
@@ -16,12 +19,16 @@ function PolicyMenu({ device, policies, onDone }: { device: Device; policies: st
         <span>策略</span>
         <select value={policy} onChange={(e) => setPolicy(e.target.value)}>{policies.map((p) => <option key={p}>{p}</option>)}</select>
       </div>
-      <div className="detail-row">
-        <label className="radio"><input type="radio" checked={!permanent} onChange={() => setPermanent(false)} /> 临时</label>
-        <label className="radio"><input type="radio" checked={permanent} onChange={() => setPermanent(true)} /> 永久（写入覆写）</label>
+      <div className="detail-row" style={{ alignItems: "center" }}>
+        <span>有效期</span>
+        <div className="seg">
+          <button className={permanent ? "" : "on"} onClick={() => setPermanent(false)}>临时</button>
+          <button className={permanent ? "on" : ""} onClick={() => setPermanent(true)}>永久</button>
+        </div>
       </div>
-      <button onClick={() => DeviceService.SetPolicy(device.ip, policy, permanent).finally(onDone)}>应用：此设备全部走 {policy}</button>
-      {device.policy && <button className="danger" onClick={() => DeviceService.ClearPolicy(device.ip).finally(onDone)}>恢复按规则分流</button>}
+      {error && <div className="small error detail-head">{error}</div>}
+      <button onClick={() => act(DeviceService.SetPolicy(device.ip, policy, permanent))}>应用：此设备全部走 {policy}</button>
+      {device.policy && <button className="danger" onClick={() => act(DeviceService.ClearPolicy(device.ip))}>恢复按规则分流</button>}
     </div>
   );
 }

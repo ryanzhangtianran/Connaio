@@ -21,7 +21,7 @@ export default class ErrorBoundary extends Component<{ children: ReactNode; onRe
     if (!this.state.error) return this.props.children;
     return (
       <div className="card error" style={{ whiteSpace: "pre-wrap" }}>
-        页面出错了（已记录到 gui-errors.log）：{"\n"}{String(this.state.error)}
+        页面错误，已记录：{"\n"}{String(this.state.error)}
         <div style={{ marginTop: 10 }}>
           <button className="btn" onClick={() => { this.setState({ error: null }); this.props.onReset?.(); }}>返回</button>
         </div>

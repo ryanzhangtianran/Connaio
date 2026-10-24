@@ -184,5 +184,5 @@ func (s *ToolService) TCPRelay(proxy string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("通过 %s 请求 %s：%d ms", proxy, testURL, ms), nil
+	return fmt.Sprintf("通过 %s 请求 %s：%d ms", proxy, s.cs.testURL(), ms), nil
 }

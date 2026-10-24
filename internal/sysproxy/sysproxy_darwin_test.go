@@ -6,10 +6,10 @@ import (
 )
 
 func TestCommands(t *testing.T) {
-	set := setCommands([]string{"Wi-Fi"}, 7890)
+	set := setCommands([]string{"Wi-Fi"}, 7890, []string{"*.corp.example"})
 	if !slices.Equal(set[0], []string{"-setwebproxy", "Wi-Fi", "127.0.0.1", "7890"}) ||
 		!slices.Equal(set[2], []string{"-setsocksfirewallproxy", "Wi-Fi", "127.0.0.1", "7890"}) ||
-		!slices.Equal(set[3], append([]string{"-setproxybypassdomains", "Wi-Fi"}, bypass...)) {
+		!slices.Equal(set[3], slices.Concat([]string{"-setproxybypassdomains", "Wi-Fi"}, bypass, []string{"*.corp.example"})) {
 		t.Fatalf("set commands: %v", set)
 	}
 	if n := len(clearCommands([]string{"Wi-Fi", "Ethernet"})); n != 6 {

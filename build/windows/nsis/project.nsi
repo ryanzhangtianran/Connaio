@@ -65,6 +65,19 @@ FunctionEnd
     Sleep 1000
 !macroend
 
+# urlScheme makes Connaio the handler of scheme:// links; dropUrlScheme undoes it while still ours,
+# not when another client has taken the scheme since
+!macro urlScheme scheme
+    WriteRegStr SHCTX "Software\Classes\${scheme}" "" "URL:${scheme}"
+    WriteRegStr SHCTX "Software\Classes\${scheme}" "URL Protocol" ""
+    WriteRegStr SHCTX "Software\Classes\${scheme}\shell\open\command" "" '"$INSTDIR\${PRODUCT_EXECUTABLE}" "%1"'
+!macroend
+!macro dropUrlScheme scheme
+    ReadRegStr $0 SHCTX "Software\Classes\${scheme}\shell\open\command" ""
+    StrCmp $0 '"$INSTDIR\${PRODUCT_EXECUTABLE}" "%1"' 0 +2
+        DeleteRegKey SHCTX "Software\Classes\${scheme}"
+!macroend
+
 Section
     !insertmacro wails.setShellContext
 
@@ -83,6 +96,10 @@ Section
 
     !insertmacro quiet 'sc start ${CORE_SERVICE}' # only exists once enhanced mode installed it
 
+    # clash:// and connaio:// links (a provider's 一键导入) open Connaio, the link its argument
+    !insertmacro urlScheme clash
+    !insertmacro urlScheme connaio
+
     !insertmacro wails.writeUninstaller
 SectionEnd
 
@@ -99,6 +116,9 @@ Section "uninstall"
 
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
+
+    !insertmacro dropUrlScheme clash
+    !insertmacro dropUrlScheme connaio
 
     !insertmacro wails.deleteUninstaller
 SectionEnd

@@ -21,6 +21,18 @@
             <string>appicon</string>
         <key>LSMinimumSystemVersion</key>
             <string>15.0.0</string>
+        <key>CFBundleURLTypes</key>
+            <array>
+                <dict>
+                    <key>CFBundleURLName</key>
+                    <string>Clash subscription</string>
+                    <key>CFBundleURLSchemes</key>
+                    <array>
+                        <string>clash</string>
+                        <string>connaio</string>
+                    </array>
+                </dict>
+            </array>
         <key>NSHighResolutionCapable</key>
             <string>true</string>
         <key>NSHumanReadableCopyright</key>

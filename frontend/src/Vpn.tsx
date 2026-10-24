@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { EasyConnectTunnel, Status, VPN } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { errText, nonNull, openURL, plain, validPort } from "./format";
-import { usePoll } from "./hooks";
+import { useConfirm, useDirty, usePoll } from "./hooks";
+import Dialog from "./Dialog";
+import { Switch } from "./Settings";
 import PasswordInput from "./PasswordInput";
 
 // A VPN is one node plus the rules that send traffic into it: the addresses listed here, picked
@@ -180,6 +182,7 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
   const [error, setError] = useState("");
   const [probe, setProbe] = useState<string[]>([]);
   const [probing, setProbing] = useState(false);
+  const [armed, confirm] = useConfirm();
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
   const text = (k: string, placeholder: string, extra: React.InputHTMLAttributes<HTMLInputElement> = {}) => <input {...plain} className="grow" placeholder={placeholder} value={form[k] ?? ""} onChange={set(k)} {...extra} />;
@@ -197,6 +200,7 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
   })();
 
   const conds = bypass.map(condOf);
+  const dirty = useDirty([form, addrs, bypass, name]); // edits hold the sheet against a stray click
 
   // build is the override's view of the form: the node, its rules and the bypass group.
   const build = () => {
@@ -305,8 +309,15 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
   } : null;
 
   return (
-    <div className="card vpn-editor" style={{ marginTop: 16 }}>
-      <div className="label">{initial ? "编辑 VPN" : "添加 VPN"}</div>
+    <Dialog title={initial ? `编辑 ${prevName}` : "增加 VPN"} className="wide vpn-editor" locked={dirty || busy || probing} onClose={onDone} foot={<>
+      {initial && !fromProfile && <button className={`btn ${armed ? "armed" : ""}`} disabled={busy} onClick={() => confirm("remove", remove)}>{armed ? "确认删除" : "删除"}</button>}
+      {form.type === "easyconnect" && tunnel?.state !== "up" && <button className="btn" disabled={probing || !ready || !status.running || tunnel?.state === "connecting"} onClick={probeGateway}>{probing ? "登录中…" : "测试登录"}</button>}
+      <span className="grow" />
+      {saved && !fromProfile && <button className="btn" disabled={busy} onClick={disconnect}>断开</button>}
+      <button className="btn" disabled={busy} onClick={onDone}>取消</button>
+      <button className="btn" disabled={busy || !ready || !nameOK} onClick={save}>保存</button>
+      <button className="btn primary" disabled={busy || !ready || !nameOK || !status.running} onClick={tunnel?.kicked || tunnel?.kicks ? () => setAskKick(true) : login}>{saved ? "重连" : "连接"}</button>
+    </>}>
       {facts}
       <div className="form">
         <input style={{ width: 150 }} placeholder="名称" value={name} onChange={(e) => setName(e.target.value)} />
@@ -318,7 +329,7 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
       </div>
       {fromProfile && <div className="muted small" style={{ margin: "4px 0 8px" }}>此 VPN 来自订阅，断开或删除需在订阅中进行；保存后以本页设置为准。</div>}
       {form.type === "lan" && <div className="muted small" style={{ margin: "4px 0 8px" }}>
-        用另一台已连接 VPN 的 Connaio 上网：那台设备在「设备」页打开「允许局域网设备连接」，端口填它的代理端口；下方「VPN 路由」填要经它访问的网段和域名。这样一个账号只在一处登录。
+        经另一台已连接 VPN 的 Connaio 访问：对方在「设备」页允许局域网设备连接，此处填它的地址与代理端口。
       </div>}
       {form.type === "easyconnect" && <>
         <div className="form">{text("username", "用户名")}{secret("password", "密码")}</div>
@@ -335,8 +346,11 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
       </>}
       {form.type === "tailscale" && <>
         <div className="form">{secret("auth-key", "Auth key（可选，留空时连接后在浏览器中登录）")}{text("hostname", "本机在 tailnet 中的名称（可选）")}</div>
-        <div className="form">{text("control-url", "控制服务器，Headscale 时填，可选")}{text("exit-node", "出口节点，可选")}
-          <label className="radio"><input type="checkbox" checked={form["accept-routes"] === "true"} onChange={(e) => setForm({ ...form, "accept-routes": String(e.target.checked) })} /> 接受子网路由</label></div>
+        <div className="form">{text("control-url", "控制服务器，Headscale 时填，可选")}{text("exit-node", "出口节点，可选")}</div>
+        <div className="setting-row option-row">
+          <div>接受子网路由</div>
+          <Switch on={form["accept-routes"] === "true"} onChange={(on) => setForm({ ...form, "accept-routes": String(on) })} />
+        </div>
       </>}
       <div className="label section-label">直连网络</div>
       <KVRow kinds={bypassKinds} items={bypass} onChange={setBypass} fill={{ label: "当前网络", get: currentNetwork }} />
@@ -346,23 +360,14 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
         <div className="vpn-offered-head"><span className="label">{offered.title}</span><span className="muted small">{offered.note}</span></div>
         {offered.rows.length ? <RoutePicker head={offered.head} rows={offered.rows} addrs={addrs} setAddrs={setAddrs} onPick={offered.onPick} /> : <div className="muted small">{offered.empty}</div>}
       </>}
-      <div className="form vpn-actions">
-        <button className="btn primary" disabled={busy || !ready || !nameOK || !status.running} onClick={tunnel?.kicked || tunnel?.kicks ? () => setAskKick(true) : login}>{saved ? "重连" : "连接"}</button>
-        <button className="btn" disabled={busy || !ready || !nameOK} onClick={save}>保存</button>
-        {saved && !fromProfile && <button className="btn" disabled={busy} onClick={disconnect}>断开</button>}
-        {initial && !fromProfile && <button className="btn" style={{ color: "var(--bad)" }} disabled={busy} onClick={remove}>删除</button>}
-        <button className="btn" disabled={busy} onClick={onDone}>取消</button>
-        {form.type === "easyconnect" && tunnel?.state !== "up" && <button className="btn" disabled={probing || !ready || !status.running || tunnel?.state === "connecting"} onClick={probeGateway}>{probing ? "登录中…" : "测试登录"}</button>}
-        {probe.length > 0 && <span className={`small ${/失败|错误|refused|rejected/i.test(probe[0]) ? "error" : "muted"}`} style={{ alignSelf: "center" }}>{probe.join("；")}</span>}
-      </div>
+      {probe.length > 0 && <div className={`small vpn-probe ${/失败|错误|refused|rejected/i.test(probe[0]) ? "error" : "muted"}`}>{probe.join("；")}</div>}
       {askKick && <div className="form delay-warn small" style={{ alignItems: "center" }}>
         该账号近期在其他设备登录过。继续连接将使其他设备的会话下线。
         <button className="btn small-btn" disabled={busy} onClick={login}>仍然连接</button>
         <button className="btn small-btn" onClick={() => setAskKick(false)}>取消</button>
       </div>}
       {error && <div className="error small" style={{ marginTop: 8 }}>{error}</div>}
-
-    </div>
+    </Dialog>
   );
 }
 
@@ -413,7 +418,7 @@ export default function Vpn({ status }: { status: Status }) {
             </button>
           );
         })}
-        <button className="tile add" onClick={() => setEditing("new")} title="添加 VPN">＋</button>
+        <button className="tile add" onClick={() => setEditing("new")} title="增加 VPN">＋</button>
       </div>
       {editing && <VpnEditor key={String(current?.proxy?.name ?? "new")} status={status} initial={current} live={vpns.find((v) => v.proxy?.name === current?.proxy?.name) ?? null}
         tunnel={tunnels.find((t) => t.name === current?.proxy?.name) ?? null} onDone={() => { setEditing(null); load(); }}

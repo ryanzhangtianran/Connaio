@@ -26,6 +26,10 @@ type Settings struct {
 	VPNs map[string]VPN `json:"vpns,omitempty"`
 	// Monitor is where the floating process monitor was last closed, x and y, to open it there again.
 	Monitor []int `json:"monitor,omitempty"`
+	// Bypass is what the system proxy leaves alone besides local and LAN addresses (通用 不经代理).
+	Bypass []string `json:"bypass,omitempty"`
+	// TestURL is what latency tests fetch through a node (通用 测速地址); "": defaultTestURL.
+	TestURL string `json:"testURL,omitempty"`
 	// Sites are the activity page's 服务状态 sites; none: defaultSites.
 	Sites []Site `json:"sites,omitempty"`
 }

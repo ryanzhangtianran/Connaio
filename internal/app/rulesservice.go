@@ -177,9 +177,10 @@ func easyConnects(c *core.Core) ([]EasyConnectTunnel, error) {
 	return resp.Tunnels, err
 }
 
-// streamLogs forwards core log lines (info and above) to the frontend, reconnecting on errors.
+// streamLogs forwards core log lines to the frontend, reconnecting on errors: all it gives, the core
+// itself holding back what is below its log-level (通用 日志级别, info unless set lower).
 func (s *CoreService) streamLogs(ctx context.Context) {
-	s.retryStream(ctx, "log stream", "/logs?level=info", func(line []byte) {
+	s.retryStream(ctx, "log stream", "/logs?level=debug", func(line []byte) {
 		var l LogLine
 		if json.Unmarshal(line, &l) == nil {
 			l.Time = time.Now().Format("15:04:05")

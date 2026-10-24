@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -414,19 +415,27 @@ func (s *CoreService) testProxy(ctx context.Context, name string) (int, error) {
 	if p.Type == "Tailscale" {
 		return measureTailscale(s.core, name)
 	}
-	return s.delay(ctx, name, testURLFor(p.Type))
+	return s.delay(ctx, name, s.testURLFor(p.Type))
 }
+
+// testURL is what latency tests fetch through a node: 通用 测速地址, else defaultTestURL.
+func (s *CoreService) testURL() string { return cmp.Or(s.settings.Get().TestURL, defaultTestURL) }
 
 // vpnTestURL is what a VPN node is measured against in place of testURL: behind a campus gateway
 // in mainland China gstatic never answers, while a mainland 204 page answers on either side.
 const vpnTestURL = "http://connect.rom.miui.com/generate_204"
 
+// vpnNode says whether a node of the core's type is a VPN, measured against vpnTestURL.
+func vpnNode(coreType string) bool {
+	return slices.Contains([]string{"EasyConnect", "WireGuard", "OpenVPN", "Tailscale"}, coreType)
+}
+
 // testURLFor picks the test URL for a node of the core's type.
-func testURLFor(coreType string) string {
-	if slices.Contains([]string{"EasyConnect", "WireGuard", "OpenVPN", "Tailscale"}, coreType) {
+func (s *CoreService) testURLFor(coreType string) string {
+	if vpnNode(coreType) {
 		return vpnTestURL
 	}
-	return testURL
+	return s.testURL()
 }
 
 func (s *CoreService) delay(ctx context.Context, name, u string) (int, error) {
@@ -448,7 +457,7 @@ func (s *CoreService) Select(group, proxy string) error {
 // under the config it was just given, every test can fail at once, and the page's tiles would stay
 // blank until clicked.
 func (s *CoreService) TestGroup(group string) (map[string]int, error) {
-	q := url.Values{"url": {testURL}, "timeout": {"5000"}}
+	q := url.Values{"url": {s.testURL()}, "timeout": {"5000"}}
 	delays := map[string]int{}
 	ctx := context.Background()
 	if err := s.core.Do(ctx, http.MethodGet, "/group/"+url.PathEscape(group)+"/delay?"+q.Encode(), nil, &delays); err != nil {
@@ -465,13 +474,13 @@ func (s *CoreService) TestGroup(group string) (map[string]int, error) {
 	}
 	all := resp.Proxies[group].All
 	for _, m := range all {
-		if u := testURLFor(resp.Proxies[m].Type); u != testURL {
+		if vpnNode(resp.Proxies[m].Type) {
 			delete(delays, m)
 			d, err := 0, error(nil)
 			if resp.Proxies[m].Type == "Tailscale" {
 				d, err = measureTailscale(s.core, m)
 			} else {
-				d, err = s.delay(ctx, m, u)
+				d, err = s.delay(ctx, m, vpnTestURL)
 			}
 			if err == nil && d > 0 {
 				delays[m] = d
@@ -493,7 +502,7 @@ func (s *CoreService) TestGroup(group string) (map[string]int, error) {
 		_ = s.core.Do(ctx, http.MethodGet, "/group/"+url.PathEscape(group)+"/delay?"+q.Encode(), nil, &again)
 		for _, m := range failed {
 			d := again[m]
-			if testURLFor(resp.Proxies[m].Type) != testURL {
+			if vpnNode(resp.Proxies[m].Type) {
 				d, _ = s.testProxy(ctx, m)
 			}
 			if d > 0 {

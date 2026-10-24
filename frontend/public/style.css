@@ -193,7 +193,6 @@ select { font: inherit; color: var(--text); background: var(--card); border: 1px
 .table td { padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
 .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.25); display: grid; place-items: center; z-index: 20; }
-.modal { width: 480px; max-width: calc(100vw - 40px); }
 .form-grid { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center; margin-top: 4px; }
 .form-grid > label { color: var(--text-2); text-align: right; }
 .radio { display: block; margin: 4px 0; }
@@ -208,10 +207,9 @@ select { font: inherit; color: var(--text); background: var(--card); border: 1px
 .log .msg { flex: none; } /* a multi-line message keeps its continuation lines under its first */
 .log.warning .lvl { color: var(--warn); }
 .log.error .lvl { color: var(--bad); }
+.logs-empty { padding: 12px 0; font-family: var(--sans); }
+.core-down { display: flex; align-items: center; gap: 8px; margin-bottom: var(--gap); }
 tr.muted td { color: var(--text-2); text-decoration: line-through; }
-.modal.wide { width: 860px; max-height: calc(100vh - 60px); overflow: auto; }
-.modal-title { margin: 0 0 8px; font-size: 18px; }
-.modal-sub { margin: -4px 0 12px; overflow-wrap: anywhere; } /* what the dialog is for, e.g. the connection a rule is added for */
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .section-title { font-weight: 600; margin: 16px 0 6px; }
 .form-grid input:not([type=checkbox]), .form-grid select { width: 100%; }
@@ -222,9 +220,9 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .install-box { padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
 .install-box > .form-grid { margin-top: 0; grid-template-columns: 83px 1fr; } /* the dialog's 96px less the box's padding and border: fields in line with the form above */
 .install-box > .actions.end { margin-top: 12px; }
-/* the dialog's buttons in line with the install box's above them: as wide, and in by its padding and border */
-.install-box .btn.small-btn, .install-box + .actions.end .btn { min-width: 84px; }
-.install-box + .actions.end { padding-right: 13px; }
+/* the dialog's buttons in line with the install box's above them: as wide, and in as far */
+.install-box .btn.small-btn, .tunnel-sheet .sheet-foot .btn { min-width: 84px; }
+.tunnel-sheet .sheet-foot { padding-right: 33px; } /* the body's 20px, the box's border and padding: under the box's buttons */
 .install-head { display: flex; align-items: center; gap: 12px; }
 .install-head > .muted { flex: 1; }
 .install-result { margin-top: 8px; }
@@ -243,7 +241,11 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .big-seg { display: flex; width: 100%; max-width: 480px; padding: 2px; border-radius: 9px; }
 .big-seg button { flex: 1; padding: 4px 0; font-size: 12px; border-radius: 7px; }
 .big-seg button.on.accent { background: var(--accent); color: #fff; }
-.tile-head { display: flex; align-items: center; justify-content: space-between; margin: 22px 0 8px; }
+.tile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 22px 0 8px; }
+.tile-head .small-input { width: 180px; height: 24px; font-size: 12px; }
+.small-seg button { padding: 2px 10px; }
+.btn.on { background: var(--active); } /* a toggle that is on, e.g. 隐藏超时 */
+.tiles-empty { padding: 8px 4px; }
 .tile-title { font-weight: 600; font-size: 13px; }
 .tile-title.proxies { color: #c026d3; }
 .tile-title.groups { color: #0ea5e9; }
@@ -267,6 +269,10 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .menu button.danger { color: var(--bad); }
 .menu button.danger:hover { background: var(--bad); color: #fff; }
 .menu.detail { min-width: 320px; padding: 8px; }
+/* a segmented control in a menu keeps its own look, not the menu's full-width rows */
+.menu .seg button { display: inline-block; width: auto; padding: 3px 16px; font-size: 12px; }
+.menu .seg button:hover:not(.on) { background: none; color: inherit; }
+.menu .seg button.on { background: var(--accent); color: #fff; }
 .menu.detail button { padding-inline: 8px; } /* in line with the rows above */
 .detail-head { padding: 4px 8px 6px; font-size: 12px; color: var(--text-2); }
 .detail-row { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 6px 8px; border-top: 1px solid var(--line); font-size: 12px; }
@@ -358,6 +364,12 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .sheet-body { flex: 1; overflow: auto; padding: 4px 24px 20px; }
 .sheet-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
 .sheet-foot .btn { min-width: 88px; }
+.sheet.narrow { width: min(480px, calc(100vw - 80px)); }
+.foot-error { align-self: center; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* a save's failure, beside the buttons that tried */
+.sheet-sub { margin-top: 2px; overflow-wrap: anywhere; } /* what the dialog is for, e.g. the connection a rule is added for */
+/* a destructive button waiting for its second click (useConfirm): red, and shown even where its row hides it */
+.btn.armed, .link-btn.armed { color: var(--bad); border-color: var(--bad); visibility: visible !important; }
+.menu button.armed { background: var(--bad); color: #fff; }
 .grouped .settings-card { padding: 0; margin: 0; background: none; border: 0; box-shadow: none; overflow: visible; }
 .grouped .settings-card > .section-title { margin: 18px 4px 8px; }
 .grouped .settings-card:first-child > .setting-row:first-child { margin-top: 16px; }
@@ -385,7 +397,6 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .plist-main { flex: 1; min-width: 0; }
 .plist-main > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plist-name { font-weight: 500; }
-.plist-main > input.plist-rename { width: 100%; max-width: 320px; font-weight: 500; } /* the name being renamed, in place */
 .plist-usage { width: 150px; flex: none; text-align: right; font-variant-numeric: tabular-nums; }
 .plist-meter { height: 4px; margin: 4px 0 2px; border-radius: 2px; background: var(--track); overflow: hidden; }
 .plist-meter i { display: block; height: 100%; border-radius: 2px; background: var(--accent); transition: width 0.2s; }
@@ -398,6 +409,7 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .plist-add { display: flex; gap: 8px; padding: 10px 16px; }
 .plist-tools { display: flex; align-items: center; gap: 6px; padding: 8px 10px; }
 .plist-tools .btn { height: 24px; padding: 0 10px; font-size: 12px; }
+.plist-error { padding: 6px 12px; border-top: 1px solid var(--line); } /* a failed action, under the toolbar that ran it */
 .plist textarea.override { margin: 0; border: 0; border-radius: 0; background: none; padding: 12px 16px; }
 
 /* form sheets (add proxy): grouped rows, label left and control right, in two columns */
@@ -413,6 +425,13 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .form-row > :last-child { justify-self: stretch; }
 .form-row > input[type=checkbox] { justify-self: end; }
 .form-row select, .form-row input:not([type=checkbox]) { width: 100%; }
+/* the connections table: headers sort it; a row's × closes that connection, shown on the hovered row only */
+.table th.sortable { cursor: pointer; white-space: nowrap; }
+.table th.sortable:hover { color: var(--text); }
+.row-close { text-align: right; padding-left: 0 !important; padding-right: 4px !important; }
+.table .row-close .btn { height: 20px; width: 22px; padding: 0; border-color: transparent; background: none; color: var(--text-2); visibility: hidden; }
+.table tr:hover .row-close .btn { visibility: visible; }
+.table .row-close .btn:hover { color: var(--bad); background: var(--hover); }
 /* rule actions: borderless, shown on the hovered row only, so the table reads as rules */
 .rule-actions { text-align: right; width: 168px; }
 .table .rule-actions .btn { height: 22px; padding: 0 8px; border-color: transparent; background: none; color: var(--text-2); visibility: hidden; }
@@ -446,6 +465,7 @@ tr.muted td.rule-actions { text-decoration: none; }
 .list-add .btn { height: 24px; font-size: 12px; border-radius: 6px; }
 .setting-control .ctl { width: 80px; } /* one column of equal-width controls */
 .setting-control .btn.ctl { height: 24px; font-size: 12px; border-radius: 6px; }
+.setting-control .ctl.url-ctl { width: 300px; } /* an address, wider than the column of short controls */
 .client-icon { width: 18px; height: 18px; flex: none; }
 .client-icon.device { display: grid; place-items: center; border-radius: 6px; background: var(--track); color: var(--text-2); }
 .client-icon.device svg { width: 12px; height: 12px; }
@@ -585,7 +605,7 @@ tr.muted td.rule-actions { text-decoration: none; }
 
 /* a table under form rows: its cells' padding would indent it past the inputs */
 .table-wrap.tight { margin-left: -8px; margin-right: -8px; }
-.card .label.section-label { margin: 18px 0 -8px; } /* a section inside a card: the row below keeps its own top margin */
+.card .label.section-label, .sheet .label.section-label { margin: 18px 0 -8px; } /* a section inside a card or sheet: the row below keeps its own top margin */
 
 /* activity: a grid one window high, as the reference dashboard: the status and speeds, the switches,
    four small cards, then the lists, which take the rest and scroll inside */
@@ -766,7 +786,7 @@ tr.muted td.rule-actions { text-decoration: none; }
 .vpn-editor .vpn-facts { margin-top: 10px; }
 .vpn-offered-head { display: flex; align-items: baseline; gap: 12px; margin-top: 18px; white-space: nowrap; overflow: hidden; }
 .vpn-offered-head .muted { overflow: hidden; text-overflow: ellipsis; }
-.vpn-actions { margin-top: 20px; }
+.vpn-probe { margin-top: 10px; } /* 测试登录's answer, under the form */
 /* the override's parts: the switch, and what the part shown holds, on one line */
 .override-tabs { gap: 12px; }
 .override-tabs .seg { flex: none; }

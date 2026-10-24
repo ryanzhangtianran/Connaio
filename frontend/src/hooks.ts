@@ -38,6 +38,20 @@ export function useClickAway(open: boolean, close: () => void) {
   }, [open]);
 }
 
+// useConfirm asks once more before a destructive action: confirm(key, run) arms key the first time
+// (show 确认… while armed === key), runs it the second; 3 seconds or a click elsewhere disarm it.
+export function useConfirm(): [string, (key: string, run: () => void) => void] {
+  const [armed, setArmed] = useState("");
+  useEffect(() => {
+    if (!armed) return;
+    const off = () => setArmed("");
+    const t = setTimeout(off, 3000);
+    const away = setTimeout(() => document.addEventListener("click", off)); // not the arming click itself
+    return () => { clearTimeout(t); clearTimeout(away); document.removeEventListener("click", off); };
+  }, [armed]);
+  return [armed, (key, run) => { if (armed === key) { setArmed(""); run(); } else setArmed(key); }];
+}
+
 // useCachedURL is fetch(key)'s data URL (an icon from Go), fetched once per key for the app's lifetime.
 const urls = new Map<string, Promise<string>>();
 export function useCachedURL(key: string | undefined, fetch: (key: string) => Promise<string>) {

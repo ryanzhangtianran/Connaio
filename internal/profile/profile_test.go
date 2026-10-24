@@ -68,6 +68,22 @@ func TestStore(t *testing.T) {
 	if _, list := s.List(); list[0].Name != "公司" {
 		t.Fatalf("renamed, then updated: %q, want 公司", list[0].Name)
 	}
+	// a chosen interval, 0 (never) too, outlives the provider's header; a link must be http(s)
+	if err := s.Edit(p.ID, "公司", "ftp://x", 0); err == nil {
+		t.Fatal("a non-http link must be rejected")
+	}
+	if err := s.Edit(p.ID, "公司", srv.URL+"/sub", 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Update(p.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, list := s.List(); list[0].Interval != 0 || list[0].URL != srv.URL+"/sub" {
+		t.Fatalf("edited, then updated: %+v, want interval 0 kept", list[0])
+	}
+	if err := s.Edit(p.ID, "公司", srv.URL+"/sub", 12); err != nil { // as the provider set it, for Due below
+		t.Fatal(err)
+	}
 
 	if err := s.SetOverride("not: [valid"); err == nil {
 		t.Fatal("broken override accepted")
@@ -443,10 +459,16 @@ func TestRuleEdits(t *testing.T) {
 	if err := s.MoveRule(1, 1); err == nil {
 		t.Fatal("moving a GUI rule past its own list (into the profile's) must be refused")
 	}
+	if err := s.ReplaceRule(0, "DOMAIN,c.com,DIRECT"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReplaceRule(2, "DOMAIN,d.com,DIRECT"); err == nil {
+		t.Fatal("editing one of the profile's rules must be refused")
+	}
 	if err := s.HideRule("MATCH,DIRECT"); err != nil { // the empty profile's only rule
 		t.Fatal(err)
 	}
-	if v, _ := s.Value(false, []string{"rules"}); !slices.Equal(v.([]any), []any{"DOMAIN,b.com,DIRECT", "DOMAIN,a.com,DIRECT"}) {
+	if v, _ := s.Value(false, []string{"rules"}); !slices.Equal(v.([]any), []any{"DOMAIN,c.com,DIRECT", "DOMAIN,a.com,DIRECT"}) {
 		t.Fatalf("rules %v", v)
 	}
 }

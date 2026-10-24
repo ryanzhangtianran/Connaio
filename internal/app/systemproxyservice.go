@@ -3,9 +3,11 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +32,28 @@ type SystemProxyService struct {
 	port    int  // port currently set, 0 = not set
 }
 
+// Bypass is what the system proxy leaves alone besides local and LAN addresses: hosts, *.domains or
+// ranges, as 通用 lists them.
+func (s *SystemProxyService) Bypass() []string { return s.settings.Get().Bypass }
+
+// SetBypass keeps list and, with the system proxy on, sets it at once.
+func (s *SystemProxyService) SetBypass(list []string) error {
+	for _, h := range list {
+		if h == "" || strings.ContainsAny(h, " \t'\";,") { // each platform joins them its own way: none of these may sneak through
+			return fmt.Errorf("「%s」不是有效的主机名或网段", h)
+		}
+	}
+	if err := s.settings.Update(func(st *Settings) { st.Bypass = list }); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.port == 0 || headless {
+		return nil
+	}
+	return sysproxy.Set(s.port, list)
+}
+
 func (s *SystemProxyService) Enabled() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -47,7 +71,7 @@ func (s *SystemProxyService) SetEnabled(on bool) error {
 		if err != nil {
 			return err
 		}
-		if err := sysproxy.Set(port); err != nil {
+		if err := sysproxy.Set(port, s.settings.Get().Bypass); err != nil {
 			return err
 		}
 		s.port = port
@@ -136,7 +160,7 @@ func (s *SystemProxyService) guard() {
 		s.port = port
 		return
 	}
-	if err := sysproxy.Set(port); err != nil {
+	if err := sysproxy.Set(port, s.settings.Get().Bypass); err != nil {
 		notify("error", "设置系统代理失败：%v", err)
 		return
 	}

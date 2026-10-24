@@ -149,7 +149,7 @@ func (s *ToolService) diagProxies(ctx context.Context) DiagSection {
 			sec.OK = false
 			continue
 		}
-		sec.Lines = append(sec.Lines, fmt.Sprintf("通过 %s 连接到 %s：%d ms", g.Now, testURL, delay))
+		sec.Lines = append(sec.Lines, fmt.Sprintf("通过 %s 连接到 %s：%d ms", g.Now, s.cs.testURL(), delay))
 	}
 	if len(sec.Lines) == 0 {
 		sec.Lines = []string{"没有在用的代理"}

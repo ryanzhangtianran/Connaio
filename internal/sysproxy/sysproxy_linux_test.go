@@ -2,11 +2,15 @@ package sysproxy
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
 func TestSetCommands(t *testing.T) {
-	cmds := setCommands(7890)
+	cmds := setCommands(7890, []string{"*.corp.example"})
+	if !strings.HasSuffix(cmds[0][3], ", '*.corp.example']") {
+		t.Fatalf("extra bypass: %q", cmds[0][3])
+	}
 	if !slices.Equal(cmds[1], []string{"set", schema + ".http", "host", "'127.0.0.1'"}) || !slices.Equal(cmds[6], []string{"set", schema + ".socks", "port", "7890"}) {
 		t.Fatalf("%q", cmds)
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,6 +26,27 @@ type Profiles struct {
 func init() {
 	application.RegisterEvent[Profiles]("profiles")
 	application.RegisterEvent[string]("setting") // dotted path of a setting that changed
+	application.RegisterEvent[Offer]("offer")
+}
+
+// Offer is a subscription a provider's page offered (clash://install-config), for the 配置 page to
+// fill in; the user adds it, a page can't by itself.
+type Offer struct {
+	URL  string `json:"url"`
+	Name string `json:"name"`
+}
+
+// installConfig reads clash://install-config?url=…&name=… (connaio:// too); ok only for an http(s) link.
+func installConfig(raw string) (Offer, bool) {
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "clash" && u.Scheme != "connaio") || u.Host != "install-config" {
+		return Offer{}, false
+	}
+	link, err := url.Parse(u.Query().Get("url"))
+	if err != nil || (link.Scheme != "http" && link.Scheme != "https") || link.Host == "" {
+		return Offer{}, false
+	}
+	return Offer{URL: link.String(), Name: u.Query().Get("name")}, true
 }
 
 // ProfileService manages subscriptions and the override, and feeds the merged config to the core.
@@ -33,6 +55,29 @@ type ProfileService struct {
 	core     *core.Core
 	settings *settingsFile
 	mu       sync.Mutex // one change at a time: read the old state, change, apply, roll back
+	offerMu  sync.Mutex
+	offer    *Offer // offered, not yet taken (Offered)
+}
+
+// offered keeps raw's subscription for the 配置 page, which takes it as it opens or, open, at once.
+func (s *ProfileService) offered(raw string) bool {
+	o, ok := installConfig(raw)
+	if ok {
+		s.offerMu.Lock()
+		s.offer = &o
+		s.offerMu.Unlock()
+		emit("offer", o)
+	}
+	return ok
+}
+
+// Offered hands the 配置 page the subscription offered last, once; nil when none waits.
+func (s *ProfileService) Offered() *Offer {
+	s.offerMu.Lock()
+	defer s.offerMu.Unlock()
+	o := s.offer
+	s.offer = nil
+	return o
 }
 
 func (s *ProfileService) build() ([]byte, error) {
@@ -194,13 +239,28 @@ func (s *ProfileService) Remove(id string) error {
 	return nil
 }
 
-// Rename renames a profile. The name is only shown, so the config is not applied again.
-func (s *ProfileService) Rename(id, name string) error {
-	if err := s.store.Rename(id, name); err != nil {
+// Edit sets a profile's name and, for a subscription, its link and auto-update hours (0: never).
+func (s *ProfileService) Edit(id, name, link string, interval int) error {
+	if err := s.store.Edit(id, name, link, interval); err != nil {
 		return err
 	}
 	s.changed()
 	return nil
+}
+
+// UpdateAll updates every subscription, one after another; the failures come back together, by name.
+func (s *ProfileService) UpdateAll() error {
+	_, list := s.store.List()
+	var errs []error
+	for _, p := range list {
+		if p.URL == "" {
+			continue
+		}
+		if err := s.Update(p.ID); err != nil {
+			errs = append(errs, fmt.Errorf("%s：%w", p.Name, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Select switches profiles; on a rejected config the previous one stays selected and running.
@@ -395,6 +455,11 @@ func (s *ProfileService) SetTunnelDisabled(name string, disabled bool) error {
 
 func (s *ProfileService) RemoveTunnel(name string) error {
 	return s.edit(func() error { return s.store.RemoveTunnel(name) })
+}
+
+// EditRule rewrites the GUI-added rule at index, where it stands.
+func (s *ProfileService) EditRule(index int, rule string) error {
+	return s.edit(func() error { return s.store.ReplaceRule(index, rule) })
 }
 
 // MoveRule moves the GUI-added rule at index one place up (delta -1) or down (+1).

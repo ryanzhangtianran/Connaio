@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { CoreService, ProfileService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { useDirty } from "./hooks";
+import Dialog from "./Dialog";
+import { errText } from "./format";
+import { Switch } from "./Settings";
 import { bypassKinds, bypassOf, condOf } from "./Vpn";
 
 const types = [
@@ -29,6 +32,7 @@ export default function GroupDialog({ editing, onClose }: { editing?: Record<str
     ? Object.entries(editing.rules as Record<string, string>).map(([cond, target]) => ({ ...bypassOf(cond), target }))
     : [{ t: "SSID", v: "", target: "DIRECT" }]);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const dirty = useDirty([name, type, members, url, period, strategy, def, rules]);
   useEffect(() => { CoreService.ProxyNames().then((n) => setNames([...new Set([...(n ?? []), "DIRECT", "REJECT"])].filter((x) => x !== editing?.name))); }, []);
 
@@ -42,7 +46,9 @@ export default function GroupDialog({ editing, onClose }: { editing?: Record<str
     if (probes) Object.assign(group, { url, interval: Number(period) });
     if (type === "load-balance") group.strategy = strategy;
     setBusy(true);
-    (editing ? ProfileService.EditGroup(editing.name, group) : ProfileService.AddGroup(group)).then(onClose).finally(() => setBusy(false));
+    setError("");
+    (editing ? ProfileService.EditGroup(editing.name, group) : ProfileService.AddGroup(group))
+      .then(onClose, (e) => setError(errText(e, "保存失败"))).finally(() => setBusy(false));
   };
   const setRule = (i: number, r: Partial<Rule>) => setRules(rules.map((x, j) => (j === i ? { ...x, ...r } : x)));
   const duplicate = !editing && [...names, "GLOBAL"].includes(name.trim()); // ProxyNames leaves GLOBAL out; the core's own
@@ -51,9 +57,11 @@ export default function GroupDialog({ editing, onClose }: { editing?: Record<str
   const ready = !!name.trim() && !duplicate && !sameCond && (type === "subnet" || members.length > 0) && (!probes || (/^\d+$/.test(period) && Number(period) > 0));
 
   return (
-    <div className="modal-bg" onClick={dirty ? undefined : onClose}>
-      <div className="modal card" onClick={(e) => e.stopPropagation()}>
-        <h2 className="modal-title">{editing ? `编辑 ${editing.name}` : "增加策略组"}</h2>
+    <Dialog title={editing ? `编辑 ${editing.name}` : "增加策略组"} className="narrow" locked={dirty || busy} onClose={onClose} foot={<>
+      {error && <span className="small error foot-error">{error}</span>}
+      <button className="btn" onClick={onClose}>取消</button>
+      <button className="btn primary" disabled={!ready || busy} onClick={save}>完成</button>
+    </>}>
         <div className="form-grid">
           <label>名称</label><input autoFocus={!editing} readOnly={!!editing} placeholder={duplicate ? "已有同名策略组或代理" : "必填"} value={name} onChange={(e) => setName(e.target.value)} style={duplicate ? { borderColor: "var(--bad)" } : undefined} />
           <label>类型</label>
@@ -61,7 +69,7 @@ export default function GroupDialog({ editing, onClose }: { editing?: Record<str
           {probes && <><label>测试 URL</label><input value={url} onChange={(e) => setURL(e.target.value)} /><label>间隔（秒）</label><input value={period} onChange={(e) => setPeriod(e.target.value)} /></>}
           {type === "subnet" && <><label>其他网络</label><select value={def} onChange={(e) => setDef(e.target.value)}>{names.map((n) => <option key={n}>{n}</option>)}</select></>}
           {type === "load-balance" && (
-            <><label>策略</label><select value={strategy} onChange={(e) => setStrategy(e.target.value)}>{["consistent-hashing", "round-robin", "sticky-sessions"].map((s) => <option key={s}>{s}</option>)}</select></>
+            <><label>策略</label><select value={strategy} onChange={(e) => setStrategy(e.target.value)}>{[["consistent-hashing", "一致性哈希"], ["round-robin", "轮询"], ["sticky-sessions", "粘性会话"]].map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></>
           )}
         </div>
         {type === "subnet" ? (
@@ -81,18 +89,13 @@ export default function GroupDialog({ editing, onClose }: { editing?: Record<str
         ) : (
           <>
             <div className="section-title">成员（按顺序）</div>
-            <div className="checks scroll">
+            <div className="plist">
               {names.map((n) => (
-                <label key={n} className="radio"><input type="checkbox" checked={members.includes(n)} onChange={(e) => setMembers(e.target.checked ? [...members, n] : members.filter((x) => x !== n))} /> {n}</label>
+                <div key={n} className="form-row"><span>{n}</span><Switch on={members.includes(n)} onChange={(on) => setMembers(on ? [...members, n] : members.filter((x) => x !== n))} /></div>
               ))}
             </div>
           </>
         )}
-        <div className="actions end">
-          <button className="btn" onClick={onClose}>取消</button>
-          <button className="btn primary" disabled={!ready || busy} onClick={save}>完成</button>
-        </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }

@@ -3,8 +3,9 @@ import { CoreService, DeviceService, EnhancedService, SettingsService, SystemPro
 import type { Activity as ActivityData, Conn, DiagSection, Group, IPInfo, LanInfo, Latency, Memory, RepairItem, Service, Status, Usage } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { delayClass, nodesOf } from "./Proxies";
 import { copyText, errText, platform, size, sizeText, speed, web } from "./format";
+import Dialog from "./Dialog";
 import { DiagLog } from "./ProxyDiagnose";
-import { on, usePoll, useCachedURL, useClickAway, useWholeRows } from "./hooks";
+import { on, usePoll, useCachedURL, useClickAway, useConfirm, useWholeRows } from "./hooks";
 import { Brand, Icon, hasBrand } from "./icons";
 import { Switch } from "./Settings";
 import { session, useHistory } from "./store";
@@ -309,16 +310,19 @@ const MAX_SITES = 6; // activity.go maxSites
 // SitesSheet edits the 服务状态 card's sites: a name and an address each, at most MAX_SITES.
 function SitesSheet({ onClose }: { onClose: (saved: boolean) => void }) {
   const [rows, setRows] = useState<{ name: string; url: string }[]>([]);
+  const [loaded, setLoaded] = useState("[]"); // as read: rows edited since lock the sheet against a stray click
   const [error, setError] = useState("");
-  useEffect(() => { SettingsService.Sites().then((s) => setRows(s ?? [])); }, []);
+  useEffect(() => { SettingsService.Sites().then((s) => { setRows(s ?? []); setLoaded(JSON.stringify(s ?? [])); }); }, []);
   const set = (i: number, k: "name" | "url", v: string) => setRows(rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   const save = (list: { name: string; url: string }[]) => SettingsService.SetSites(list).then(() => onClose(true), (e) => setError(errText(e)));
   const ready = rows.length > 0 && rows.every((r) => r.name.trim() && r.url.trim());
   return (
-    <div className="modal-bg" onClick={() => onClose(false)}>
-      <div className="sheet sites-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-head"><div className="sheet-title">编辑站点</div><div className="muted small">经规则访问各站点，测量首次响应的时间；最多 {MAX_SITES} 个。</div></div>
-        <div className="sheet-body">
+    <Dialog title="编辑站点" sub={`经规则访问各站点，测量首次响应的时间；最多 ${MAX_SITES} 个。`} className="sites-sheet" locked={JSON.stringify(rows) !== loaded} onClose={() => onClose(false)} foot={<>
+      <button className="btn" onClick={() => save([])}>恢复默认</button>
+      <span className="grow" />
+      <button className="btn" onClick={() => onClose(false)}>取消</button>
+      <button className="btn primary" disabled={!ready} onClick={() => save(rows)}>完成</button>
+    </>}>
           {rows.map((r, i) => (
             <div key={i} className="site-row">
               <span className="svc-logo"><SiteLogo name={r.name} url={r.url.includes("://") ? r.url : `https://${r.url}`} /></span>
@@ -329,15 +333,7 @@ function SitesSheet({ onClose }: { onClose: (saved: boolean) => void }) {
           ))}
           <button className="btn site-add" disabled={rows.length >= MAX_SITES} onClick={() => setRows([...rows, { name: "", url: "" }])}>添加站点</button>
           {error && <div className="error small">{error}</div>}
-        </div>
-        <div className="sheet-foot">
-          <button className="btn" onClick={() => save([])}>恢复默认</button>
-          <span className="grow" />
-          <button className="btn" onClick={() => onClose(false)}>取消</button>
-          <button className="btn primary" disabled={!ready} onClick={() => save(rows)}>保存</button>
-        </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 
@@ -369,17 +365,7 @@ function MemoryCard() {
 type Range = "today" | "month";
 
 function TrafficSum({ activity, range, setRange }: { activity: ActivityData | null; range: Range; setRange: (r: Range) => void }) {
-  const [confirming, setConfirming] = useState(false); // 清除 asks once more before it forgets
-  useEffect(() => {
-    if (!confirming) return;
-    const t = setTimeout(() => setConfirming(false), 3000);
-    return () => clearTimeout(t);
-  }, [confirming]);
-  const clear = () => {
-    if (!confirming) { setConfirming(true); return; }
-    setConfirming(false);
-    CoreService.ClearTraffic();
-  };
+  const [armed, confirm] = useConfirm(); // 清除 asks once more before it forgets
   const { direct, proxy } = activity?.[range] ?? { direct: 0, proxy: 0 };
   const [total, unit] = size(direct + proxy);
   return (
@@ -388,7 +374,7 @@ function TrafficSum({ activity, range, setRange }: { activity: ActivityData | nu
         <Num value={total} unit={unit} />
         <span className="traffic-range">
           {(["today", "month"] as const).map((r) => <button key={r} className={range === r ? "on" : ""} onClick={() => setRange(r)}>{r === "today" ? "今日" : "本月"}</button>)}
-          <button className={`link-btn ${confirming ? "danger" : ""}`} onClick={clear} title="清除所有流量统计">{confirming ? "确认清除" : "清除"}</button>
+          <button className={`link-btn ${armed ? "armed" : ""}`} onClick={() => confirm("clear", () => CoreService.ClearTraffic())} title="清除所有流量统计">{armed ? "确认清除" : "清除"}</button>
         </span>
       </div>
       <div className="split-bar">
@@ -396,7 +382,7 @@ function TrafficSum({ activity, range, setRange }: { activity: ActivityData | nu
         {proxy > 0 && <i style={{ flexGrow: proxy, background: "var(--down)" }} />}
       </div>
       <div className="legend">
-        <span><i style={{ background: "var(--up)" }} />DIRECT <b>{sizeText(direct)}</b></span>
+        <span><i style={{ background: "var(--up)" }} />直连 <b>{sizeText(direct)}</b></span>
         <span><i style={{ background: "var(--down)" }} />代理 <b>{sizeText(proxy)}</b></span>
       </div>
     </div>
@@ -443,7 +429,7 @@ export function Routes({ shown, routes }: { shown: string; routes: Map<string, C
     <>
       {[...routes].map(([chain, cs]) => (
         <div key={chain} className="watch-route" title={[...new Set(cs.map((c) => c.host))].join("\n")}>
-          <div className="watch-head"><span className="watch-chain">{chain}</span><span className="muted small">{cs.length} 个连接</span></div>
+          <div className="watch-head"><span className="watch-chain">{chain === "DIRECT" ? "直连" : chain}</span><span className="muted small">{cs.length} 个连接</span></div>
           <div className="watch-exit"><ExitCell policy={chain.split(" → ").pop()!} /></div>
         </div>
       ))}
@@ -477,7 +463,7 @@ function BarChart({ values, now, labels, tip }: { values: number[]; now: number;
   );
 }
 
-const hourLabels: [number, string][] = [[0, "12AM"], [6, "6AM"], [12, "12PM"], [18, "6PM"]];
+const hourLabels: [number, string][] = [[0, "0 时"], [6, "6 时"], [12, "12 时"], [18, "18 时"]];
 const dayLabels: [number, string][] = [0, 7, 14, 21, 28].map((i) => [i, `${i + 1}日`]);
 
 // ClientIcon is a client's Finder icon (an app's, or an executable's generic one), a reverse
@@ -668,21 +654,15 @@ function DiagnoseSheet({ onClose }: { onClose: () => void }) {
     return () => { off(); ToolService.CancelDiagnose(); };
   }, []);
   return (
-    <div className="modal-bg" onClick={running ? undefined : onClose}>
-      <div className="sheet diag-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-head"><div className="sheet-title">网络诊断</div></div>
-        <div className="sheet-body diag-log tool-log">
-          {sections.length === 0 && <div className="muted">诊断中…</div>}
-          <DiagLog sections={sections} />
-        </div>
-        <div className="sheet-foot">
-          {running && <span className="spinner" />}
-          <span className="grow" />
-          {running ? <button className="btn" onClick={() => ToolService.CancelDiagnose()}>终止</button> : <button className="btn" onClick={diagnose}>重新诊断</button>}
-          <button className="btn primary" disabled={running} onClick={onClose}>完成</button>
-        </div>
-      </div>
-    </div>
+    <Dialog title="网络诊断" className="diag-sheet" bodyClass="diag-log tool-log" locked={running} onClose={onClose} foot={<>
+      {running && <span className="spinner" />}
+      <span className="grow" />
+      {running ? <button className="btn" onClick={() => ToolService.CancelDiagnose()}>终止</button> : <button className="btn" onClick={diagnose}>重新诊断</button>}
+      <button className="btn primary" disabled={running} onClick={onClose}>完成</button>
+    </>}>
+      {sections.length === 0 && <div className="muted">诊断中…</div>}
+      <DiagLog sections={sections} />
+    </Dialog>
   );
 }
 
@@ -706,7 +686,7 @@ export default function Activity({ status, activity, sysProxy, enhanced, rooted,
   usePoll(loadLan, 10_000, status.running); // allow-lan and the port can change from the devices page or the tray
 
   if (!status.running) {
-    return <div className="card"><div className="muted">{status.error ? "内核未运行" : "内核启动中…"}</div></div>;
+    return status.error ? null : <div className="card"><div className="muted">内核启动中…</div></div>; // stopped: App's banner says why
   }
 
   const tunSub = !rooted ? (web ? "需以 root 运行 Connaio" : "需先在「通用」中授予 root 权限") : enhanced === "tun" ? "TUN 接管全部流量" : enhanced === "process-tun" ? "部分增强运行中" : "已关闭";

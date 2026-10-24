@@ -3,6 +3,7 @@ package sysproxy
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/registry"
@@ -19,7 +20,8 @@ const (
 	internetOptionRefresh         = 37
 )
 
-func Set(port int) error {
+// Set points WinINET's proxy at 127.0.0.1:port, extra bypassed besides local and LAN.
+func Set(port int, extra []string) error {
 	return write(func(k registry.Key) error {
 		if err := k.SetDWordValue("ProxyEnable", 1); err != nil {
 			return err
@@ -27,7 +29,7 @@ func Set(port int) error {
 		if err := k.SetStringValue("ProxyServer", server(port)); err != nil {
 			return err
 		}
-		return k.SetStringValue("ProxyOverride", bypass)
+		return k.SetStringValue("ProxyOverride", strings.Join(append([]string{bypass}, extra...), ";"))
 	})
 }
 

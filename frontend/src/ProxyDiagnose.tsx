@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
+import Dialog from "./Dialog";
+import { errText } from "./format";
 
 type Section = { title: string; lines: string[] | null; ok: boolean };
 
@@ -27,38 +29,33 @@ export default function ProxyDiagnose({ nodes, groups, initial, onClose }: { nod
   ];
   const run = (title: string, test: () => Promise<string[]>) => {
     setBusy(title);
-    test().then((lines) => ({ title: `${title} · ${policy}`, lines, ok: true }), (e) => ({ title: `${title} · ${policy}`, lines: [String(e)], ok: false }))
+    test().then((lines) => ({ title: `${title} · ${policy}`, lines, ok: true }), (e) => ({ title: `${title} · ${policy}`, lines: [errText(e, "失败")], ok: false }))
       .then((s) => setLog((l) => [...l, s])).finally(() => setBusy(""));
   };
   return (
-    <div className="modal-bg" onClick={busy ? undefined : onClose}>
-      <div className="sheet diag-sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-head"><div className="sheet-title">代理诊断</div></div>
-        <div className="diag-controls">
-          <div className="inline">
-            <span>策略</span>
-            <select value={policy} onChange={(e) => setPolicy(e.target.value)}>
-              <optgroup label="节点">{nodes.map((p) => <option key={p}>{p}</option>)}</optgroup>
-              {groups.length > 0 && <optgroup label="策略组（测试当前选中的节点）">{groups.map((p) => <option key={p}>{p}</option>)}</optgroup>}
-            </select>
-          </div>
-          <div className="diag-tests">
-            {tests.map(([title, test]) => (
-              <button key={title} className={`btn ${busy === title ? "running" : ""}`} disabled={!!busy} onClick={() => run(title, test)}>{title}</button>
-            ))}
-          </div>
+    <Dialog title="代理诊断" className="diag-sheet" bodyClass="diag diag-log" locked={!!busy} onClose={onClose} bar={
+      <div className="diag-controls">
+        <div className="inline">
+          <span>策略</span>
+          <select value={policy} onChange={(e) => setPolicy(e.target.value)}>
+            <optgroup label="节点">{nodes.map((p) => <option key={p}>{p}</option>)}</optgroup>
+            {groups.length > 0 && <optgroup label="策略组（测试当前选中的节点）">{groups.map((p) => <option key={p}>{p}</option>)}</optgroup>}
+          </select>
         </div>
-        <div className="sheet-body diag diag-log">
-          {log.length === 0 && !busy && <div className="muted">选择一项测试开始。</div>}
-          <DiagLog sections={log} />
-        </div>
-        <div className="sheet-foot">
-          {busy && <span className="spinner" />}
-          <span className="grow" />
-          <button className="btn" disabled={!log.length} onClick={() => setLog([])}>清除</button>
-          <button className="btn primary" disabled={!!busy} title={busy ? "等测试结束" : ""} onClick={onClose}>完成</button>
+        <div className="diag-tests">
+          {tests.map(([title, test]) => (
+            <button key={title} className={`btn ${busy === title ? "running" : ""}`} disabled={!!busy} onClick={() => run(title, test)}>{title}</button>
+          ))}
         </div>
       </div>
-    </div>
+    } foot={<>
+      {busy && <span className="spinner" />}
+      <span className="grow" />
+      <button className="btn" disabled={!log.length} onClick={() => setLog([])}>清除</button>
+      <button className="btn primary" disabled={!!busy} title={busy ? "等测试结束" : ""} onClick={onClose}>完成</button>
+    </>}>
+      {log.length === 0 && !busy && <div className="muted">选择一项测试开始。</div>}
+      <DiagLog sections={log} />
+    </Dialog>
   );
 }

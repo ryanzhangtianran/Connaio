@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -54,8 +55,14 @@ func Run(assets fs.FS, trayIcon []byte) error {
 		MarshalError: marshalError,
 		// a second copy would fight the first over the core's ports; bring the first forward instead
 		SingleInstance: &application.SingleInstanceOptions{
-			UniqueID:               "com.ryanzhangtianran.connaio",
-			OnSecondInstanceLaunch: func(application.SecondInstanceData) { show("") },
+			UniqueID: "com.ryanzhangtianran.connaio",
+			OnSecondInstanceLaunch: func(d application.SecondInstanceData) { // its arguments carry a clash:// link on Windows and Linux
+				if slices.ContainsFunc(d.Args, profiles.offered) {
+					show("profiles")
+				} else {
+					show("")
+				}
+			},
 		},
 		Name:        "Connaio",
 		Description: "Rule-based proxy with reverse tunnels",
@@ -107,6 +114,12 @@ func Run(assets fs.FS, trayIcon []byte) error {
 	// the first window too is built once the app runs: on macOS one built before app.Run is never
 	// freed when closed, left behind as an invisible window (alpha 0, off screen) in Mission Control
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) { show("") })
+	// a provider's 一键导入 (clash://install-config): macOS hands it over here, Windows and Linux in the arguments
+	app.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(e *application.ApplicationEvent) {
+		if profiles.offered(e.Context().URL()) {
+			show("profiles")
+		}
+	})
 
 	// the floating process monitor: built when opened, kept above other windows, freed when closed
 	// and opened again where it was left

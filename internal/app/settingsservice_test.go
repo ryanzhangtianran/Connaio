@@ -56,3 +56,30 @@ func TestLeftOut(t *testing.T) {
 		}
 	}
 }
+
+// 测速地址 takes an http(s) address; the default and "" both mean the default.
+func TestSetTestURL(t *testing.T) {
+	s := &SettingsService{settings: loadSettings(t.TempDir())}
+	if err := s.SetTestURL("ftp://a.com"); err == nil {
+		t.Error("ftp accepted")
+	}
+	if err := s.SetTestURL(" https://cp.cloudflare.com/generate_204 "); err != nil || s.TestURL() != "https://cp.cloudflare.com/generate_204" {
+		t.Errorf("got %q, %v", s.TestURL(), err)
+	}
+	if err := s.SetTestURL(""); err != nil || s.TestURL() != defaultTestURL {
+		t.Errorf("reset: got %q, %v", s.TestURL(), err)
+	}
+}
+
+// 不经代理 keeps plain host and range entries; one that could break a platform's list is refused.
+func TestSetBypass(t *testing.T) {
+	s := &SystemProxyService{settings: loadSettings(t.TempDir())}
+	if err := s.SetBypass([]string{"*.corp.example", "10.1.0.0/16"}); err != nil || len(s.Bypass()) != 2 {
+		t.Fatalf("got %v, %v", s.Bypass(), err)
+	}
+	for _, bad := range []string{"a b", "x';rm", "a;b", ""} {
+		if err := s.SetBypass([]string{bad}); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}

@@ -62,7 +62,8 @@ type Latency struct {
 	Group    string `json:"group"`
 }
 
-const testURL = "https://www.gstatic.com/generate_204"
+// defaultTestURL is what latency tests fetch through a node unless 通用 测速地址 names another (testURL).
+const defaultTestURL = "https://www.gstatic.com/generate_204"
 
 // directURL is what the direct Internet probe fetches: reachable without a proxy from anywhere,
 // China included, where Google's is reset.

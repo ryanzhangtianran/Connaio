@@ -326,6 +326,18 @@ func (s *Store) MoveRule(index, delta int) error {
 	})
 }
 
+// ReplaceRule rewrites the GUI-added rule at index (in prepend-rules) in place, keeping its order.
+func (s *Store) ReplaceRule(index int, rule string) error {
+	return s.editOverride(func(root *yaml.Node) error {
+		seq := listOf(root, "prepend-rules")
+		if seq == nil || index < 0 || index >= len(seq.Content) {
+			return errors.New("只能编辑自己添加的规则")
+		}
+		seq.Content[index].Value = rule
+		return nil
+	})
+}
+
 // RemoveRule drops a GUI-added rule from the override.
 func (s *Store) RemoveRule(rule string) error {
 	return s.editOverride(func(root *yaml.Node) error {

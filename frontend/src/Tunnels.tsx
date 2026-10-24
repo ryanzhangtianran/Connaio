@@ -5,7 +5,7 @@ import TunnelDialog from "./TunnelDialog";
 import { ExitCell } from "./Activity";
 import { Icon } from "./icons";
 import { nonNull, sizeText, speed } from "./format";
-import { usePoll } from "./hooks";
+import { useConfirm, usePoll } from "./hooks";
 
 const stateLabel: Record<string, string> = { running: "运行中", connecting: "连接中", retrying: "重试中", stopped: "已停止" };
 const stateClass: Record<string, string> = { running: "delay-good", connecting: "delay-warn", retrying: "delay-bad", stopped: "muted" };
@@ -170,6 +170,8 @@ export default function Tunnels({ status }: { status: Status }) {
   const [mine, setMine] = useState<Record<string, any>[]>([]);
   const [dialog, setDialog] = useState<Record<string, any> | true | null>(null); // true: a new tunnel; else the one edited
   const [open, setOpen] = useState("");
+  const [switching, setSwitching] = useState(""); // the tunnel being started or stopped
+  const [armed, confirm] = useConfirm();
   const [conns, setConns] = useState<Conn[]>([]);
   const mixedPort = useMixedPort();
   // relays: the connaio-relay versions this app carries; a tunnel's relay reporting another is outdated
@@ -218,7 +220,7 @@ export default function Tunnels({ status }: { status: Status }) {
               <button className={`tile ${open === t.name ? "selected" : ""}`} onClick={() => setOpen(open === t.name ? "" : t.name)}>
                 <span className="kind">WireGuard · {forwards.length} 条转发</span>
                 <span className="name">{t.name}</span>
-                <span className={`foot ${stateClass[t.state] ?? ""}`}>{stateLabel[t.state] ?? t.state}{t.error && " · 有错误"}{outdated(t) && <span className="delay-warn"> · 服务器程序需更新</span>}</span>
+                <span className={`foot ${stateClass[t.state] ?? ""}`}>{switching === t.name ? "切换中…" : stateLabel[t.state] ?? t.state}{t.error && " · 有错误"}{outdated(t) && <span className="delay-warn"> · 服务器程序需更新</span>}</span>
               </button>
               {open === t.name && (
                 <div className="menu members detail" onClick={(e) => e.stopPropagation()}>
@@ -234,9 +236,9 @@ export default function Tunnels({ status }: { status: Status }) {
                   ))}
                   {own && <>
                     {/* a stopped tunnel stays in the config, disabled, until started again */}
-                    <button onClick={() => { ProfileService.SetTunnelDisabled(t.name, t.state !== "stopped"); setOpen(""); }}>{t.state === "stopped" ? "开始连接" : "停止连接"}</button>
+                    <button onClick={() => { setOpen(""); setSwitching(t.name); ProfileService.SetTunnelDisabled(t.name, t.state !== "stopped").then(poll).finally(() => setSwitching("")); }}>{t.state === "stopped" ? "开始连接" : "停止连接"}</button>
                     <button onClick={() => { setDialog(own); setOpen(""); }}>编辑此隧道</button>
-                    <button className="danger" onClick={() => { remove(t.name); setOpen(""); }}>删除此隧道</button>
+                    <button className={`danger ${armed === t.name ? "armed" : ""}`} onClick={() => confirm(t.name, () => { remove(t.name); setOpen(""); })}>{armed === t.name ? "确认删除" : "删除此隧道"}</button>
                   </>}
                 </div>
               )}
