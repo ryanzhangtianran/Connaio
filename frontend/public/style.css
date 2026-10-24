@@ -637,11 +637,12 @@ tr.muted td.rule-actions { text-decoration: none; }
 .activity > .card { display: flex; flex-direction: column; min-height: 0; }
 .activity .head { min-height: 22px; }
 .activity .head-actions { gap: 8px; min-width: 0; }
-/* the status card: a pale field at the right holding the pause button, a scalloped disc; its edge one
-   gentle diagonal, top right to bottom left, clear of the button at its height */
+/* the status card: a pale field at the right holding the pause button, a scalloped disc; its edge a
+   slant, top right to bottom left, clear of the button at its height, rippling (HeroWave) */
 .hero > :not(.hero-wave) { position: relative; }
 .hero > .card-title { max-width: 66%; } /* the stats and the address's row (the button at its end) run across the field */
 .hero-wave { position: absolute; top: 0; right: 0; width: 38%; height: 100%; fill: color-mix(in srgb, var(--accent) 13%, transparent); pointer-events: none; }
+.hero-wave .back { fill: color-mix(in srgb, var(--accent) 7%, transparent); } /* the layer a little behind */
 .hero-btn { position: relative; flex: none; width: 104px; height: 104px; margin: -14px 4% -14px auto; padding: 0; /* in the address's row, centred with it */ border: 0; background: none; color: #fff; transition: transform .2s; }
 .hero-btn:hover { transform: rotate(12deg) scale(1.04); }
 .hero-btn:active { transform: scale(.96); }

@@ -140,6 +140,36 @@ const Cookie = ({ className, children }: { className: string; children?: React.R
 
 let resumeMode = "rule"; // the mode the pause button goes back to
 
+// waveFrames are the status card field's edge through one ripple: a slant from top right to bottom
+// left (in the field's 100×100 box, stretched to it) with a wave travelling along it, each frame the
+// same points so SMIL can move between them; shift sets a layer a little behind, a quarter out of step.
+// SMIL, not CSS: WebKit doesn't animate a path's d.
+function waveFrames(shift: number, lag: number, steps = 12, points = 40) {
+  const frames: string[] = [];
+  for (let f = 0; f <= steps; f++) {
+    const phase = (f / steps) * 2 * Math.PI + lag;
+    const x = (y: number) => (62 + shift - 0.52 * y + 2.6 * Math.sin((y / 50) * 2 * Math.PI - phase)).toFixed(2);
+    const edge = Array.from({ length: points + 1 }, (_, i) => { const y = (i / points) * 100; return `${x(y)},${y.toFixed(1)}`; });
+    frames.push(`M${edge.join(" L")} L100,100 L100,0 Z`);
+  }
+  return frames;
+}
+const waves = [waveFrames(-6, Math.PI / 2), waveFrames(0, 0)];
+const stillMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// HeroWave is the status card's pale field, its slanted edge rippling unless the system asks for less motion.
+function HeroWave() {
+  return (
+    <svg className="hero-wave" viewBox="0 0 100 100" preserveAspectRatio="none">
+      {waves.map((frames, i) => (
+        <path key={i} className={i === 0 ? "back" : ""} d={frames[0]}>
+          {!stillMotion && <animate attributeName="d" dur={i === 0 ? "11s" : "8s"} repeatCount="indefinite" values={frames.join(";")} />}
+        </path>
+      ))}
+    </svg>
+  );
+}
+
 // StatusCard is where traffic comes out (as the rules send it, or through a chosen node or DIRECT),
 // where that is and whose network, and the latency; its button pauses
 // proxying (the direct mode) and resumes the mode it left.
@@ -161,7 +191,7 @@ function StatusCard({ activity, mode, setMode, latency }: { activity: ActivityDa
   const lat = latency && [latency.router && `路由 ${latency.router} ms`, latency.dns && `DNS ${latency.dns} ms`, latency.proxy && `${latency.group} ${latency.proxy} ms`].filter(Boolean).join(" · ");
   return (
     <div className="card hero" style={{ gridArea: "hero" }}>
-      <svg className="hero-wave" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M62,0 C50,40 28,60 10,100 L100,100 L100,0 Z" /></svg>
+      <HeroWave />
       <div className="card-title"><Icon name="activity" className="card-icon" />状态
         {paused ? <span className="chip warn"><i className="dot warn" />已暂停</span> : <span className="chip good"><i className="dot on" />运行中</span>}
       </div>

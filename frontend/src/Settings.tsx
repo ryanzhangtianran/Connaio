@@ -47,7 +47,7 @@ export function useSetting<T>(path: string, fallback: T): [T, (v: T) => Promise<
 
 declare function applyTheme(): void; // public/theme.js
 
-const accents = ["#0a84ff", "#5e5ce6", "#bf5af2", "#ff375f", "#ff453a", "#ff9f0a", "#30d158", "#40c8e0", "#8e8e93"]; // the first is style.css's --accent
+const accents = ["#0a84ff", "#5e5ce6", "#bf5af2", "#ff375f", "#ff453a", "#ff9f0a", "#30d158", "#00c7be", "#40c8e0", "#8e8e93"]; // #00c7be: mint // the first is style.css's --accent
 
 // Appearance is the 外观 card: light, dark or the system's, and the accent colour, kept in
 // this browser's localStorage, which theme.js reads before the page paints; the windows' appearance
