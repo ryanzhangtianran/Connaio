@@ -17,7 +17,7 @@ jobs:
           path: Connaio
       - uses: ./Connaio/.github/actions/apt # GTK 3 and WebKit2GTK 4.1
         with:
-          packages: libgtk-3-dev libwebkit2gtk-4.1-dev
+          packages: libgtk-3-dev libwebkit2gtk-4.1-dev xvfb dbus # as the Linux release: one cache for both
       - uses: ./Connaio/.github/actions/setup
         with:
           wails-tags: gtk3

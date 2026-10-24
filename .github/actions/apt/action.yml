@@ -18,7 +18,7 @@ runs:
       shell: bash
       run: echo "image=$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
     - id: cache
-      uses: actions/cache@v4
+      uses: actions/cache/restore@v4 # saved below, on main only: a tag's cache serves no other tag
       with:
         path: ~/apt-cache
         key: apt-${{ steps.image.outputs.image }}-${{ runner.arch }}-${{ inputs.packages }}
@@ -37,3 +37,8 @@ runs:
         $apt install -y ${{ inputs.packages }}
         sudo rm -rf ~/apt-cache/partial ~/apt-cache/lock
         sudo chown -R "$USER" ~/apt-cache # apt wrote it as root; the cache saves it as this user
+    - if: github.ref == 'refs/heads/main' && steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/apt-cache
+        key: ${{ steps.cache.outputs.cache-primary-key }}
