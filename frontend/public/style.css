@@ -339,11 +339,11 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .dash-empty { flex: 1; display: grid; place-items: center; }
 .dash-table .table th { position: sticky; top: 0; background: var(--card); }
 .dash-table .table th, .dash-table .table td { padding: 8px 10px; }
-.dash-table .table :is(th, td):first-child { padding-left: 22px; }
+.dash-table .table :is(th, td):first-child { padding-left: 12px; } /* in line with the search box above */
 /* an editable table (a tunnel's forwards): its outer columns flush with the form, so header, fields and 添加转发 share one edge */
 .rows-table :is(th, td):first-child { padding-left: 0; }
 .rows-table :is(th, td):last-child { padding-right: 0; }
-.dash-table .table :is(th, td):last-child { padding-right: 24px; }
+.dash-table .table :is(th, td):last-child { padding-right: 12px; } /* ending under the actions above */
 .dash-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .dash-table .table { table-layout: auto; } /* columns fit their content, the slack spread over 客户端 and 地址; too wide scrolls sideways */
 .dash-table .table td { max-width: none; }
@@ -412,9 +412,9 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 @keyframes meter-slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 .plist-empty { padding: 18px 16px; }
 .plist-add { display: flex; gap: 8px; padding: 10px 16px; }
-.plist-tools { display: flex; align-items: center; gap: 6px; padding: 8px 10px; }
+.plist-tools { display: flex; align-items: center; gap: 6px; padding: 8px 16px; } /* inset as the rows above it */
 .plist-tools .btn { height: 24px; padding: 0 10px; font-size: 12px; }
-.plist-error { padding: 6px 12px; border-top: 1px solid var(--line); } /* a failed action, under the toolbar that ran it */
+.plist-error { padding: 6px 16px; border-top: 1px solid var(--line); } /* a failed action, under the toolbar that ran it */
 .plist textarea.override { margin: 0; border: 0; border-radius: 0; background: none; padding: 12px 16px; }
 
 /* form sheets (add proxy): grouped rows, label left and control right, in two columns */
@@ -493,6 +493,8 @@ tr.muted td.rule-actions { text-decoration: none; }
 .rules-card { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .rules-card .table-wrap { flex: 1; min-height: 0; }
 .rules-card .table th { position: sticky; top: 0; z-index: 1; background: var(--card); }
+.rules-card .table :is(th, td):first-child { padding-left: 0; } /* the numbers under 共 N 条, the actions ending under 增加规则 */
+.rules-card .table :is(th, td):last-child { padding-right: 0; }
 /* profiles: one window high; the override editor takes the height the other groups leave and scrolls inside */
 /* 配置 is one window tall: the override takes what the rest leaves, 资源 folded to one row unless
    opened, long lists scrolling in place, so the override keeps room even in the smallest window */
