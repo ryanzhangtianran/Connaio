@@ -741,10 +741,13 @@ tr.muted td.rule-actions { text-decoration: none; }
 .link-chip { border: 0; cursor: pointer; gap: 2px; padding-right: 4px; }
 .link-chip:hover { background: var(--active); color: var(--text); }
 .chip-icon { width: 13px; height: 13px; }
-/* the network checks: three compact rows under the head */
-.health-rows { flex: 1; display: flex; flex-direction: column; justify-content: center; margin-top: 4px; min-height: 0; }
+/* the network checks, compact rows under the head: centred while they fit, scrolling when not (Windows
+   lists six), never squeezed over one another; auto margins centre without clipping the first row */
+.health-rows { flex: 1; display: flex; flex-direction: column; margin-top: 4px; min-height: 0; overflow-y: auto; }
+.health-rows > :first-child { margin-top: auto; }
+.health-rows > :last-child { margin-bottom: auto; }
 /* a check: its name over its detail (the full width, the card being narrow), the state or fix at the right */
-.health-card .tool-row { grid-template-columns: minmax(0, 1fr) 64px; grid-template-areas: "title action" "detail action"; row-gap: 1px; min-height: 0; padding: 7px 0; }
+.health-card .tool-row { grid-template-columns: minmax(0, 1fr) 64px; grid-template-areas: "title action" "detail action"; row-gap: 1px; flex: none; padding: 7px 0; }
 .health-card .tool-title { grid-area: title; font-weight: 500; }
 .health-card .tool-detail { grid-area: detail; }
 .health-card .tool-action { grid-area: action; }

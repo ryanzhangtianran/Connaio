@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -56,13 +57,28 @@ func (s *SettingsService) AppIcon(path string) string {
 	if v, ok := winIcons.Load(path); ok {
 		return v.(string)
 	}
+	key := path
+	if path == "system" { // the system's services, folded into one client (clientOf): Settings' gear, else Control Panel's
+		path = systemIcon()
+	}
 	url := ""
 	if h := w32.ExtractIcon(path, 0); h > 1 { // 0: no icon, 1: not an executable
 		url = iconPNG(h)
 		w32.DestroyIcon(h)
 	}
-	winIcons.Store(path, url)
+	winIcons.Store(key, url)
 	return url
+}
+
+// systemIcon is the executable whose icon stands for Windows itself: the Settings app, or on a
+// Windows without it Control Panel.
+func systemIcon() string {
+	root := cmp.Or(os.Getenv("SystemRoot"), `C:\Windows`)
+	p := filepath.Join(root, "ImmersiveControlPanel", "SystemSettings.exe")
+	if _, err := os.Stat(p); err == nil {
+		return p
+	}
+	return filepath.Join(root, "System32", "control.exe")
 }
 
 // iconPNG is an icon as a PNG data URL, by way of a temporary file, which is how w32 converts one.

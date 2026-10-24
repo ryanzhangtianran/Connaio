@@ -357,7 +357,7 @@ type Split struct {
 // in Ghostty is Ghostty), as on Linux; the system's own daemons (trustd's certificate checks,
 // nsurlsessiond's background downloads for other apps) fold into macOS; none for a device.
 func clientOf(c Conn) (name, icon string) {
-	if c.Inbound == "Inner" {
+	if c.Inbound == "Inner" || c.Path != "" && c.Path == ownExe { // the core's own, or the app's (its update check, latency): Windows would name it by its file description
 		return "Connaio", cmp.Or(ownBundle, ownExe)
 	}
 	if c.Tunnel != nil && c.Tunnel.Name != "" {
@@ -369,8 +369,11 @@ func clientOf(c Conn) (name, icon string) {
 	if c.System || c.Process == "" && c.Path == "" && c.Inbound != "Inner" && fromHere(c.Source) {
 		// Linux's services, as macOS's daemons above, and this machine's connections the core
 		// couldn't name; AppIcon draws "system" as the settings gear
-		if runtime.GOOS == "darwin" {
+		switch runtime.GOOS {
+		case "darwin":
 			return "macOS", "/System/Applications/System Settings.app"
+		case "windows":
+			return "Windows", "system" // as macOS's are macOS
 		}
 		return "System", "system"
 	}

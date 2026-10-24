@@ -6,7 +6,7 @@
 		"0000": {
 			"ProductVersion": "__VERSION__",
 			"CompanyName": "ryanzhangtianran",
-			"FileDescription": "Rule-based proxy with reverse tunnels",
+			"FileDescription": "Connaio",
 			"LegalCopyright": "(c) 2026, ryanzhangtianran",
 			"ProductName": "Connaio"
 		}
