@@ -284,9 +284,9 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .setting-title { font-weight: 500; }
 .setting-control { flex: none; display: flex; align-items: center; gap: 8px; }
 .swatches { display: flex; align-items: center; gap: 8px; }
-.swatch, .swatches input { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.15); }
+.swatch, .swatches input[type=color] { flex: none; width: 18px; height: 18px; aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; /* never squeezed into an oval, nor stretched by the inputs' 28px height */ background: var(--c); box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.15); }
 .swatches .on { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--text-2); }
-.swatches input { background: conic-gradient(#ff453a, #ff9f0a, #ffd60a, #30d158, #40c8e0, #0a84ff, #bf5af2, #ff453a); } /* 自定义: the colour well hidden under a wheel */
+.swatches input[type=color] { background: conic-gradient(#ff453a, #ff9f0a, #ffd60a, #30d158, #40c8e0, #0a84ff, #bf5af2, #ff453a); } /* 自定义: the colour well hidden under a wheel */
 .swatches input::-webkit-color-swatch-wrapper { padding: 0; }
 .swatches input::-webkit-color-swatch { border: 0; opacity: 0; }
 .sidebar { overflow-y: auto; } /* short windows scroll the settings group into view */
