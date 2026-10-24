@@ -79,7 +79,14 @@ tasks:
       # the core reports constant.Version, a 1.10.0 placeholder unless set here, as mihomo's Makefile does;
       # on macOS with its commit, e.g. 1.19.32+07bcb6bc: the app restarts the root daemon, which runs the
       # core in the bundle, when this differs from the running one's
-      - go -C "{{.CORE_DIR}}" build -tags with_gvisor -trimpath -ldflags="-w -s -X github.com/metacubex/mihomo/constant.Version={{.CORE_VERSION}}{{if eq .GOOS "darwin"}}+{{.CORE_COMMIT}}{{end}}" -o "{{.ROOT_DIR}}/{{.BIN_DIR}}/connaio-core{{if eq .GOOS "windows"}}.exe{{end}}" .
+      # CONNAIO_CORE_CACHE (CI): a core built from this commit, for this target and version, is copied
+      # from there rather than built again, and one built here is kept there
+      - |
+        out="{{.ROOT_DIR}}/{{.BIN_DIR}}/connaio-core{{if eq .GOOS "windows"}}.exe{{end}}"
+        kept="${CONNAIO_CORE_CACHE:-}/core-{{.CORE_COMMIT}}-{{.GOOS}}-{{.ARCH | default ARCH}}-{{.CORE_VERSION}}"
+        if [ -n "${CONNAIO_CORE_CACHE:-}" ] && [ -f "$kept" ]; then mkdir -p "$(dirname "$out")" && cp "$kept" "$out"; exit 0; fi
+        go -C "{{.CORE_DIR}}" build -tags with_gvisor -trimpath -ldflags="-w -s -X github.com/metacubex/mihomo/constant.Version={{.CORE_VERSION}}{{if eq .GOOS "darwin"}}+{{.CORE_COMMIT}}{{end}}" -o "$out" .
+        if [ -n "${CONNAIO_CORE_CACHE:-}" ]; then mkdir -p "${CONNAIO_CORE_CACHE}" && cp "$out" "$kept"; fi
     vars:
       CORE_COMMIT:
         sh: git -C "{{.CORE_DIR}}" rev-parse --short=8 HEAD
@@ -94,7 +101,16 @@ tasks:
     cmds:
       - for: [amd64, arm64]
         # gzip in Go: Windows hosts have no gzip; GOOS only on the build, so go run's helper runs here
-        cmd: GOOS=linux GOARCH={{.ITEM}} go -C "{{.CORE_DIR}}" build -trimpath -buildvcs=false -ldflags="-w -s" -o "{{.ROOT_DIR}}/internal/app/relay/connaio-relay-linux-{{.ITEM}}" ./cmd/connaio-relay && go run "{{.ROOT_DIR}}/build/gzip.go" "{{.ROOT_DIR}}/internal/app/relay/connaio-relay-linux-{{.ITEM}}"
+        # CONNAIO_CORE_CACHE (CI) keeps it by the core's commit, as build:core does the core
+        cmd: |
+          out="{{.ROOT_DIR}}/internal/app/relay/connaio-relay-linux-{{.ITEM}}.gz"
+          kept="${CONNAIO_CORE_CACHE:-}/relay-{{.CORE_COMMIT}}-{{.ITEM}}.gz"
+          if [ -n "${CONNAIO_CORE_CACHE:-}" ] && [ -f "$kept" ]; then cp "$kept" "$out"; exit 0; fi
+          GOOS=linux GOARCH={{.ITEM}} go -C "{{.CORE_DIR}}" build -trimpath -buildvcs=false -ldflags="-w -s" -o "{{.ROOT_DIR}}/internal/app/relay/connaio-relay-linux-{{.ITEM}}" ./cmd/connaio-relay && go run "{{.ROOT_DIR}}/build/gzip.go" "{{.ROOT_DIR}}/internal/app/relay/connaio-relay-linux-{{.ITEM}}"
+          if [ -n "${CONNAIO_CORE_CACHE:-}" ]; then mkdir -p "${CONNAIO_CORE_CACHE}" && cp "$out" "$kept"; fi
+    vars:
+      CORE_COMMIT:
+        sh: git -C "{{.CORE_DIR}}" rev-parse --short=8 HEAD
     env:
       CGO_ENABLED: 0
 

@@ -26,7 +26,11 @@ runs:
       run: |
         # the Taskfile's GOPATH (Connaio/.go) would download the modules outside the cache
         echo "GOMODCACHE=$(go env GOMODCACHE)" >> "$GITHUB_ENV"
-        echo "key=go-${{ runner.os }}-${{ runner.arch }}-$(go env GOVERSION)-${{ hashFiles('Connaio/go.sum', 'connaio-core/go.sum') }}" >> "$GITHUB_OUTPUT"
+        # r2: main's builds put the release builds' objects in it too (Linux's since check builds them)
+        echo "key=go-r2-${{ runner.os }}-${{ runner.arch }}-$(go env GOVERSION)-${{ hashFiles('Connaio/go.sum', 'connaio-core/go.sum') }}" >> "$GITHUB_OUTPUT"
+        # the built core and relay by the core's commit (build:core, build:relay), not built again while it stays
+        echo "CONNAIO_CORE_CACHE=${RUNNER_TEMP//\\//}/core-cache" >> "$GITHUB_ENV" # forward slashes: the tasks' cp and mkdir on Windows too
+        echo "core=core-${{ runner.os }}-${{ runner.arch }}-$(git -C connaio-core rev-parse HEAD)" >> "$GITHUB_OUTPUT"
         printf 'paths<<EOF\n%s\n%s\nEOF\n' "$(go env GOCACHE)" "$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
     - if: github.ref == 'refs/heads/main'
       uses: actions/cache@v4
@@ -38,6 +42,16 @@ runs:
       with:
         path: ${{ steps.go.outputs.paths }}
         key: ${{ steps.go.outputs.key }}
+    - if: github.ref == 'refs/heads/main'
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.temp }}/core-cache
+        key: ${{ steps.go.outputs.core }}
+    - if: github.ref != 'refs/heads/main'
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ runner.temp }}/core-cache
+        key: ${{ steps.go.outputs.core }}
     - uses: actions/setup-node@v4
       with:
         node-version: 24
