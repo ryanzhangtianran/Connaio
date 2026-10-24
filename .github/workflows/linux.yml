@@ -78,7 +78,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" "$DEB" --clobber -R "$GITHUB_REPOSITORY"
+        run: sh Connaio/build/attach.sh "$DEB"
 
       # the headless build: no window, its UI on a web port; no GUI libraries, so any Linux
       - name: Build the headless build, amd64 and arm64
@@ -102,7 +102,7 @@ jobs:
         working-directory: Connaio
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" bin/Connaio-*-linux-*.tar.gz --clobber -R "$GITHUB_REPOSITORY"
+        run: sh build/attach.sh bin/Connaio-*-linux-*.tar.gz
 
   # the same .deb on the newer LTS releases: installs with their packages, starts and proxies
   install:

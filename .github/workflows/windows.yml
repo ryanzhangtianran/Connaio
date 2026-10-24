@@ -51,4 +51,4 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${GITHUB_REF_NAME}" Connaio/bin/Connaio-*-windows-amd64.exe --clobber -R "$GITHUB_REPOSITORY"
+        run: sh Connaio/build/attach.sh Connaio/bin/Connaio-*-windows-amd64.exe

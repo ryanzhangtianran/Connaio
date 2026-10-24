@@ -1,5 +1,5 @@
-# Checks every push to main: the Go code vets and tests, the frontend typechecks. The release
-# workflows only run on a tag, which left a broken main unnoticed until release day.
+# Checks every push to main: the Go code vets and tests, the frontend typechecks, macOS and Windows
+# build. The release workflows only run on a tag, which left a broken main unnoticed until release day.
 name: check
 
 on:
@@ -31,3 +31,23 @@ jobs:
         run: |
           go vet -tags gtk3 ./... # Ubuntu 22.04 has GTK 3; wails links GTK 4 unless told
           go test -tags gtk3 ./internal/profile ./internal/app
+
+  # macOS and Windows build on main too: a break shows before release day, and main keeps their Go
+  # caches, which a tag's build restores (one saved on a tag serves no other tag)
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: Connaio
+      - uses: ./Connaio/.github/actions/setup
+      - name: Build, as the release does
+        working-directory: Connaio
+        run: wails3 task build

@@ -20,9 +20,24 @@ runs:
     - uses: actions/setup-go@v5
       with:
         go-version-file: Connaio/go.mod
-        cache-dependency-path: |
-          Connaio/go.sum
-          connaio-core/go.sum
+        cache: false # below: saved on main only, as a tag's cache serves no other tag
+    - id: go
+      shell: bash
+      run: |
+        # the Taskfile's GOPATH (Connaio/.go) would download the modules outside the cache
+        echo "GOMODCACHE=$(go env GOMODCACHE)" >> "$GITHUB_ENV"
+        echo "key=go-${{ runner.os }}-${{ runner.arch }}-$(go env GOVERSION)-${{ hashFiles('Connaio/go.sum', 'connaio-core/go.sum') }}" >> "$GITHUB_OUTPUT"
+        printf 'paths<<EOF\n%s\n%s\nEOF\n' "$(go env GOCACHE)" "$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
+    - if: github.ref == 'refs/heads/main'
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.go.outputs.paths }}
+        key: ${{ steps.go.outputs.key }}
+    - if: github.ref != 'refs/heads/main'
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ steps.go.outputs.paths }}
+        key: ${{ steps.go.outputs.key }}
     - uses: actions/setup-node@v4
       with:
         node-version: 24
