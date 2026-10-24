@@ -48,6 +48,18 @@ func loadSettings(dir string) *settingsFile {
 	return f
 }
 
+// reload reads the file again, over what this run holds.
+func (f *settingsFile) reload() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if b, err := os.ReadFile(f.path); err == nil {
+		var s Settings
+		if json.Unmarshal(b, &s) == nil {
+			f.s = s
+		}
+	}
+}
+
 func (f *settingsFile) Get() Settings {
 	f.mu.Lock()
 	defer f.mu.Unlock()

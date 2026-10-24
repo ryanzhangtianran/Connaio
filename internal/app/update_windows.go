@@ -38,6 +38,22 @@ func installPackage(installer string) error {
 
 func restartCommand() []string { return nil } // installPackage's script starts the new version
 
+// restartApp quits and starts this app again, once this process is gone (the single-instance check
+// would hand a new one back to the quitting one), on the data as it is now (a restored backup).
+func restartApp() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	script := fmt.Sprintf("Wait-Process -Id %d -ErrorAction SilentlyContinue; Start-Process -FilePath '%s'", os.Getpid(), strings.ReplaceAll(exe, "'", "''"))
+	c := run.Command("powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
+	c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: windows.CREATE_NO_WINDOW | windows.CREATE_NEW_PROCESS_GROUP | windows.DETACHED_PROCESS}
+	if err := c.Start(); err != nil {
+		return err
+	}
+	return relaunch(nil)
+}
+
 // relaunch quits; installPackage's script, waiting for that, installs and starts what comes next.
 func relaunch([]string) error {
 	go func() {

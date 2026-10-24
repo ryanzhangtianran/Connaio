@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Clipboard } from "@wailsio/runtime";
-import { ProfileService, SettingsService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import type { Offer, OverrideParts, Profiles as ProfilesData } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
+import { CoreService, ProfileService, SettingsService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
+import type { Offer, OverrideParts, Profiles as ProfilesData, Resource } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Profile } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/profile";
 import { ago, errText, plain, sizeText, web, words } from "./format";
 import { on, useConfirm } from "./hooks";
@@ -72,6 +72,9 @@ export default function Profiles() {
   const [setting, setSetting] = useState<Profile | null>(null); // the profile whose 设置 sheet is open
   const [error, setError] = useState({ key: "", text: "" }); // a failed action's, shown by the part it belongs to
   const [armed, confirm] = useConfirm();
+  const [resources, setResources] = useState<Resource[]>([]); // the config's proxy and rule sets
+  const [updating, setUpdating] = useState(""); // the resource being fetched again
+  const loadResources = () => CoreService.Resources().then((r) => setResources(r ?? []), () => setResources([]));
 
   const load = useCallback(() => ProfileService.Profiles().then(setData), []);
   const loadParts = () => ProfileService.OverrideParts().then((p) => { setParts(p); setSavedParts(p); });
@@ -81,6 +84,7 @@ export default function Profiles() {
   useEffect(() => {
     load();
     loadParts();
+    loadResources();
     // a provider's 一键导入 fills the add box: the user adds it
     const offer = (o: Offer | null) => { if (o) { setAdding(true); setLink(o.url); setName(o.name); } };
     ProfileService.Offered().then(offer);
@@ -195,6 +199,30 @@ export default function Profiles() {
         {failed("field", "override")}
       </div>
 
+      <div className="group-title">资源</div>
+      <div className="plist">
+        <div className="plist-rows resource-rows">
+          {resources.length === 0 && <div className="plist-empty muted">当前配置没有规则集或节点集</div>}
+          {resources.map((r) => (
+            <div key={`${r.kind}:${r.name}`} className="plist-row static">
+              <div className="plist-main">
+                <div className="plist-name">{r.name}</div>
+                <div className="muted small">{r.kind === "proxy" ? `节点集 · ${r.count} 个节点` : `规则集 · ${r.count} 条规则`}{r.vehicle === "HTTP" ? ` · 更新于 ${ago(r.updatedAt)}` : r.vehicle === "File" ? " · 本地文件" : " · 内联"}</div>
+              </div>
+              {r.vehicle === "HTTP" && <button className="btn small-btn" disabled={!!busy}
+                onClick={() => { setUpdating(r.name); run("res", () => CoreService.UpdateResource(r.kind, r.name).then(loadResources).finally(() => setUpdating(""))); }}>{updating === r.name ? "更新中…" : "更新"}</button>}
+            </div>
+          ))}
+        </div>
+        <div className="plist-tools">
+          <button className="btn" disabled={!resources.some((r) => r.vehicle === "HTTP") || !!busy}
+            onClick={() => run("res", () => Promise.all(resources.filter((r) => r.vehicle === "HTTP").map((r) => CoreService.UpdateResource(r.kind, r.name))).then(loadResources))}>{busy === "res" && !updating ? "更新中…" : "全部更新"}</button>
+          <span className="grow" />
+          <button className="btn" disabled={!!busy} onClick={() => run("geo", () => CoreService.UpdateGeo())}>{busy === "geo" ? "更新中…" : "更新 GeoIP 数据库"}</button>
+        </div>
+        {failed("res", "geo")}
+      </div>
+
       {editing && <ProfileEditor editing={editing} subscription={!!list.find((p) => p.id === editing.id)?.url} onClose={() => setEditing(null)} />}
       {setting && <ProfileSettings profile={setting} onClose={() => setSetting(null)} />}
 
@@ -204,6 +232,12 @@ export default function Profiles() {
           <div className="plist-main"><div className="plist-name">数据目录</div><div className="muted small">{web ? "保存在运行 Connaio 的服务器上" : "配置、覆写与流量统计保存在本机"}</div></div>
           {!web && <button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button>}
         </div>
+        {!web && <div className="plist-row static">
+          <div className="plist-main"><div className="plist-name">备份与恢复</div><div className="muted small">配置、覆写与 VPN 设置，含密码，请妥善保管；恢复后 Connaio 将重新启动</div></div>
+          <button className="btn" disabled={!!busy} onClick={() => run("backup", () => SettingsService.ExportBackup())}>导出…</button>
+          <button className={`btn ${armed === "restore" ? "armed" : ""}`} disabled={!!busy} onClick={() => confirm("restore", () => run("backup", () => SettingsService.ImportBackup()))}>{armed === "restore" ? "确认覆盖当前配置" : "恢复…"}</button>
+        </div>}
+        {failed("backup")}
       </div>
     </>
   );

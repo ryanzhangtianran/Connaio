@@ -614,3 +614,63 @@ func (s *CoreService) ReportError(message string) {
 	defer f.Close()
 	fmt.Fprintf(f, "%s %s\n\n", time.Now().Format(time.RFC3339), message)
 }
+
+// Resource is a proxy or rule set the config fetches (proxy-providers, rule-providers), for 配置's 资源.
+type Resource struct {
+	Name      string `json:"name"`
+	Kind      string `json:"kind"`    // "proxy" or "rule"
+	Vehicle   string `json:"vehicle"` // HTTP (downloaded, so updatable), File or Inline
+	Count     int    `json:"count"`   // its nodes or rules
+	UpdatedAt string `json:"updatedAt"`
+}
+
+// Resources lists the config's proxy and rule sets, proxy sets first; the core's own built-in set
+// (every node of the config) is left out.
+func (s *CoreService) Resources() ([]Resource, error) {
+	var proxies struct {
+		Providers map[string]struct {
+			VehicleType string            `json:"vehicleType"`
+			Proxies     []json.RawMessage `json:"proxies"`
+			UpdatedAt   string            `json:"updatedAt"`
+		} `json:"providers"`
+	}
+	var rules struct {
+		Providers map[string]struct {
+			VehicleType string `json:"vehicleType"`
+			RuleCount   int    `json:"ruleCount"`
+			UpdatedAt   string `json:"updatedAt"`
+		} `json:"providers"`
+	}
+	ctx := context.Background()
+	if err := s.core.Do(ctx, http.MethodGet, "/providers/proxies", nil, &proxies); err != nil {
+		return nil, err
+	}
+	if err := s.core.Do(ctx, http.MethodGet, "/providers/rules", nil, &rules); err != nil {
+		return nil, err
+	}
+	var out []Resource
+	for _, name := range slices.Sorted(maps.Keys(proxies.Providers)) {
+		if p := proxies.Providers[name]; p.VehicleType != "Compatible" {
+			out = append(out, Resource{name, "proxy", p.VehicleType, len(p.Proxies), p.UpdatedAt})
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(rules.Providers)) {
+		r := rules.Providers[name]
+		out = append(out, Resource{name, "rule", r.VehicleType, r.RuleCount, r.UpdatedAt})
+	}
+	return out, nil
+}
+
+// UpdateResource fetches a proxy set (kind "proxy") or rule set ("rule") again.
+func (s *CoreService) UpdateResource(kind, name string) error {
+	path := map[string]string{"proxy": "/providers/proxies/", "rule": "/providers/rules/"}[kind]
+	if path == "" {
+		return fmt.Errorf("unknown resource kind %q", kind)
+	}
+	return s.core.Do(context.Background(), http.MethodPut, path+url.PathEscape(name), nil, nil)
+}
+
+// UpdateGeo downloads the GeoIP, GeoSite and ASN databases again, from the config's geox-url.
+func (s *CoreService) UpdateGeo() error {
+	return s.core.Do(context.Background(), http.MethodPost, "/configs/geo", nil, nil)
+}

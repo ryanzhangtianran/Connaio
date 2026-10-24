@@ -3,6 +3,7 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"strconv"
@@ -11,6 +12,15 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+// restartApp quits and starts this app again, on the data as it is now (a restored backup).
+func restartApp() error {
+	cmd := restartCommand()
+	if len(cmd) == 0 || cmd[len(cmd)-1] == "" { // macOS run outside a bundle, as in development
+		return errors.New("无法自动重启，请手动重新打开 Connaio")
+	}
+	return relaunch(cmd)
+}
 
 // relaunch quits and runs cmd once this process is gone, so the single-instance check doesn't
 // hand the new one back to the quitting one.
