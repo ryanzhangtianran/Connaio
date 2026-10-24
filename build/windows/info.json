@@ -1,6 +1,6 @@
 {
 	"fixed": {
-		"file_version": "__VERSION__"
+		"file_version": "__VERSION_NUM__"
 	},
 	"info": {
 		"0000": {

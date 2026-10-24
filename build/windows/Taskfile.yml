@@ -58,7 +58,7 @@ tasks:
     internal: true
     dir: build
     cmds:
-      - sed "s/__VERSION__/{{.VERSION}}/g" windows/info.json > windows/info.gen.json # the version is the git tag
+      - sed -e "s/__VERSION_NUM__/{{.VERSION_NUM}}/g" -e "s/__VERSION__/{{.VERSION}}/g" windows/info.json > windows/info.gen.json # the version is the git tag
       - wails3 generate syso -arch {{.ARCH | default "amd64"}} -icon windows/icon.ico -manifest windows/wails.exe.manifest -info windows/info.gen.json -out ../wails_windows_{{.ARCH | default "amd64"}}.syso
 
   package:
@@ -70,7 +70,7 @@ tasks:
       # the WebView2 bootstrapper the installer runs when the runtime is missing
       - wails3 generate webview2bootstrapper -dir "{{.ROOT_DIR}}/build/windows/nsis"
       # NSIS on Windows wants backslashes in File paths (a mixed D:\...\x/bin/y.exe finds nothing)
-      - makensis -DINFO_PRODUCTVERSION={{.VERSION}} -DARG_WAILS_AMD64_BINARY="{{.BIN}}{{.APP_NAME}}.exe" -DARG_CORE_BINARY="{{.BIN}}connaio-core.exe" -DARG_WINTUN="{{.BIN}}wintun.dll" project.nsi
+      - makensis -DINFO_PRODUCTVERSION={{.VERSION}} -DINFO_VERSION_NUM={{.VERSION_NUM}} -DARG_WAILS_AMD64_BINARY="{{.BIN}}{{.APP_NAME}}.exe" -DARG_CORE_BINARY="{{.BIN}}connaio-core.exe" -DARG_WINTUN="{{.BIN}}wintun.dll" project.nsi
     vars:
       BIN: '{{if eq OS "windows"}}{{.ROOT_DIR}}\{{.BIN_DIR}}\{{else}}{{.ROOT_DIR}}/{{.BIN_DIR}}/{{end}}'
 

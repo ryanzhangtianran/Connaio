@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -183,8 +184,22 @@ func fetchTo(c *http.Client, url, path, want string) error {
 	return nil
 }
 
-// newerVersion reports whether dotted version a is above b, e.g. 1.0.10 above 1.0.9.
+// newerVersion reports whether version a is above b, e.g. 1.0.10 above 1.0.9, and a release above
+// its test builds: 1.0.0 above 1.0.0-rc.2, which is above 1.0.0-rc.1.
 func newerVersion(a, b string) bool {
+	an, apre, _ := strings.Cut(a, "-")
+	bn, bpre, _ := strings.Cut(b, "-")
+	if c := compareDotted(an, bn); c != 0 || apre == bpre {
+		return c > 0
+	}
+	if apre == "" || bpre == "" {
+		return apre == ""
+	}
+	return compareDotted(apre, bpre) > 0
+}
+
+// compareDotted compares dotted numbers part by part, a missing or non-numeric part as 0 (rc.2: 0.2).
+func compareDotted(a, b string) int {
 	as, bs := strings.Split(a, "."), strings.Split(b, ".")
 	for i := range max(len(as), len(bs)) {
 		var x, y int
@@ -195,8 +210,8 @@ func newerVersion(a, b string) bool {
 			y, _ = strconv.Atoi(bs[i])
 		}
 		if x != y {
-			return x > y
+			return cmp.Compare(x, y)
 		}
 	}
-	return false
+	return 0
 }
