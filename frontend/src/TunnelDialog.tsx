@@ -18,7 +18,7 @@ const joinAddr = (host: string, port: string) => `${host}:${port}`;
 function Rows({ cols, rows, setRows, addr = [], locked }: { cols: [string, string][]; rows: Row[]; setRows: (r: Row[]) => void; addr?: string[]; locked?: (r: Row, k: string) => boolean }) {
   const update = (i: number, k: string, value: string) => setRows(rows.map((r, j) => (j === i ? { ...r, [k]: value } : r)));
   return (
-    <table className="table">
+    <table className="table rows-table">
       <thead><tr>{cols.flatMap(([k, l]) => (addr.includes(k) ? [<th key={k}>{l} IP</th>, <th key={k + ":port"} style={{ width: 110 }}>{l}端口</th>] : [<th key={k}>{l}</th>]))}<th style={{ width: 40 }} /></tr></thead>
       <tbody>
         {rows.map((r, i) => (

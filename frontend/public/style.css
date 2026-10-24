@@ -340,6 +340,9 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .dash-table .table th { position: sticky; top: 0; background: var(--card); }
 .dash-table .table th, .dash-table .table td { padding: 8px 10px; }
 .dash-table .table :is(th, td):first-child { padding-left: 22px; }
+/* an editable table (a tunnel's forwards): its outer columns flush with the form, so header, fields and 添加转发 share one edge */
+.rows-table :is(th, td):first-child { padding-left: 0; }
+.rows-table :is(th, td):last-child { padding-right: 0; }
 .dash-table .table :is(th, td):last-child { padding-right: 24px; }
 .dash-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 .dash-table .table { table-layout: auto; } /* columns fit their content, the slack spread over 客户端 and 地址; too wide scrolls sideways */
