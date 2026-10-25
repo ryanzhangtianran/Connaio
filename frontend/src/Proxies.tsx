@@ -6,11 +6,12 @@ import ProxyDiagnose from "./ProxyDiagnose";
 import GroupDialog from "./GroupDialog";
 import { on, useClickAway, useConfirm } from "./hooks";
 import { errText } from "./format";
+import { AddTile, Seg } from "./Settings";
 
 const modes = [
-  { key: "direct", label: "直接连接", hint: "所有请求都将被直接发往目标服务器。" },
-  { key: "global", label: "全局代理", hint: "所有请求都将被转发给 GLOBAL 中选中的代理。" },
-  { key: "rule", label: "规则判定", hint: "根据规则系统判定处理方式。" },
+  { key: "direct", label: "直接连接", hint: "所有请求直接发往目标。" },
+  { key: "global", label: "全局代理", hint: "所有请求经 GLOBAL 中选中的代理。" },
+  { key: "rule", label: "规则判定", hint: "按规则判定每个请求的去向。" },
 ];
 const builtin = new Set(["Direct", "Reject", "RejectDrop", "Compatible", "Pass", "Dns"]);
 let lastTested = 0; // when the page last probed every node on open; not again within 5 minutes
@@ -114,11 +115,7 @@ export default function Proxies({ status }: { status: Status }) {
 
   return (
     <>
-      <div className="seg big-seg">
-        {modes.map((m) => (
-          <button key={m.key} className={m.key === mode ? "on accent" : ""} disabled={!status.running} onClick={() => choose(m.key)}>{m.label}</button>
-        ))}
-      </div>
+      <Seg className="big-seg" options={modes.map((m) => [m.key, m.label] as const)} value={mode} onChange={choose} disabled={!status.running} />
       {hint && <div className="hint">{hint}</div>}
 
       <div className="tile-head">
@@ -142,7 +139,7 @@ export default function Proxies({ status }: { status: Status }) {
             </button>
           );
         })}
-        <button className="tile add" disabled={!status.running} onClick={() => setDialog("proxy")} title="增加代理">＋</button>
+        <AddTile label="添加代理" empty={nodes.length === 0} disabled={!status.running} onClick={() => setDialog("proxy")} />
         {!loaded && status.running && <div className="muted tiles-empty">加载中…</div>}
       </div>
 
@@ -174,7 +171,7 @@ export default function Proxies({ status }: { status: Status }) {
             )}
           </div>
         ))}
-        <button className="tile add" disabled={!status.running} onClick={() => setDialog("group")} title="增加策略组">＋</button>
+        <AddTile label="添加策略组" empty={shownGroups.length === 0} disabled={!status.running} onClick={() => setDialog("group")} />
       </div>
 
       {menu && (

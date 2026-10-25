@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { CoreService, ProfileService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Conn } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import { Switch } from "./Settings";
+import { Seg, Switch } from "./Settings";
 import Dialog from "./Dialog";
 import { errText, plain } from "./format";
 
@@ -55,7 +55,7 @@ export function RuleDialog({ conn, editing, onClose }: { conn?: Conn; editing?: 
   };
 
   return (
-    <Dialog title={editing ? "编辑规则" : "增加规则"} sub={conn && `${conn.host}${conn.process ? ` · ${conn.process}` : ""}`} className="narrow" locked={busy} onClose={onClose} foot={<>
+    <Dialog title={editing ? "编辑规则" : "添加规则"} sub={conn && `${conn.host}${conn.process ? ` · ${conn.process}` : ""}`} className="narrow" locked={busy} onClose={onClose} foot={<>
       <button className="btn" onClick={onClose}>取消</button>
       <button className="btn primary" disabled={busy || !payload || payload.includes(",")} title={payload.includes(",") ? "值里不能有逗号" : ""} onClick={save}>完成</button>
     </>}>
@@ -74,10 +74,7 @@ export function RuleDialog({ conn, editing, onClose }: { conn?: Conn; editing?: 
         {!editing && <>
           <label>有效期</label>
           <div className="inline">
-            <div className="seg">
-              <button className={permanent ? "" : "on"} onClick={() => setPermanent(false)}>临时</button>
-              <button className={permanent ? "on" : ""} onClick={() => setPermanent(true)}>永久</button>
-            </div>
+            <Seg options={[[false, "临时"], [true, "永久"]]} value={permanent} onChange={setPermanent} />
             <span className="muted small">{permanent ? "写入覆写" : "重载配置后失效"}</span>
           </div>
         </>}

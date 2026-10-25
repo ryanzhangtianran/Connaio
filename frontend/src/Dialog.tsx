@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 
 // Dialog is every dialog's sheet: its title (and what it is for) on top, the body scrolling, the
 // buttons at its foot; bar, if any, stays between the title and the body. A click outside or Esc
@@ -13,10 +13,11 @@ export default function Dialog({ title, sub, bar, className = "", bodyClass = ""
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
   }, [locked, onClose]);
+  const titleId = useId();
   return (
     <div className="modal-bg" onClick={locked ? undefined : onClose}>
-      <div className={`sheet ${className}`} onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-head"><div className="sheet-title">{title}</div>{sub && <div className="muted small sheet-sub">{sub}</div>}</div>
+      <div className={`sheet ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-head"><div className="sheet-title" id={titleId}>{title}</div>{sub && <div className="muted small sheet-sub">{sub}</div>}</div>
         {bar}
         <div className={`sheet-body ${bodyClass}`}>{children}</div>
         <div className="sheet-foot">{foot}</div>

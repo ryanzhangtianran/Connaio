@@ -21,6 +21,27 @@ export function Switch({ on, onChange, disabled }: { on: boolean; onChange: (v: 
   return <input type="checkbox" {...{ switch: "" }} checked={on} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />;
 }
 
+// AddTile is a tile grid's last tile, adding one more; with none in the grid yet it also says what
+// it adds, the page's first step.
+export function AddTile({ label, empty, onClick, disabled }: { label: string; empty: boolean; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button className={`tile add ${empty ? "first" : ""}`} disabled={disabled} onClick={onClick} title={label} aria-label={label}>
+      ＋{empty && <span className="add-label">{label}</span>}
+    </button>
+  );
+}
+
+// Seg is every segmented control: one of options, the chosen one on, and said so (aria-pressed).
+export function Seg<T extends string | number | boolean>({ options, value, onChange, className, disabled }: {
+  options: readonly (readonly [T, React.ReactNode])[]; value: T; onChange: (v: T) => void; className?: string; disabled?: boolean;
+}) {
+  return (
+    <div className={className ? `seg ${className}` : "seg"} role="group">
+      {options.map(([v, label]) => <button key={String(v)} className={v === value ? "on" : ""} aria-pressed={v === value} disabled={disabled} onClick={() => onChange(v)}>{label}</button>)}
+    </div>
+  );
+}
+
 // sameShape keeps a value only if it matches the fallback's type: an unset Go value can reach JS
 // as a non-null placeholder (not null), which must not replace e.g. an empty list.
 function sameShape<T>(v: unknown, fallback: T): T {
@@ -67,10 +88,7 @@ function Appearance() {
     <div className="card settings-card">
       <div className="section-title">外观</div>
       <Row title="外观模式">
-        <div className="seg">
-          {[["system", "跟随系统"], ["light", "浅色"], ["dark", "深色"]].map(([v, label]) =>
-            <button key={v} className={theme === v ? "on" : ""} onClick={() => set("theme", v)}>{label}</button>)}
-        </div>
+        <Seg options={[["system", "跟随系统"], ["light", "浅色"], ["dark", "深色"]]} value={theme} onChange={(v) => set("theme", v)} />
       </Row>
       <Row title="主题色">
         <div className="swatches">
@@ -111,15 +129,15 @@ function ProxySettings({ port }: { port: number }) {
         <button className="btn ctl" onClick={() => setEditingBypass(true)}>编辑</button>
       </Row>}
       {editingBypass && (
-        <Dialog title="不经代理" sub="这些主机与网段直连，不经系统代理；本机与局域网地址默认直连" className="narrow" onClose={() => setEditingBypass(false)}
+        <Dialog title="不经代理" sub="这些地址直连，不经系统代理；本机与局域网默认直连" className="narrow" onClose={() => setEditingBypass(false)}
           foot={<button className="btn primary" onClick={() => setEditingBypass(false)}>完成</button>}>
           <ListEditor title="" items={bypass} placeholder="如 *.corp.example、10.1.0.0/16" save={(next) => SystemProxyService.SetBypass(next).then(() => setBypass(next))} />
         </Dialog>
       )}
-      <Row title="终端代理命令" desc="在终端中执行，使命令行程序经代理端口访问">
+      <Row title="终端代理命令" desc="使命令行程序经代理访问">
         <button className="btn ctl" onClick={() => { copyText(command); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? "已复制" : "复制"}</button>
       </Row>
-      <Row title="测速地址" desc={error ? <span className="error">{error}</span> : "测试节点延迟时访问的地址"}>
+      <Row title="测速地址" desc={error ? <span className="error">{error}</span> : "节点延迟测试访问的地址"}>
         <input {...plain} className="ctl url-ctl" value={urlText} onChange={(e) => setURLText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveURL()} onBlur={saveURL} />
       </Row>
     </div>
@@ -167,10 +185,10 @@ export function General() {
             {["debug", "info", "warning", "error", "silent"].map((l) => <option key={l}>{l}</option>)}
           </select>
         </Row>
-        <Row title="重启内核" desc="重新启动内核进程并载入当前配置">
+        <Row title="重启内核" desc="重新载入当前配置">
           <button className="btn ctl" disabled={!!busy} onClick={() => run(CoreService.Restart(), "restart")}>{busy === "restart" ? "重启中…" : "重启"}</button>
         </Row>
-        {web ? <Row title="root 权限" desc={daemon ? "Connaio 以 root 运行，可开启增强模式" : "以 root 运行 Connaio 后可开启增强模式"}>{null}</Row> : <Row title="root 权限" desc={daemon ? "已授予，内核以 root 运行" : "授予后才能开启增强模式"}>
+        {web ? <Row title="root 权限" desc={daemon ? "以 root 运行，可开启增强模式" : "以 root 运行后可开启增强模式"}>{null}</Row> : <Row title="root 权限" desc={daemon ? "已授予，内核以 root 运行" : "授予后才能开启增强模式"}>
           {daemon
             ? <button className="btn ctl" disabled={!!busy} onClick={() => run(EnhancedService.Uninstall(), "root")}>{busy === "root" ? "移除中…" : "移除"}</button>
             : <button className="btn ctl" disabled={!!busy} onClick={() => run(EnhancedService.Grant(), "root")}>{busy === "root" ? "授予中…" : "授予"}</button>}
@@ -268,7 +286,7 @@ function PolicySetting() {
     setPolicy({ ...(policy ?? {}), [d]: sv.length === 1 ? sv[0] : sv }).then(() => { setDomain(""); setServers(""); });
   };
   return (
-    <Row list title="分域名服务器" desc="指定域名用指定的服务器解析。">
+    <Row list title="分域名服务器" desc="指定域名由指定服务器解析">
       {entries.map(([d, v]) => (
         <ListItem key={d} onRemove={() => setPolicy(Object.fromEntries(entries.filter(([k]) => k !== d)))}>
           <span className="list-value">{d}</span><span className="list-value muted">{list(v).join(", ")}</span>
@@ -284,7 +302,7 @@ function PolicySetting() {
 }
 
 function ListItem({ onRemove, children }: { onRemove: () => void; children: React.ReactNode }) {
-  return <div className="list-item">{children}<button className="list-remove" title="删除" onClick={onRemove}>−</button></div>;
+  return <div className="list-item">{children}<button className="list-remove" title="删除" aria-label="删除" onClick={onRemove}>−</button></div>;
 }
 
 // servers sums a list of DNS servers up by network: "CloudFlare Inc（AS13335）· United States of America · 2 台",
@@ -318,8 +336,8 @@ function LeakTest() {
     ToolService.DNSLeakTest().then(setResult).catch((e) => setError(errText(e, "检测失败，详情见事件"))).finally(() => setBusy(false));
   };
   const leaked = new Set((result?.leaked ?? []).map((s) => s.ip));
-  const desc = busy ? "约需 20 秒" : error ? error : !result ? "按规则访问测试域名，看哪些 DNS 服务器解析了它；需要「规则判定」模式"
-    : leaked.size ? `可能泄漏：本地网络的 ${leaked.size} 台 DNS 服务器解析了走代理的域名` : "没有泄漏：走代理的域名只由代理一侧的 DNS 服务器解析";
+  const desc = busy ? "约需 20 秒" : error ? error : !result ? "检查走代理的域名由哪些 DNS 服务器解析；需「规则判定」模式"
+    : leaked.size ? `可能泄漏：本地网络的 ${leaked.size} 台 DNS 服务器解析了走代理的域名` : "无泄漏：走代理的域名仅由代理侧 DNS 解析";
   return (
     <>
       <Row title="DNS 泄漏检测" desc={desc}>
@@ -355,28 +373,23 @@ export function Dns() {
         <div className="section-title">基本</div>
         <Row title="启用 DNS"><Switch on={enable} onChange={setEnable} /></Row>
         <Row title="模式">
-          <div className="seg">
-            {["fake-ip", "redir-host"].map((m) => <button key={m} className={mode === m ? "on" : ""} onClick={() => setMode(m)}>{m.toUpperCase()}</button>)}
-          </div>
+          <Seg options={[["fake-ip", "FAKE-IP"], ["redir-host", "REDIR-HOST"]]} value={mode} onChange={setMode} />
         </Row>
-        <Row title="IP 版本" desc="仅 IPv4 时增强模式不接管 IPv6；本机有 IPv6 时需在系统中关闭，否则应用会绕过代理。">
-          <div className="seg">
-            <button className={dual ? "on" : ""} onClick={() => setDual(true)}>双栈</button>
-            <button className={!dual ? "on" : ""} onClick={() => setDual(false)}>仅 IPv4</button>
-          </div>
+        <Row title="IP 版本" desc="仅 IPv4 时不接管 IPv6，需在系统中关闭 IPv6">
+          <Seg options={[[true, "双栈"], [false, "仅 IPv4"]]} value={dual} onChange={setDual} />
         </Row>
         <Row title="解析 IPv6"><Switch on={ipv6} onChange={setIPv6} /></Row>
         <Row title="DoH 优先使用 HTTP/3"><Switch on={h3} onChange={setH3} /></Row>
-        <Row title="DNS 查询遵循规则" desc="解析也按规则走代理，减少泄漏。"><Switch on={respect} onChange={setRespect} /></Row>
+        <Row title="DNS 查询遵循规则" desc="解析也按规则走代理，减少泄漏"><Switch on={respect} onChange={setRespect} /></Row>
       </div>
 
       <div className="card settings-card">
         <div className="section-title">上游服务器</div>
         <ListSetting title="主服务器" path="dns.nameserver" placeholder="如 https://doh.pub/dns-query 或 223.5.5.5" />
-        <ListSetting title="引导服务器" desc="解析 DoH 地址本身的域名，只能填 IP。" path="dns.default-nameserver" placeholder="如 223.5.5.5" />
-        <ListSetting title="代理节点域名" desc="只用来解析代理服务器的域名。" path="dns.proxy-server-nameserver" placeholder="如 https://doh.pub/dns-query" />
-        <ListSetting title="直连域名" desc="直连的连接用它解析。" path="dns.direct-nameserver" placeholder="如 system" />
-        <ListSetting title="备用服务器" desc="主服务器结果可能被污染时使用。" path="dns.fallback" placeholder="如 https://1.1.1.1/dns-query" />
+        <ListSetting title="引导服务器" desc="解析 DoH 域名，须填 IP" path="dns.default-nameserver" placeholder="如 223.5.5.5" />
+        <ListSetting title="代理节点域名" desc="仅解析代理服务器的域名" path="dns.proxy-server-nameserver" placeholder="如 https://doh.pub/dns-query" />
+        <ListSetting title="直连域名" desc="解析直连的域名" path="dns.direct-nameserver" placeholder="如 system" />
+        <ListSetting title="备用服务器" desc="主服务器结果可能被污染时使用" path="dns.fallback" placeholder="如 https://1.1.1.1/dns-query" />
         <PolicySetting />
       </div>
 
@@ -388,12 +401,12 @@ export function Dns() {
             <button className="btn" disabled={rangeText === range || !/^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(rangeText.trim())} onClick={() => setRange(rangeText.trim())}>保存</button>
           </div>
         </Row>
-        <ListSetting title="不分配虚拟 IP 的域名" desc="局域网、时间服务器、游戏主机等需要真实 IP 的域名。" path="dns.fake-ip-filter" placeholder="如 +.lan、time.*.com" />
+        <ListSetting title="不分配虚拟 IP 的域名" desc="需真实 IP 的域名，如局域网与游戏主机" path="dns.fake-ip-filter" placeholder="如 +.lan、time.*.com" />
       </div>
 
       <div className="card settings-card">
         <div className="section-title">系统</div>
-        <Row title="跟随系统分域名 DNS" desc="VPN 等为特定域名设置的 DNS 继续生效。"><Switch on={split} onChange={setSplit} /></Row>
+        <Row title="跟随系统分域名 DNS" desc="VPN 等设置的分域名 DNS 保持生效"><Switch on={split} onChange={setSplit} /></Row>
         <Row title="使用系统 HOSTS"><Switch on={hosts} onChange={setHosts} /></Row>
       </div>
 

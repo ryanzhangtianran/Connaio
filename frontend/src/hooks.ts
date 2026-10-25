@@ -76,6 +76,7 @@ export function useDirty(deps: unknown[]) {
 // reads where the container's [data-flip] children are just before the change, and once React has
 // laid the list out again each row that moved starts from there and slides home. Positions are
 // read at the change, not at the last render, so a <details> opened in between doesn't skew them.
+const lessMotion = matchMedia("(prefers-reduced-motion: reduce)");
 export function useFlip<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   const before = useRef<Map<string, number> | null>(null);
@@ -90,6 +91,7 @@ export function useFlip<T extends HTMLElement>() {
     const was = before.current;
     if (!was) return;
     before.current = null;
+    if (lessMotion.matches) return; // the system asks for less motion: rows take their places at once
     const el = ref.current;
     if (!el) return;
     for (const [key, top] of tops()) {

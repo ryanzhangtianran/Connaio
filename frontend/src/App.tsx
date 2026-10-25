@@ -139,7 +139,7 @@ export default function App() {
       <ErrorBoundary>
       <nav className="sidebar">
         {pages.map((p) => (
-          <button key={p.key} className={`item ${p.key === current ? "active" : ""}`} onClick={() => setCurrent(p.key)}><NavIcon page={p.key} />{p.title}</button>
+          <button key={p.key} className={`item ${p.key === current ? "active" : ""}`} aria-current={p.key === current ? "page" : undefined} onClick={() => setCurrent(p.key)}><NavIcon page={p.key} />{p.title}</button>
         ))}
       </nav>
       <main className="main">
@@ -147,7 +147,8 @@ export default function App() {
           <h1 className="page-title">{pages.find((p) => p.key === current)?.title}</h1>
           <EventsButton />
           {!web && <button
-            className="pill"
+            className={`pill ${sysProxy ? "active" : ""}`}
+            aria-pressed={sysProxy}
             disabled={!status.running}
             title="将系统代理指向本机代理端口"
             onClick={() => SystemProxyService.SetEnabled(!sysProxy)}
@@ -155,7 +156,8 @@ export default function App() {
             <span className={`dot ${sysProxy ? "on" : ""}`} />系统代理
           </button>}
           <button
-            className="pill"
+            className={`pill ${enhanced ? "active" : ""}`}
+            aria-pressed={!!enhanced}
             disabled={!status.running || enhancedBusy || !rooted}
             title={!rooted ? (web ? "需以 root 运行 Connaio" : "需先在「通用」中授予 root 权限") : enhanced === "process-tun" ? "TUN 只接管选中的应用；点击关闭部分增强" : "TUN 接管全部流量"}
             onClick={() => {

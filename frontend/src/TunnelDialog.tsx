@@ -38,7 +38,7 @@ function Rows({ cols, rows, setRows, addr = [], locked }: { cols: [string, strin
                 </td>,
               ];
             })}
-            <td><button className="btn" onClick={() => setRows(rows.filter((_, j) => j !== i))}>×</button></td>
+            <td><button className="btn" title="删除" aria-label="删除" onClick={() => setRows(rows.filter((_, j) => j !== i))}>×</button></td>
           </tr>
         ))}
       </tbody>
@@ -146,14 +146,14 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
     && (!viaRules || validPort(viaPort)); // the via-rules forward's port has no default
 
   return (
-    <Dialog title={editing ? `编辑 ${editing.name}` : "增加隧道"} className="wide tunnel-sheet" locked={dirty || busy} onClose={onClose} foot={<>
+    <Dialog title={editing ? `编辑 ${editing.name}` : "添加隧道"} className="wide tunnel-sheet" locked={dirty || busy} onClose={onClose} foot={<>
       <button className="btn" onClick={onClose}>取消</button>
       <button className="btn primary" disabled={!filled || busy} onClick={save}>完成</button>
     </>}>
         <div className="form-grid">
           <label>名称</label>{field("name", v.name && !validName(v.name) ? "只能用字母、数字、. _ -" : "必填")}
           <label>服务器</label>
-          <div className="inline">{field("server", "vps.example.com")} : <span style={{ width: 90, flex: "none" }}>{field("port", "51820")}</span><span className="muted small" title="服务器程序接收 WireGuard 的端口，与 SSH 端口无关">UDP</span></div>
+          <div className="inline">{field("server", "vps.example.com")} : <span style={{ width: 90, flex: "none" }}>{field("port", "51820")}</span><span className="muted small" title="服务器接收 WireGuard 的端口，与 SSH 无关">UDP</span></div>
           <label>本机隧道地址</label>{field("ip", v.ip && !validIP(v.ip) ? "须为 IPv4 地址" : "10.8.0.2")}
           <label>密码</label>
           <div className="inline">
@@ -173,18 +173,18 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
         <div className="setting-row option-row">
           <div>
             <div>按规则分流</div>
-            <div className="muted small">{viaRules ? `服务器本机 ${viaPort || "（在下方填写）"} 端口作为 HTTP / SOCKS5 代理，接入 Connaio 的 ${mixedPort} 端口` : "服务器本机的一个端口作为 HTTP / SOCKS5 代理，接入 Connaio"}</div>
+            <div className="muted small">{viaRules ? `服务器本机 ${viaPort || "（在下方填写）"} 端口作为 HTTP / SOCKS5 代理，接入 Connaio 的 ${mixedPort} 端口` : "服务器本机一个端口作为代理，接入 Connaio"}</div>
           </div>
           <Switch on={viaRules} disabled={!mixedPort} onChange={setViaRules} />
         </div>
         <Rows cols={[["remote", "服务器"], ["local", "本地"]]} rows={rows} setRows={setRows} addr={["remote", "local"]} locked={lockedCell} />
-        <button className="btn small-btn" style={{ marginTop: 8 }} onClick={() => setRows([...rows, { remote: `${publicHost}:` }])}>添加转发</button>
+        <button className="btn small-btn add-row" onClick={() => setRows([...rows, { remote: `${publicHost}:` }])}>添加转发</button>
 
         <div className="section-title">服务器程序</div>
         <div className="install-box">
           {!login && <>
             <div className="install-head">
-              <span className="muted small">经 SSH 登录一次，以登录用户安装并启动，无需 root，密码不保存。修改密码、端口或转发后需重新安装。</span>
+              <span className="muted small">经 SSH 安装并启动，无需 root，密码不保存；修改密码、端口或转发后需重新安装。</span>
               <button className="btn small-btn" disabled={busy || !filled} title="先保存此隧道，再安装到服务器" onClick={() => { setInstalled(null); setLogin({ user: "", port: "22", password: "" }); }}>安装到服务器</button>
             </div>
             {installed && <div className={`small install-result ${installed.ok ? "delay-good" : "error"}`}>{installed.text}</div>}
@@ -200,8 +200,8 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
               <div>
                 <div>同时开启 BBR 并放行防火墙端口</div>
                 <div className="muted small">
-                  {admin ? "需 sudo 或 root：仅写入 BBR 设置，并在运行中的 ufw 或 firewalld 中放行本隧道的端口，不保留任何权限。" : "以管理员权限执行一次，提升弱网下的速度。"}
-                  {login.user === "root" && " 以 root 登录时，服务器程序也将以 root 运行。"}
+                  {admin ? "需 sudo 或 root：仅写入 BBR 设置并放行本隧道端口，不保留权限。" : "以管理员权限执行一次，提升弱网速度。"}
+                  {login.user === "root" && " 以 root 登录时，服务器程序也以 root 运行。"}
                 </div>
               </div>
               <Switch on={admin} onChange={setAdmin} />
@@ -215,7 +215,7 @@ export default function TunnelDialog({ editing, onClose }: { editing?: Record<st
             <div className="form-grid">
               <label>登录</label><span className="selectable">{login.user}@{v.server}:{login.port}{admin && <span className="muted">，同时开启 BBR 并放行端口</span>}</span>
               <label>服务器指纹</label><span className="fingerprint selectable">{fingerprint}</span>
-              <span /><span className="muted small">请与服务器控制台中的指纹核对，一致后再安装；密码仅发送给此服务器。</span>
+              <span /><span className="muted small">请与服务器控制台的指纹核对后安装；密码仅发送至此服务器。</span>
               {installed && !installed.ok && <><span /><div className="small error">{installed.text}</div></>}
             </div>
             <div className="actions end">

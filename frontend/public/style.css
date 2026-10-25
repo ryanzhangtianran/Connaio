@@ -22,6 +22,7 @@
   --track: rgba(0, 0, 0, 0.07);
   --seg-on: #8e8e93;
   --accent: #0a84ff;
+  --on-accent: #fff; /* text on the accent: theme.js turns it dark on a light accent (green, mint, teal, orange) */
   --up: #6a5af9;
   --down: #22b0e6;
   --good: #34c759;
@@ -88,8 +89,9 @@ button { font: inherit; color: inherit; }
 .pill {
   display: flex; align-items: center; gap: 6px; min-width: 96px; justify-content: center; padding: 3px 12px;
   border: 0; border-radius: 999px; background: var(--pill); font-size: 12px; font-weight: 500;
-  --wails-draggable: no-drag;
+  --wails-draggable: no-drag; transition: background .15s;
 }
+.pill.active { background: color-mix(in srgb, var(--accent) 18%, var(--pill)); } /* a switch that is on: tinted, not told by its dot's colour alone */
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #8e8e93; flex: none; }
 .dot.on { background: var(--good); }
 .dot.warn { background: var(--warn); }
@@ -112,7 +114,7 @@ button { font: inherit; color: inherit; }
 
 .menu { position: absolute; z-index: 10; margin-top: 4px; padding: 4px; border-radius: 10px; background: var(--card); backdrop-filter: blur(30px); box-shadow: 0 8px 30px rgba(0,0,0,.18); border: 1px solid var(--line); }
 .menu button { display: flex; justify-content: space-between; gap: 16px; width: 100%; padding: 6px 12px; border: 0; border-radius: 6px; background: none; text-align: left; font-size: 13px; }
-.menu button:hover { background: var(--accent); color: #fff; }
+.menu button:hover { background: var(--accent); color: var(--on-accent); }
 
 /* cards */
 .split-bar { display: flex; gap: 4px; height: 10px; margin-top: 8px; }
@@ -162,7 +164,7 @@ label.btn.disabled { pointer-events: none; }
 
 .seg { display: inline-flex; justify-self: start; padding: 2px; border-radius: 8px; background: var(--track); }
 .seg button { border: 0; border-radius: 6px; padding: 3px 16px; background: none; font-size: 12px; white-space: nowrap; }
-.seg button.on { background: var(--accent); color: #fff; font-weight: 500; }
+.seg button.on { background: var(--accent); color: var(--on-accent); font-weight: 500; }
 
 .rank { display: flex; flex-direction: column; gap: 10px; }
 .rank .row { display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 10px; row-gap: 4px; min-height: 24px; }
@@ -192,7 +194,7 @@ select { font: inherit; color: var(--text); background: var(--card); border: 1px
 .table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .table th { text-align: left; font-weight: 500; color: var(--text-2); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .table td { padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
-.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
 .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.25); display: grid; place-items: center; z-index: 20; }
 .form-grid { display: grid; grid-template-columns: 96px 1fr; gap: 10px; align-items: center; margin-top: 4px; }
 .form-grid > label { color: var(--text-2); text-align: right; }
@@ -241,7 +243,7 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 /* strategy page tiles */
 .big-seg { display: flex; width: 100%; max-width: 480px; padding: 2px; border-radius: 9px; }
 .big-seg button { flex: 1; padding: 4px 0; font-size: 12px; border-radius: 7px; }
-.big-seg button.on.accent { background: var(--accent); color: #fff; }
+.big-seg button.on { background: var(--accent); color: var(--on-accent); }
 .tile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 22px 0 8px; }
 .btn.on { background: var(--active); } /* a toggle that is on, e.g. 隐藏超时 */
 .tiles-empty { padding: 8px 4px; }
@@ -257,11 +259,12 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 }
 .tile:hover { background: var(--active); }
 .tile.selected { border-color: var(--accent); }
-.tile .kind { font-size: 10px; color: var(--text-2); }
+.tile .kind { font-size: 11px; color: var(--text-2); }
 .tile .name { font-size: 13px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tile .foot { margin-top: auto; font-size: 10px; color: var(--text-2); }
+.tile .foot { margin-top: auto; font-size: 11px; color: var(--text-2); }
 .tile .foot.delay-good { color: var(--good); } .tile .foot.delay-warn { color: var(--warn); } .tile .foot.delay-bad { color: var(--bad); }
 .tile.add { align-items: center; justify-content: center; border: 1.5px dashed var(--line); background: none; font-size: 22px; color: var(--text-2); }
+.tile.add .add-label { font-size: 12px; margin-top: 2px; } /* an empty grid's only tile says what it adds */
 .menu.members { position: absolute; left: 0; top: 100px; min-width: 240px; max-height: 320px; overflow: auto; }
 .menu button:disabled { opacity: 1; color: var(--text); background: none; }
 .menu button.current { font-weight: 600; }
@@ -271,7 +274,7 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 /* a segmented control in a menu keeps its own look, not the menu's full-width rows */
 .menu .seg button { display: inline-block; width: auto; padding: 3px 16px; font-size: 12px; }
 .menu .seg button:hover:not(.on) { background: none; color: inherit; }
-.menu .seg button.on { background: var(--accent); color: #fff; }
+.menu .seg button.on { background: var(--accent); color: var(--on-accent); }
 .menu.detail button { padding-inline: 8px; } /* in line with the rows above */
 .detail-head { padding: 4px 8px 6px; font-size: 12px; color: var(--text-2); }
 .detail-row { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 6px 8px; border-top: 1px solid var(--line); font-size: 12px; }
@@ -350,7 +353,7 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .dash-table .addr .method { margin-right: 8px; }
 .dash-table tr:hover td { background: var(--hover); }
 .row-selected td { background: var(--active) !important; }
-.method { display: inline-block; width: 46px; text-align: center; font-size: 10px; font-weight: 700; padding: 1px 0; border-radius: 4px; color: #fff; background: #ec4899; } /* one width, so the addresses after it line up; TCP's pink unless a kind below */
+.method { display: inline-block; width: 48px; text-align: center; font-size: 11px; font-weight: 700; padding: 1px 0; border-radius: 4px; color: #fff; background: #ec4899; } /* one width, so the addresses after it line up; TCP's pink unless a kind below */
 .m-https { background: #f59e0b; } .m-http { background: #22c55e; } .m-quic { background: #8b5cf6; } .m-udp { background: #0ea5e9; }
 .dash-detail { margin-top: 10px; padding: 10px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--card-line); }
 .detail-grid { display: grid; grid-template-columns: 90px 1fr 90px 1fr; gap: 4px 12px; margin-top: 8px; font-size: 12px; }
@@ -434,13 +437,16 @@ tr.muted td { color: var(--text-2); text-decoration: line-through; }
 .table th.sortable { cursor: pointer; white-space: nowrap; }
 .table th.sortable:hover { color: var(--text); }
 .row-close { text-align: right; padding-left: 0 !important; padding-right: 4px !important; }
-.table .row-close .btn { height: 20px; width: 22px; padding: 0; border-color: transparent; background: none; color: var(--text-2); visibility: hidden; }
-.table tr:hover .row-close .btn { visibility: visible; }
+.table .row-close .btn { height: 24px; width: 24px; padding: 0; border-color: transparent; background: none; color: var(--text-2); opacity: .3; } /* there, faint, until its row is hovered */
+.table tr:hover .row-close .btn, .table .row-close .btn:focus-visible { opacity: 1; }
 .table .row-close .btn:hover { color: var(--bad); background: var(--hover); }
 /* rule actions: borderless, shown on the hovered row only, so the table reads as rules */
 .rule-actions { text-align: right; width: 168px; }
 .table .rule-actions .btn { height: 22px; padding: 0 8px; border-color: transparent; background: none; color: var(--text-2); visibility: hidden; }
 .table tr:hover .rule-actions .btn, .table .rule-actions .btn:focus-visible { visibility: visible; }
+.table td.rule-actions { position: relative; }
+.table td.rule-actions::after { content: "⋯"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); color: var(--text-2); opacity: .6; pointer-events: none; } /* the actions wait here: hover the row */
+.table tr:hover td.rule-actions::after, .table td.rule-actions:focus-within::after { display: none; }
 .table .rule-actions .btn:hover:not(:disabled) { background: var(--hover); color: var(--text); }
 .table .rule-actions .btn.danger:hover { color: var(--bad); }
 .table tr:hover td { background: var(--hover); }
@@ -476,7 +482,7 @@ tr.muted td.rule-actions { text-decoration: none; }
 .client-icon { width: 18px; height: 18px; flex: none; }
 .client-icon.device { display: grid; place-items: center; border-radius: 6px; background: var(--track); color: var(--text-2); }
 .client-icon.device svg { width: 12px; height: 12px; }
-.client-icon.tunnel { display: grid; place-items: center; border-radius: 5px; background: var(--accent); color: #fff; }
+.client-icon.tunnel { display: grid; place-items: center; border-radius: 5px; background: var(--accent); color: var(--on-accent); }
 .client-icon.tunnel svg { width: 64%; height: 64%; stroke-width: 2.2; }
 .hours { position: relative; flex: 1; min-height: 0; margin-top: 24px; } /* the card's height under its head, room above for the top gridline's label */
 .hours-grid { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--line); }
@@ -529,7 +535,7 @@ tr.muted td.rule-actions { text-decoration: none; }
 .menu.picker-menu { position: fixed; margin: 0; max-height: 280px; overflow: auto; }
 .menu.picker-menu button { font-size: 12px; padding: 5px 10px; }
 .menu.picker-menu button.current { font-weight: 500; color: var(--accent); }
-.menu.picker-menu button.current:hover { color: #fff; }
+.menu.picker-menu button.current:hover { color: var(--on-accent); }
 .tool-row { display: grid; grid-template-columns: auto minmax(0, 1fr) 72px; align-items: center; gap: 10px; min-height: 40px; border-top: 1px solid var(--line); font-size: 12px; }
 .tool-title { color: var(--text); }
 .tool-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -572,7 +578,7 @@ tr.muted td.rule-actions { text-decoration: none; }
 /* a speed: arrow, figure and unit together; the figure right-aligned in a set width and the unit
    in its own, so it doesn't jitter as it changes */
 .monitor-rate { display: flex; align-items: baseline; justify-content: flex-end; gap: 3px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.monitor-rate i { font-style: normal; font-size: 10px; }
+.monitor-rate i { font-style: normal; font-size: 11px; }
 .monitor-rate.down i { color: var(--down); }
 .monitor-rate.up i { color: var(--up); }
 .monitor-rate b { min-width: 30px; text-align: right; font-weight: 500; }
@@ -643,11 +649,12 @@ tr.muted td.rule-actions { text-decoration: none; }
 .hero > .card-title { max-width: 66%; } /* the stats and the address's row (the button at its end) run across the field */
 .hero-wave { position: absolute; top: 0; right: 0; width: 38%; height: 100%; fill: color-mix(in srgb, var(--accent) 13%, transparent); pointer-events: none; }
 .hero-wave .back { fill: color-mix(in srgb, var(--accent) 7%, transparent); } /* the layer a little behind */
-.hero-btn { position: relative; flex: none; width: 104px; height: 104px; margin: -14px 4% -14px auto; padding: 0; /* in the address's row, centred with it */ border: 0; background: none; color: #fff; transition: transform .2s; }
+.hero-btn { position: relative; flex: none; width: 104px; height: 104px; margin: -14px 4% -14px auto; padding: 0; /* in the address's row, centred with it */ border: 0; background: none; color: var(--on-accent); transition: transform .2s; }
 .hero-btn:hover { transform: rotate(12deg) scale(1.04); }
 .hero-btn:active { transform: scale(.96); }
 .hero-cookie svg { position: absolute; inset: 0; width: 100%; height: 100%; fill: var(--accent); filter: drop-shadow(0 6px 14px color-mix(in srgb, var(--accent) 40%, transparent)); transition: fill .2s; }
 .hero-btn.paused .hero-cookie svg { fill: var(--warn); filter: drop-shadow(0 6px 14px color-mix(in srgb, var(--warn) 40%, transparent)); }
+.hero-btn.paused { color: #1d1d1f; } /* the pause glyph on --warn's orange */
 .hero-glyph { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; }
 .hero-ip { display: flex; align-items: center; gap: 16px; margin: auto 0 28px; padding-top: 12px; min-width: 0; } /* auto here and above the stats: between the head and them, a little above the middle */
 .hero-main { min-width: 0; }
@@ -670,11 +677,12 @@ tr.muted td.rule-actions { text-decoration: none; }
 .mode-seg { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); margin-left: 8px; padding: 3px; border-radius: 12px; background: var(--track); }
 .mode-seg button { display: flex; align-items: center; justify-content: center; gap: 6px; height: 36px; border: 0; border-radius: 9px; background: none; font-size: 13px; font-weight: 500; transition: background .15s, color .15s; }
 .mode-seg button:hover:not(.on) { background: var(--hover); }
-.mode-seg button.on { background: var(--accent); color: #fff; }
+.mode-seg button.on { background: var(--accent); color: var(--on-accent); }
 .toggle-icon { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 11px; background: var(--track); transition: background .15s; }
 .toggle-icon.on { background: var(--accent); }
 .toggle-icon.part { background: var(--warn); }
-.toggle-icon:is(.on, .part) .card-icon { color: #fff; }
+.toggle-icon.on .card-icon { color: var(--on-accent); }
+.toggle-icon.part .card-icon { color: #1d1d1f; } /* on --warn's orange, white would read at 2:1 */
 .toggle-icon.small { width: 30px; height: 30px; border-radius: 9px; }
 .toggle-text { flex: 1; min-width: 0; }
 .toggle-title { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; }
@@ -693,7 +701,7 @@ tr.muted td.rule-actions { text-decoration: none; }
 .site-row .svc-logo { background: var(--track); }
 .site-row input { height: 28px; padding: 0 8px; font-size: 12px; }
 .site-row .code-input { font-family: var(--mono); }
-.site-add { margin-top: 10px; }
+.add-row { margin-top: 8px; } /* a list's 添加转发, 添加条件, 添加站点: one small button under its rows */
 .svc-logo .dot { position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; box-shadow: 0 0 0 2px var(--card); }
 .svc-text { display: flex; flex-direction: column; min-width: 0; }
 .svc-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -707,7 +715,7 @@ tr.muted td.rule-actions { text-decoration: none; }
 .tabs { display: flex; min-width: 0; padding: 2px; border-radius: 10px; background: var(--track); }
 .tabs button { display: flex; align-items: center; gap: 5px; height: 26px; padding: 0 14px; border: 0; border-radius: 8px; background: none; font-size: 12px; font-weight: 500; white-space: nowrap; transition: background .15s, color .15s; }
 .tabs button:hover:not(.on) { background: var(--hover); }
-.tabs button.on { background: var(--accent); color: #fff; }
+.tabs button.on { background: var(--accent); color: var(--on-accent); }
 .tabs b { font: 600 13px var(--rounded); font-variant-numeric: tabular-nums; }
 .pane { flex: 1; min-height: 0; overflow: auto; margin: 10px -18px -16px; padding: 0 18px 16px; }
 .pane-empty { flex: 1; display: grid; place-items: center; }
@@ -718,8 +726,7 @@ tr.muted td.rule-actions { text-decoration: none; }
 .traffic-sum .big { margin-top: 0; font-size: 26px; }
 .traffic-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .traffic-range { display: flex; align-items: center; gap: 2px; }
-.traffic-range button:not(.link-btn) { border: 0; border-radius: 6px; padding: 2px 8px; background: none; font-size: 12px; color: var(--text-2); }
-.traffic-range button.on { background: var(--track); color: var(--text); font-weight: 600; }
+.seg.small-seg button { padding: 2px 10px; } /* a compact one, beside a figure (今日 / 本月) */
 .traffic-range .link-btn { margin-left: 8px; }
 .traffic-sum .split-bar { height: 6px; margin-top: 10px; }
 .traffic-sum .split-bar i { border-radius: 3px; }
@@ -806,3 +813,13 @@ tr.muted td.rule-actions { text-decoration: none; }
 .override-tabs { gap: 12px; }
 .override-tabs .seg { flex: none; }
 .override-tabs .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* focus, as the keyboard moves it: a ring in the accent colour, not the system's blue */
+:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 2px; }
+:is(input, select, textarea):focus-visible { outline-offset: 0; }
+
+/* the system asks for less motion: transitions and animations finish at once (the status card's
+   wave already stands still, Activity.tsx) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}

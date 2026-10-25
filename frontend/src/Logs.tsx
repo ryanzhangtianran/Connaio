@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { clearLogs, useLogs } from "./store";
 import { copyText } from "./format";
+import { Seg } from "./Settings";
 
 const levels = ["debug", "info", "warning", "error"];
 
@@ -16,9 +17,7 @@ export default function Logs() {
   return (
     <div className="card logs-card">
       <div className="head">
-        <div className="seg">
-          {levels.map((l) => <button key={l} className={l === level ? "on" : ""} onClick={() => setLevel(l)}>{l}</button>)}
-        </div>
+        <Seg options={levels.map((l) => [l, l] as const)} value={level} onChange={setLevel} />
         <div className="actions">
           <input data-search placeholder="搜索…" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: 200 }} />
           <button className="btn" onClick={() => setHeld(held ? null : live)}>{held ? "继续" : "暂停"}</button>

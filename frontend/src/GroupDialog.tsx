@@ -57,8 +57,8 @@ export default function GroupDialog({ editing, onClose }: { editing?: Record<str
   const ready = !!name.trim() && !duplicate && !sameCond && (type === "subnet" || members.length > 0) && (!probes || (/^\d+$/.test(period) && Number(period) > 0));
 
   return (
-    <Dialog title={editing ? `编辑 ${editing.name}` : "增加策略组"} className="narrow" locked={dirty || busy} onClose={onClose} foot={<>
-      {error && <span className="small error foot-error">{error}</span>}
+    <Dialog title={editing ? `编辑 ${editing.name}` : "添加策略组"} className="narrow" locked={dirty || busy} onClose={onClose} foot={<>
+      {error && <span className="small error foot-error" role="alert">{error}</span>}
       <button className="btn" onClick={onClose}>取消</button>
       <button className="btn primary" disabled={!ready || busy} onClick={save}>完成</button>
     </>}>
@@ -81,10 +81,10 @@ export default function GroupDialog({ editing, onClose }: { editing?: Record<str
                 {fixed(r.t) ? <span /> : <input value={r.v} placeholder={bypassKinds.find((k) => k.key === r.t)?.placeholder} onChange={(e) => setRule(i, { v: e.target.value })} />}
                 <span className="muted">→</span>
                 <select value={r.target} onChange={(e) => setRule(i, { target: e.target.value })}>{names.map((n) => <option key={n}>{n}</option>)}</select>
-                <button className="btn" onClick={() => setRules(rules.filter((_, j) => j !== i))}>×</button>
+                <button className="btn" title="删除" aria-label="删除" onClick={() => setRules(rules.filter((_, j) => j !== i))}>×</button>
               </div>
             ))}
-            <button className="btn" onClick={() => setRules([...rules, { t: "SSID", v: "", target: "DIRECT" }])}>增加一条</button>{sameCond && <span className="muted small" style={{ marginLeft: 8, color: "var(--bad)" }}>有重复的条件</span>}
+            <button className="btn small-btn add-row" onClick={() => setRules([...rules, { t: "SSID", v: "", target: "DIRECT" }])}>添加条件</button>{sameCond && <span className="muted small" style={{ marginLeft: 8, color: "var(--bad)" }}>有重复的条件</span>}
           </>
         ) : (
           <>

@@ -6,6 +6,7 @@ import { ClientIcon } from "./Activity";
 import { TunnelPath, useTunnelSites } from "./Tunnels";
 import { sizeText, speed } from "./format";
 import { usePoll, useClickAway, useConfirm } from "./hooks";
+import { Seg } from "./Settings";
 
 // method approximates Surge's column from what the core knows: transport and port.
 function method(c: Conn) {
@@ -29,7 +30,7 @@ function Detail({ c, sites, onRule, onClose }: { c: Conn; sites: ReturnType<type
         <span className="actions">
           <button className="btn" onClick={onRule}>为此主机添加规则</button>
           <button className="btn" onClick={() => CoreService.CloseConnection(c.id).then(onClose)}>断开</button>
-          <button className="btn" onClick={onClose}>×</button>
+          <button className="btn" title="关闭" aria-label="关闭" onClick={onClose}>×</button>
         </span>
       </div>
       {c.tunnel && <TunnelPath c={c} {...sites} />}
@@ -105,10 +106,7 @@ export default function Dashboard({ status }: { status: Status }) {
       {/* one split-view card: grouping and list on the left, search, actions and table on the right */}
       <div className="dash-body">
         <aside className="dash-side">
-          <div className="seg">
-            <button className={groupBy === "client" ? "on" : ""} onClick={() => { setGroupBy("client"); setSelected(""); }}>按客户端</button>
-            <button className={groupBy === "host" ? "on" : ""} onClick={() => { setGroupBy("host"); setSelected(""); }}>按主机名</button>
-          </div>
+          <Seg options={[["client", "按客户端"], ["host", "按主机名"]]} value={groupBy} onChange={(v) => { setGroupBy(v); setSelected(""); }} />
           <button className={`dash-item ${selected === "" ? "active" : ""}`} onClick={() => setSelected("")}>
             <span>{groupBy === "client" ? "所有客户端" : "所有主机"}</span><span className="muted">{conns.length}</span>
           </button>
@@ -157,7 +155,7 @@ export default function Dashboard({ status }: { status: Status }) {
                     <td className="num">{sizeText(c.upload)}</td>
                     <td className="num">{sizeText(c.download)}</td>
                     <td className="num">{age(c.start)}</td>
-                    <td className="row-close"><button className="btn" title="断开" onClick={(e) => { e.stopPropagation(); CoreService.CloseConnection(c.id).then(() => setConns((l) => l.filter((x) => x.id !== c.id))); }}>×</button></td>
+                    <td className="row-close"><button className="btn" title="断开" aria-label="断开" onClick={(e) => { e.stopPropagation(); CoreService.CloseConnection(c.id).then(() => setConns((l) => l.filter((x) => x.id !== c.id))); }}>×</button></td>
                   </tr>
                 ))}
               </tbody>

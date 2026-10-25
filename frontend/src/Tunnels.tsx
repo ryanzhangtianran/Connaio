@@ -6,6 +6,7 @@ import { ExitCell } from "./Activity";
 import { Icon } from "./icons";
 import { nonNull, sizeText, speed } from "./format";
 import { useConfirm, usePoll } from "./hooks";
+import { AddTile } from "./Settings";
 
 const stateLabel: Record<string, string> = { running: "运行中", connecting: "连接中", retrying: "重试中", stopped: "已停止" };
 const stateClass: Record<string, string> = { running: "delay-good", connecting: "delay-warn", retrying: "delay-bad", stopped: "muted" };
@@ -208,7 +209,7 @@ export default function Tunnels({ status }: { status: Status }) {
 
   return (
     <>
-      <div className="hint">通过 WireGuard 把本机服务暴露到公网。</div>
+      <div className="hint">经 WireGuard 将本机服务暴露至公网。</div>
 
       <div className="tile-head"><span className="tile-title groups">隧道</span></div>
       <div className="tiles">
@@ -228,7 +229,7 @@ export default function Tunnels({ status }: { status: Status }) {
                     {stateLabel[t.state] ?? t.state} · 自 {new Date(t.since).toLocaleTimeString()}
                   </div>
                   {t.error && <div className="error small detail-head">{t.error}</div>}
-                  {outdated(t) && <div className="delay-warn small detail-head">服务器程序版本较旧，请在编辑中重新安装到服务器。</div>}
+                  {outdated(t) && <div className="delay-warn small detail-head">服务器程序较旧，请在编辑中重新安装。</div>}
                   {forwards.map((f, i) => (
                     <div key={i} className="detail-row">
                       <span className="muted">{f.remote} → {f.local}</span>
@@ -245,7 +246,7 @@ export default function Tunnels({ status }: { status: Status }) {
             </div>
           );
         })}
-        <button className="tile add" disabled={!status.running} onClick={() => setDialog(true)} title="增加隧道">＋</button>
+        <AddTile label="添加隧道" empty={tunnels.length === 0} disabled={!status.running} onClick={() => setDialog(true)} />
       </div>
 
       <div className="tile-head"><span className="tile-title groups">实时链路</span></div>

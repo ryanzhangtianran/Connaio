@@ -30,7 +30,7 @@ export default function Rules({ status }: { status: Status }) {
           <div className="label">{rules ? `共 ${rules.length} 条` : "加载中…"}</div>
           <div className="actions">
             <input data-search placeholder="搜索类型、内容、策略…" value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: 240 }} />
-            <button className="btn primary" disabled={!status.running} onClick={() => setDialog(true)}>增加规则</button>
+            <button className="btn primary" disabled={!status.running} onClick={() => setDialog(true)}>添加规则</button>
           </div>
         </div>
         <div className="table-wrap">

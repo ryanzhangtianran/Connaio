@@ -7,7 +7,7 @@ import Dialog from "./Dialog";
 import { DiagLog } from "./ProxyDiagnose";
 import { on, usePoll, useCachedURL, useClickAway, useConfirm, useWholeRows } from "./hooks";
 import { Brand, Icon, hasBrand } from "./icons";
-import { Switch } from "./Settings";
+import { Seg, Switch } from "./Settings";
 import { session, useHistory } from "./store";
 
 function Num({ value, unit, cls = "big" }: { value: string; unit: string; cls?: string }) {
@@ -26,7 +26,7 @@ function Head({ icon, title, children }: { icon: string; title: React.ReactNode;
 
 // IconButton is a small borderless action in a card's head; spin turns it while its work runs.
 function IconButton({ icon, title, onClick, disabled, spin }: { icon: string; title: string; onClick: () => void; disabled?: boolean; spin?: boolean }) {
-  return <button className={`icon-btn ${spin ? "spin" : ""}`} title={title} onClick={onClick} disabled={disabled}><Icon name={icon} className="btn-icon" /></button>;
+  return <button className={`icon-btn ${spin ? "spin" : ""}`} title={title} aria-label={title} onClick={onClick} disabled={disabled}><Icon name={icon} className="btn-icon" /></button>;
 }
 
 // Sparkline plots the recent seconds across the card's full width, oldest at the left, scaled to the peak.
@@ -227,9 +227,7 @@ function ModeCard({ mode, setMode }: { mode: string; setMode: (m: string) => voi
   return (
     <div className="card row-card" style={{ gridArea: "mode" }}>
       <div className="card-title"><Icon name="proxies" className="card-icon" />出站模式</div>
-      <div className="mode-seg">
-        {modeList.map(([k, label, icon]) => <button key={k} className={mode === k ? "on" : ""} onClick={() => setMode(k)}><Icon name={icon} className="btn-icon" />{label}</button>)}
-      </div>
+      <Seg className="mode-seg" options={modeList.map(([k, label, icon]) => [k, <><Icon name={icon} className="btn-icon" />{label}</>] as const)} value={mode} onChange={setMode} />
     </div>
   );
 }
@@ -358,10 +356,10 @@ function SitesSheet({ onClose }: { onClose: (saved: boolean) => void }) {
               <span className="svc-logo"><SiteLogo name={r.name} url={r.url.includes("://") ? r.url : `https://${r.url}`} /></span>
               <input placeholder="名称" value={r.name} onChange={(e) => set(i, "name", e.target.value)} />
               <input className="code-input" placeholder="https://example.com" value={r.url} onChange={(e) => set(i, "url", e.target.value)} />
-              <button className="list-remove" title="删除" onClick={() => setRows(rows.filter((_, j) => j !== i))}>−</button>
+              <button className="list-remove" title="删除" aria-label="删除" onClick={() => setRows(rows.filter((_, j) => j !== i))}>−</button>
             </div>
           ))}
-          <button className="btn site-add" disabled={rows.length >= MAX_SITES} onClick={() => setRows([...rows, { name: "", url: "" }])}>添加站点</button>
+          <button className="btn small-btn add-row" disabled={rows.length >= MAX_SITES} onClick={() => setRows([...rows, { name: "", url: "" }])}>添加站点</button>
           {error && <div className="error small">{error}</div>}
     </Dialog>
   );
@@ -403,7 +401,7 @@ function TrafficSum({ activity, range, setRange }: { activity: ActivityData | nu
       <div className="traffic-top">
         <Num value={total} unit={unit} />
         <span className="traffic-range">
-          {(["today", "month"] as const).map((r) => <button key={r} className={range === r ? "on" : ""} onClick={() => setRange(r)}>{r === "today" ? "今日" : "本月"}</button>)}
+          <Seg className="small-seg" options={[["today", "今日"], ["month", "本月"]]} value={range} onChange={setRange} />
           <button className={`link-btn ${armed ? "armed" : ""}`} onClick={() => confirm("clear", () => CoreService.ClearTraffic())} title="清除所有流量统计">{armed ? "确认清除" : "清除"}</button>
         </span>
       </div>
@@ -559,17 +557,11 @@ function ListCard({ activity, go }: { activity: ActivityData | null; go: (page: 
   return (
     <div className="card list-card" style={{ gridArea: "list" }}>
       <div className="head">
-        <div className="tabs">
-          <button className={tab === 0 ? "on" : ""} onClick={() => setTab(0)}>流量排行</button>
-          <button className={tab === 1 ? "on" : ""} onClick={() => setTab(1)}>进程监视</button>
-        </div>
+        <Seg className="tabs" options={[[0, "流量排行"], [1, "进程监视"]]} value={tab} onChange={setTab} />
         <div className="head-actions">
           {tab === 0 ? <>
-            <div className="seg">{["应用", "域名", "策略"].map((n, i) => <button key={n} className={i === by ? "on" : ""} onClick={() => setBy(i)}>{n}</button>)}</div>
-            <div className="seg">
-              <button className={!proxyOnly ? "on" : ""} onClick={() => setProxyOnly(false)}>全部</button>
-              <button className={proxyOnly ? "on" : ""} onClick={() => setProxyOnly(true)}>仅代理</button>
-            </div>
+            <Seg options={[[0, "应用"], [1, "域名"], [2, "策略"]]} value={by} onChange={setBy} />
+            <Seg options={[[false, "全部"], [true, "仅代理"]]} value={proxyOnly} onChange={setProxyOnly} />
           </> : <>
             {!web && <IconButton icon="window" title="在悬浮窗中显示" onClick={() => SettingsService.OpenMonitor()} />}
             <Picker value={shown} options={procs} onChange={choose} />

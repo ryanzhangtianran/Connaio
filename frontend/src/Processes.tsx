@@ -65,21 +65,21 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
   const shown = rows.filter((r) => !q || matches(r) || kids(r.exec).some(matches));
   const showTools = !q || "命令行工具".includes(q) || toolNames.some((t) => t.includes(q));
   const off = !status.running || !!busy || !rooted;
-  const partialState = busy === "partial" ? "切换中…" : !rooted ? "需先在「通用」中授予 root 权限" : !partial ? "选中的应用及其子进程经 TUN 按规则分流，其他应用照常遵循系统代理" : mode === "tun" ? "增强模式已接管全部流量，关闭后恢复部分增强" : picked.length === 0 ? "尚未选择应用，暂不接管" : `已增强 ${picked.length} 个应用`;
+  const partialState = busy === "partial" ? "切换中…" : !rooted ? "需先在「通用」中授予 root 权限" : !partial ? "选中的应用及其子进程经 TUN 分流，其余照常" : mode === "tun" ? "增强模式已接管全部流量，关闭后恢复部分增强" : picked.length === 0 ? "尚未选择应用，暂不接管" : `已增强 ${picked.length} 个应用`;
 
   return (
     <>
       <div className="group-title">增强模式</div>
       <div className="plist">
         <div className="plist-row static">
-          <div className="plist-main"><div className="plist-name">增强模式</div><div className="muted small">{busy === "enh" ? "切换中…" : !rooted ? "需先在「通用」中授予 root 权限" : mode === "tun" ? "TUN 已接管全部流量" : "以 TUN 接管全部流量，包括不遵循系统代理的应用"}</div></div>
+          <div className="plist-main"><div className="plist-name">增强模式</div><div className="muted small">{busy === "enh" ? "切换中…" : !rooted ? "需先在「通用」中授予 root 权限" : mode === "tun" ? "TUN 已接管全部流量" : "以 TUN 接管全部流量"}</div></div>
           <Switch on={full ?? mode === "tun"} disabled={off} onChange={(v) => { setFull(v); run("enh", EnhancedService.SetFull(v).catch((e) => { setFull(null); throw e; })); }} />
         </div>
       </div>
 
       <div className="grouped"><div className="card settings-card">
         <div className="section-title">路由排除</div>
-        <ListSetting title="排除网段" desc="目标为以下网段的流量不经 TUN 转发，由系统路由处理；适用于增强模式与部分增强。" path="tun.route-exclude-address" placeholder="如 192.168.0.0/16" fix={cidr} invalid="网段格式无效，如 192.168.0.0/16 或 10.1.2.3" />
+        <ListSetting title="排除网段" desc="这些网段不经 TUN，由系统路由处理" path="tun.route-exclude-address" placeholder="如 192.168.0.0/16" fix={cidr} invalid="网段格式无效，如 192.168.0.0/16 或 10.1.2.3" />
       </div></div>
 
       <div className="group-title">部分增强</div>

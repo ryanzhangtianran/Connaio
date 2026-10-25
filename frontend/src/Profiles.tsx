@@ -6,6 +6,7 @@ import type { Profile } from "../bindings/github.com/ryanzhangtianran/Connaio/in
 import { ago, errText, plain, sizeText, web, words } from "./format";
 import { on, useConfirm } from "./hooks";
 import Dialog from "./Dialog";
+import { Seg } from "./Settings";
 
 const host = (url: string) => { try { return new URL(url).host; } catch { return url; } };
 
@@ -38,8 +39,8 @@ const overrideFields = [
 // override merged on top, and where it is all stored.
 // partNote says what each part of the override holds.
 const partNote: Record<keyof OverrideParts, string> = {
-  clash: "Clash（mihomo）通用的部分，可在其他客户端中使用",
-  connaio: "仅 Connaio 支持的部分，保存时其中的规则排在前面",
+  clash: "各 Clash 客户端通用",
+  connaio: "仅 Connaio 支持，其中的规则排在前面",
 };
 
 // FilePick is the web UI's 导入: the browser reads the chosen YAML file and hands its text, and
@@ -100,7 +101,7 @@ export default function Profiles() {
     setError({ key: "", text: "" });
     action().catch((e) => setError({ key, text: errText(e, "操作失败") })).finally(() => setBusy(""));
   };
-  const failed = (...keys: string[]) => keys.includes(error.key) && <div className="small error plist-error">{error.text}</div>;
+  const failed = (...keys: string[]) => keys.includes(error.key) && <div className="small error plist-error" role="alert">{error.text}</div>;
   // ＋ opens the add box, its link from the clipboard when that holds one
   const startAdding = () => {
     setAdding(true);
@@ -154,7 +155,7 @@ export default function Profiles() {
           </div>
         )}
         <div className="plist-tools">
-          <button className="btn" title="从 URL 添加订阅" onClick={startAdding}>＋</button>
+          <button className="btn" title="从 URL 添加订阅" aria-label="从 URL 添加订阅" onClick={startAdding}>＋</button>
           <button className={`btn ${armed === "remove" ? "armed" : ""}`} title="删除所选配置" disabled={!selected || !!busy}
             onClick={() => selected && confirm("remove", () => run("remove", () => ProfileService.Remove(selected.id).then(() => setSel(""))))}>{armed === "remove" ? "确认删除" : "－"}</button>
           <button className="btn" disabled={!selected?.url || !!busy} onClick={() => selected && run("update", () => ProfileService.Update(selected.id))}>{busy === "update" ? "更新中…" : "更新"}</button>
@@ -179,17 +180,14 @@ export default function Profiles() {
           <button className="btn" disabled={!canAdd} title={dirty ? "先保存或还原编辑框里的改动" : ""} onClick={addField}>{busy === "field" ? "添加中…" : "添加"}</button>
         </div>
         <div className="plist-tools override-tabs">
-          <div className="seg">
-            <button className={part === "clash" ? "on" : ""} onClick={() => setPart("clash")}>Clash</button>
-            <button className={part === "connaio" ? "on" : ""} onClick={() => setPart("connaio")}>Connaio</button>
-          </div>
+          <Seg options={[["clash", "Clash"], ["connaio", "Connaio"]]} value={part} onChange={setPart} />
           <span className="muted small">{partNote[part]}</span>
         </div>
         <textarea className="code override" rows={10} spellCheck={false} value={parts[part]} onChange={(e) => setParts({ ...parts, [part]: e.target.value })} />
         <div className="plist-tools">
           {web
-            ? <FilePick disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件到覆写：同名项以导入的为准，列表追加"} onText={(_, text) => run("import", () => ProfileService.MergeOverride(text).then(loadParts))} />
-            : <button className="btn" disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件到覆写：同名项以导入的为准，列表追加"} onClick={() => run("import", () => ProfileService.ImportOverride().then(loadParts))}>导入</button>}
+            ? <FilePick disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件：同名项以导入为准，列表追加"} onText={(_, text) => run("import", () => ProfileService.MergeOverride(text).then(loadParts))} />
+            : <button className="btn" disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件：同名项以导入为准，列表追加"} onClick={() => run("import", () => ProfileService.ImportOverride().then(loadParts))}>导入</button>}
           <button className={`btn ${armed === "clear" ? "armed" : ""}`} disabled={!parts[part] || !!busy} onClick={() => confirm("clear", () => setParts({ ...parts, [part]: "" }))}>{armed === "clear" ? "确认清除" : "清除"}</button>
           <span className="grow" />
           <button className="btn" disabled={!dirty || !!busy} onClick={() => setParts(savedParts)}>还原</button>
@@ -237,7 +235,7 @@ export default function Profiles() {
           {!web && <button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button>}
         </div>
         {!web && <div className="plist-row static">
-          <div className="plist-main"><div className="plist-name">备份与恢复</div><div className="muted small">配置、覆写与 VPN 设置，含密码，请妥善保管；恢复后 Connaio 将重新启动</div></div>
+          <div className="plist-main"><div className="plist-name">备份与恢复</div><div className="muted small">含 VPN 密码，请妥善保管；恢复后自动重启</div></div>
           <button className="btn" disabled={!!busy} onClick={() => run("backup", () => SettingsService.ExportBackup())}>导出</button>
           <button className={`btn ${armed === "restore" ? "armed" : ""}`} disabled={!!busy} onClick={() => confirm("restore", () => run("backup", () => SettingsService.ImportBackup()))}>{armed === "restore" ? "确认覆盖当前配置" : "恢复"}</button>
         </div>}
@@ -263,7 +261,7 @@ function ProfileEditor({ editing, subscription, onClose }: { editing: { id: stri
     <Dialog title={`编辑 ${editing.name}`} sub={subscription && "这是订阅，下次更新时会被覆盖。"} locked={dirty || !!busy} onClose={onClose} foot={<>
       <button className="btn" disabled={!!busy} onClick={() => run("format", () => ProfileService.Format(text).then(setText))}>格式化</button>
       <span className="grow" />
-      {error && <span className="small error foot-error">{error}</span>}
+      {error && <span className="small error foot-error" role="alert">{error}</span>}
       <button className={`btn ${armed ? "armed" : ""}`} onClick={() => (dirty ? confirm("drop", onClose) : onClose())}>{armed ? "确认放弃" : "取消"}</button>
       <button className="btn primary" disabled={!!busy} onClick={() => run("content", () => ProfileService.SetContent(editing.id, text).then(onClose))}>
         {busy === "content" ? "应用中…" : "完成"}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CoreService, DeviceService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Device, LanInfo, Status } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { errText, sizeText } from "./format";
-import { Switch } from "./Settings";
+import { Seg, Switch } from "./Settings";
 import { usePoll } from "./hooks";
 
 function PolicyMenu({ device, policies, onDone }: { device: Device; policies: string[]; onDone: () => void }) {
@@ -21,10 +21,7 @@ function PolicyMenu({ device, policies, onDone }: { device: Device; policies: st
       </div>
       <div className="detail-row" style={{ alignItems: "center" }}>
         <span>有效期</span>
-        <div className="seg">
-          <button className={permanent ? "" : "on"} onClick={() => setPermanent(false)}>临时</button>
-          <button className={permanent ? "on" : ""} onClick={() => setPermanent(true)}>永久</button>
-        </div>
+        <Seg options={[[false, "临时"], [true, "永久"]]} value={permanent} onChange={setPermanent} />
       </div>
       {error && <div className="small error detail-head">{error}</div>}
       <button onClick={() => act(DeviceService.SetPolicy(device.ip, policy, permanent))}>应用：此设备全部走 {policy}</button>
