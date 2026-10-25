@@ -22,7 +22,7 @@ import (
 // Usage is the command line's help, printed by connaio help.
 const Usage = `用法：connaio [命令] [选项] [参数]
 
-不带命令时运行 Connaio（--listen 127.0.0.1:9090 --data-dir 目录 --token 令牌）。
+在终端中不带参数时打开管理菜单；带选项时运行 Connaio（--listen 127.0.0.1:9090 --data-dir 目录 --token 令牌）。
 以下命令控制运行中的 Connaio，选项写在参数之前：--addr 地址（默认 127.0.0.1:9090）、
 --token 令牌（默认读服务数据目录或 ~/.config/Connaio 中的 web-token）、--data-dir 目录。
 
@@ -135,7 +135,7 @@ func Main(args []string, out io.Writer) error {
 	name := args[0]
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	addr := fs.String("addr", cmp.Or(os.Getenv("CONNAIO_ADDR"), "127.0.0.1:9090"), "")
+	addr := fs.String("addr", defaultAddr(), "")
 	given := fs.String("token", os.Getenv("CONNAIO_TOKEN"), "")
 	dir := fs.String("data-dir", "", "")
 	all := fs.Bool("a", false, "")
@@ -150,12 +150,22 @@ func Main(args []string, out io.Writer) error {
 		}
 		positional, rest = append(positional, rest[0]), rest[1:]
 	}
-	tok, err := token(*given, *dir)
+	c, err := connect(*addr, *given, *dir)
 	if err != nil {
 		return err
 	}
-	c := &client{base: "http://" + *addr, token: tok, http: &http.Client{Timeout: 60 * time.Second}}
 	return run(c, name, positional, *all, *addr, out)
+}
+
+func defaultAddr() string { return cmp.Or(os.Getenv("CONNAIO_ADDR"), "127.0.0.1:9090") }
+
+// connect is a client of the instance at addr, with the token given or the data directory's.
+func connect(addr, given, dir string) (*client, error) {
+	tok, err := token(given, dir)
+	if err != nil {
+		return nil, err
+	}
+	return &client{base: "http://" + addr, token: tok, http: &http.Client{Timeout: 60 * time.Second}}, nil
 }
 
 var (

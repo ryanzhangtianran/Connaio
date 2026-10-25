@@ -29,6 +29,10 @@ func Run(assets fs.FS, _ []byte) error {
 		}
 		return nil
 	}
+	// bare in a terminal, as x-ui: the menu; the service always starts with --listen
+	if fi, err := os.Stdin.Stat(); err == nil && len(os.Args) == 1 && fi.Mode()&os.ModeCharDevice != 0 {
+		return cli.Menu(os.Stdin, os.Stdout)
+	}
 	listen := flag.String("listen", "127.0.0.1:9090", "address of the web UI; 0.0.0.0:9090 to reach it from other machines")
 	dataDir := flag.String("data-dir", "", "data directory: profiles, override, settings (default: Connaio in the user's config directory)")
 	given := flag.String("token", "", "access token of the web UI (default: made once, kept in the data directory as web-token)")

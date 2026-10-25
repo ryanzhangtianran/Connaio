@@ -46,6 +46,7 @@ curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo sh
 - 默认只监听本机，可经 `ssh -L 9090:127.0.0.1:9090 服务器` 访问；对外开放时（`--listen 0.0.0.0:9090`）建议在前面加 HTTPS 反向代理。
 - 以 root 运行，可开启增强模式（TUN）；系统代理、开机启动、托盘等桌面功能不提供。
 - 也可从 Releases 下载 `Connaio-<版本>-linux-<架构>.tar.gz` 手动运行：`./connaio --listen 127.0.0.1:9090`。
+- 在终端中直接运行 `connaio` 打开管理菜单：启停服务、查看日志、更新、切换节点与配置等，按编号选择。
 - 命令行控制运行中的 Connaio。安装时执行 sudo 的用户会获得访问令牌（`~/.config/Connaio/web-token`），无需 sudo；其他用户需 sudo 或 `--token`：
 
   ```sh

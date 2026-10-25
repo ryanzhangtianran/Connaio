@@ -124,3 +124,34 @@ func TestDisplayWidth(t *testing.T) {
 		}
 	}
 }
+
+// TestMenu: a node and a mode chosen by number reach the same calls as the commands; an invalid
+// choice and the end of the input leave the menu.
+func TestMenu(t *testing.T) {
+	addr, calls := fake(t, map[string]string{
+		"CoreService.Status": `{"running":true,"version":"1.19.32"}`,
+		"CoreService.Groups": `[{"name":"GLOBAL"},{"name":"Proxy","now":"A","all":[{"name":"A","delay":80},{"name":"B"}]}]`,
+	})
+	t.Setenv("CONNAIO_ADDR", addr)
+	t.Setenv("CONNAIO_TOKEN", "tok")
+	var out strings.Builder
+	// 8 切换节点 → group 1 → node 2; 7 出站模式 → 全局; 99 invalid; then the input ends
+	if err := Menu(strings.NewReader("8\n1\n2\n\n7\n2\n\n99\n"), &out); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, c := range *calls {
+		if c != "CoreService.Status[]" {
+			got = append(got, c)
+		}
+	}
+	want := []string{`CoreService.Groups[]`, `CoreService.Select["Proxy","B"]`, `CoreService.SetMode["global"]`}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("calls %v\nwant  %v", got, want)
+	}
+	for _, s := range []string{"Connaio 管理菜单", "运行中（1.19.32）", "Proxy  → A", "*  A  80 ms", "   B  —", "无效的选项"} {
+		if !strings.Contains(out.String(), s) {
+			t.Errorf("menu lacks %q:\n%s", s, out.String())
+		}
+	}
+}
