@@ -1,7 +1,6 @@
 package app
 
 import (
-	"cmp"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -49,36 +48,29 @@ func (s *SettingsService) PickApp() (ProcessChoice, error) {
 	return ProcessChoice{Name: strings.TrimSuffix(exe, filepath.Ext(exe)), Exec: exe, Source: "app"}, nil
 }
 
+const windowsLogo = "data:image/svg+xml," +
+	"%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 23 23'%3E" +
+	"%3Cpath fill='%23f25022' d='M1 1h10v10H1z'/%3E%3Cpath fill='%237fba00' d='M12 1h10v10H12z'/%3E" +
+	"%3Cpath fill='%2300a4ef' d='M1 12h10v10H1z'/%3E%3Cpath fill='%23ffb900' d='M12 12h10v10H12z'/%3E%3C/svg%3E"
+
 var winIcons, winNames sync.Map // executable path -> icon data URL / its description, "" when none
 
 // AppIcon is the icon of the executable at path, as a PNG data URL; "" when it has none, and the
 // window shows its glyph.
 func (s *SettingsService) AppIcon(path string) string {
+	if path == "system" { // the system's services, folded into one client (clientOf): the four squares
+		return windowsLogo
+	}
 	if v, ok := winIcons.Load(path); ok {
 		return v.(string)
-	}
-	key := path
-	if path == "system" { // the system's services, folded into one client (clientOf): Settings' gear, else Control Panel's
-		path = systemIcon()
 	}
 	url := ""
 	if h := w32.ExtractIcon(path, 0); h > 1 { // 0: no icon, 1: not an executable
 		url = iconPNG(h)
 		w32.DestroyIcon(h)
 	}
-	winIcons.Store(key, url)
+	winIcons.Store(path, url)
 	return url
-}
-
-// systemIcon is the executable whose icon stands for Windows itself: the Settings app, or on a
-// Windows without it Control Panel.
-func systemIcon() string {
-	root := cmp.Or(os.Getenv("SystemRoot"), `C:\Windows`)
-	p := filepath.Join(root, "ImmersiveControlPanel", "SystemSettings.exe")
-	if _, err := os.Stat(p); err == nil {
-		return p
-	}
-	return filepath.Join(root, "System32", "control.exe")
 }
 
 // iconPNG is an icon as a PNG data URL, by way of a temporary file, which is how w32 converts one.

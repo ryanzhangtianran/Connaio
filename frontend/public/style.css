@@ -783,8 +783,8 @@ tr.muted td.rule-actions { text-decoration: none; }
 /* Linux, Windows and the web UI: the switch drawn, WebKit's native one (<input switch>, see Switch)
    being macOS's alone; WebView2 and other browsers would show a plain checkbox */
 :is(.linux, .windows, .web) input[switch] {
-  appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 36px; height: 20px; margin: 0;
-  border-radius: 10px; background: var(--active); transition: background .2s; cursor: pointer;
+  appearance: none; -webkit-appearance: none; position: relative; flex: none; box-sizing: border-box; width: 36px; height: 20px; margin: 0;
+  padding: 0; border: 0; /* not the inputs' (above): their border shrank the box the knob sits in, putting it over the edge */ border-radius: 10px; background: var(--active); transition: background .2s; cursor: pointer;
 }
 :is(.linux, .windows, .web) input[switch]::before {
   content: ""; position: absolute; top: 1px; left: 1px; width: 18px; height: 18px; border-radius: 50%; /* all but filling the track: a 2px seam rounded unevenly at Windows' 125% and 150% */

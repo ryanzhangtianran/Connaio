@@ -577,7 +577,15 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, 
 		return sub, item
 	}
 
-	t.details[m.Add("显示主窗口").SetAccelerator("CmdOrCtrl+M").OnClick(func(*application.Context) { t.show("") })] = "" // no detail; on Linux a blank where the others have their dot (markState)
+	// the shortcuts shown beside 显示主窗口 and 退出, but not on Windows, where they only widened the
+	// menu's right-hand column: its tray menu takes no keys
+	shortcut := func(item *application.MenuItem, key string) *application.MenuItem {
+		if runtime.GOOS == "windows" {
+			return item
+		}
+		return item.SetAccelerator(key)
+	}
+	t.details[shortcut(m.Add("显示主窗口"), "CmdOrCtrl+M").OnClick(func(*application.Context) { t.show("") })] = "" // no detail; on Linux a blank where the others have their dot (markState)
 	t.details[m.Add("显示进程监视").OnClick(func(*application.Context) { t.monitor() })] = ""
 	var headers []*application.MenuItem
 	header := func(title string) {
@@ -675,7 +683,7 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, 
 	}
 	open(sub, "打开 VPN…", "vpn")
 	m.AddSeparator()
-	t.details[m.Add("退出").SetAccelerator("CmdOrCtrl+Q").OnClick(func(*application.Context) { t.app.Quit() })] = ""
+	t.details[shortcut(m.Add("退出"), "CmdOrCtrl+Q").OnClick(func(*application.Context) { t.app.Quit() })] = ""
 	m.Update()
 	sectionHeaders(headers)
 	t.showRows()
