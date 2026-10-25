@@ -1,3 +1,5 @@
+//go:build linux && !server
+
 package app
 
 import (

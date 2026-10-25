@@ -25,6 +25,16 @@ func restartApp() error {
 // relaunch quits and runs cmd once this process is gone, so the single-instance check doesn't
 // hand the new one back to the quitting one.
 func relaunch(cmd []string) error {
+	// the service: systemd restarts it; a command left waiting would end with it, in its cgroup
+	if headless && os.Getenv("INVOCATION_ID") != "" {
+		go func() {
+			time.Sleep(300 * time.Millisecond) // the page hears the call returned first
+			if out, err := exec.Command("systemctl", "--no-block", "restart", "connaio").CombinedOutput(); err != nil {
+				notify("error", "重启服务失败：%s", out)
+			}
+		}()
+		return nil
+	}
 	wait := `while kill -0 "$0" 2>/dev/null; do sleep 0.2; done; exec "$@"`
 	c := exec.Command("sh", append([]string{"-c", wait, strconv.Itoa(os.Getpid())}, cmd...)...)
 	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // outlives this process

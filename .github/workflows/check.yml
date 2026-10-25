@@ -31,6 +31,7 @@ jobs:
         run: |
           go vet -tags gtk3 ./... # Ubuntu 22.04 has GTK 3; wails links GTK 4 unless told
           go test -tags gtk3 ./internal/profile ./internal/app
+          go test -tags server ./internal/app ./internal/cli # the headless build: its updater and command line
       - name: Build, as the release does # the deb's app and the headless build: their objects and core for main's cache, which a tag's build restores
         working-directory: Connaio
         run: |

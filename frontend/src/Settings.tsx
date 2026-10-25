@@ -3,7 +3,7 @@ import { CoreService, EnhancedService, ProfileService, SettingsService, SystemPr
 import type { About, DNSLeak, LeakServer, Update, UpdateProgress } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { on } from "./hooks";
 import Dialog from "./Dialog";
-import { copyText, errText, openURL, platform, plain, sizeText, words, validPort, web } from "./format";
+import { copyText, errText, platform, plain, sizeText, words, validPort, web } from "./format";
 
 
 // Row is one setting: title and description, the control at the right; a list row lists its items below.
@@ -166,6 +166,12 @@ export function General() {
   useEffect(() => { load(); return on("enhanced", load); }, [load]);
   useEffect(() => setPortText(String(port)), [port]);
 
+  // web: the service restarts on the new version, and the page reloads once it answers with it
+  const reloadWhenUpdated = (old: string) => {
+    const poll = () => SettingsService.About().then((a) => (a.version !== old ? location.reload() : setTimeout(poll, 1000)), () => setTimeout(poll, 1000));
+    setTimeout(poll, 1000);
+  };
+
   const run = (p: Promise<unknown>, key = "") => {
     setBusy(key);
     p.finally(() => { setBusy(""); load(); });
@@ -213,11 +219,9 @@ export function General() {
 
       <div className="card settings-card">
         <div className="section-title">更新</div>
-        <Row title={`当前版本 ${version}`} desc={update ? (update.newer ? (web ? `发现新版本 ${update.latest}，重新运行安装命令即可更新` : `发现新版本 ${update.latest}，从 GitHub Releases 下载安装后自动重启`) : "已是最新版本") : undefined}>
+        <Row title={`当前版本 ${version}`} desc={update ? (update.newer ? `发现新版本 ${update.latest}，从 GitHub Releases 下载安装后自动重启` : "已是最新版本") : undefined}>
           {update?.newer
-            ? web // the headless build doesn't replace itself: the release page, in this browser
-              ? <button className="btn ctl" onClick={() => openURL(update.url)}>下载</button>
-              : <button className="btn ctl" disabled={!!busy} onClick={() => { setProgress(null); run(SettingsService.InstallUpdate(), "update"); }}>{busy === "update" ? updateLabel(progress) : "更新"}</button>
+            ? <button className="btn ctl" disabled={!!busy} onClick={() => { setProgress(null); run(SettingsService.InstallUpdate().then(() => web && new Promise(() => reloadWhenUpdated(version))), "update"); }}>{busy === "update" ? updateLabel(progress) : "更新"}</button>
             : <button className="btn ctl" disabled={!!busy} onClick={() => run(SettingsService.CheckUpdate().then(setUpdate), "check")}>{busy === "check" ? "检查中…" : "检查更新"}</button>}
         </Row>
         {busy === "update" && (
