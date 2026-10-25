@@ -2,16 +2,17 @@
 # Installs Connaio's headless build on Linux (amd64, arm64), its UI in a browser: the latest release
 # into /opt/connaio, run as the systemd service connaio on 127.0.0.1:9090, and prints the address to
 # sign in with. Again, it updates it, keeping the data in /var/lib/connaio-web.
-#   curl -fsSL https://raw.githubusercontent.com/ryanzhangtianran/Connaio/main/install.sh | sudo sh
+#   curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo sh
+# From the site: its latest names the version (v1.2.3), <tag>/ holds that version's tarballs.
 # CONNAIO_TARBALL=<path> installs that tarball instead of downloading one.
 set -eu
-repo=ryanzhangtianran/Connaio
+site=https://connaio-dl.ryanzhangtianran.top
 dir=/opt/connaio
 data=/var/lib/connaio-web
 
 fail() { echo "connaio: $*" >&2; exit 1; }
 [ "$(uname -s)" = Linux ] || fail "仅支持 Linux"
-[ "$(id -u)" = 0 ] || fail "需要 root：curl -fsSL https://raw.githubusercontent.com/$repo/main/install.sh | sudo sh"
+[ "$(id -u)" = 0 ] || fail "需要 root：curl -fsSL $site/install.sh | sudo sh"
 case "$(uname -m)" in
   x86_64 | amd64) arch=amd64 ;;
   aarch64 | arm64) arch=arm64 ;;
@@ -22,11 +23,10 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 tarball=${CONNAIO_TARBALL:-}
 if [ -z "$tarball" ]; then
-  # the latest release's tag, from where GitHub redirects /releases/latest
-  tag=$(curl -fsSLI -o /dev/null -w '%{url_effective}' "https://github.com/$repo/releases/latest" | sed 's|.*/||')
+  tag=$(curl -fsSL "$site/latest" | tr -d '[:space:]')
   case "$tag" in v*) ;; *) fail "无法获取最新版本" ;; esac
   echo "下载 Connaio ${tag#v}（linux-$arch）…"
-  curl -fL --progress-bar -o "$tmp/connaio.tar.gz" "https://github.com/$repo/releases/download/$tag/Connaio-${tag#v}-linux-$arch.tar.gz"
+  curl -fL --progress-bar -o "$tmp/connaio.tar.gz" "$site/$tag/Connaio-${tag#v}-linux-$arch.tar.gz"
   tarball=$tmp/connaio.tar.gz
 fi
 

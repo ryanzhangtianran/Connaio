@@ -39,7 +39,7 @@
 不带窗口的 Connaio，界面在浏览器中打开，适合服务器、NAS 等没有桌面的 Linux（amd64 / arm64，无需图形库）。一行安装：
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ryanzhangtianran/Connaio/main/install.sh | sudo sh
+curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo sh
 ```
 
 - 安装到 `/opt/connaio`，以 systemd 服务 `connaio` 运行，数据在 `/var/lib/connaio-web`；结束时输出带访问令牌的地址，首次用它打开即可登录。再次运行即更新。
