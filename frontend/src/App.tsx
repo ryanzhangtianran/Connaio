@@ -22,7 +22,7 @@ import { start as startStore } from "./store";
 // NavIcon is the page's line icon, grey or, for the page shown, the accent colour.
 const NavIcon = ({ page }: { page: string }) => <Icon name={page} />;
 
-// WindowButtons stand in for the title bar Linux windows go without (frameless, see app.go); close
+// WindowButtons stand in for the title bar Linux and Windows windows go without (frameless, see app.go); close
 // hides to the tray as the system one did.
 const WindowButtons = () => (
   <div className="winbtns">
@@ -169,7 +169,7 @@ export default function App() {
             <span className={`dot ${enhanced === "tun" ? "on" : enhanced === "process-tun" ? "part" : ""}`} />
             {enhancedBusy ? "切换中…" : enhanced === "process-tun" ? "部分增强" : "增强模式"}
           </button>
-          {platform === "linux" && <WindowButtons />}
+          {(platform === "linux" || platform === "windows") && <WindowButtons />}
         </div>
         <div className="page">
           {/* the core stopped: why, and the way back, above whichever page is shown */}

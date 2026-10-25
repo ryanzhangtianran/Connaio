@@ -91,7 +91,7 @@ func Run(assets fs.FS, trayIcon []byte) error {
 			MinWidth:       1440, // the activity page's four columns of cards show whole without scrolling from here, and every connections column too
 			MinHeight:      890,
 			BackgroundType: application.BackgroundTypeTranslucent,
-			Frameless:      runtime.GOOS == "linux", // the topbar draws the window buttons (App.tsx WindowButtons)
+			Frameless:      runtime.GOOS != "darwin", // one piece, the topbar drawing the window buttons (App.tsx WindowButtons); Windows keeps its shadow, corners and Mica
 			Mac: application.MacWindow{
 				InvisibleTitleBarHeight: 52,
 				Backdrop:                application.MacBackdropTranslucent,
