@@ -20,7 +20,8 @@ fail() {
 }
 [ "$(uname -s)" = Linux ] || fail "仅支持 Linux"
 [ "$(id -u)" = 0 ] || fail "需要 root：curl -fsSL $site/install.sh | sudo sh"
-line() { echo "------------------------------------------------------------------"; }
+# line is a rule 72 wide; the text between rules is kept within it
+line() { echo "------------------------------------------------------------------------"; }
 # opening is the rule above a section, but for one closed right above it: no two rules in a row
 opening() { [ -n "${closed:-}" ] || line; closed=; }
 closing() { line; closed=1; }
@@ -28,7 +29,7 @@ closing() { line; closed=1; }
 # scheme or path never matches the certificate
 domain_ok() { case "$1" in *[!A-Za-z0-9.-]*) return 1 ;; esac; }
 # checked before anything changes
-domain_ok "${CONNAIO_DOMAIN:-}" || fail "域名格式无效：${CONNAIO_DOMAIN}（只填写域名，如 connaio.example.com）"
+domain_ok "${CONNAIO_DOMAIN:-}" || fail "域名格式无效：${CONNAIO_DOMAIN}，只填写域名，如 connaio.example.com"
 case "$(uname -m)" in
 x86_64 | amd64) arch=amd64 ;;
 aarch64 | arm64) arch=arm64 ;;
@@ -68,8 +69,9 @@ if ! grep -q '^CONNAIO_DOMAIN=' "$conf" 2>/dev/null && [ -z "${CONNAIO_DOMAIN+se
   opening
   echo "HTTPS 访问"
   line
-  echo "如需在浏览器中通过公网直接访问网页界面，请输入已解析到本机的域名，将自动申请 HTTPS 证书"
-  echo "（需在防火墙或安全组中放行 443 端口）。没有域名时，可填写 <本机公网 IP>.sslip.io。"
+  echo "如需在浏览器中通过公网访问网页界面，请输入已解析到本机的域名，"
+  echo "将自动申请 HTTPS 证书（需放行 443 端口）。"
+  echo "没有域名时，可填写 <本机公网 IP>.sslip.io。"
   echo "留空则仅允许本机访问，可通过 SSH 隧道使用。"
   while :; do
     printf "域名（留空跳过）："
@@ -112,6 +114,8 @@ done
 # look after the service's), so the commands work for them without sudo
 cli=connaio # run as root itself, as in a container: no sudo needed (nor there, often)
 if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then cli="sudo connaio"; fi
+# a desktop install's connaio is the app with a window, which fails with no display: named by path
+[ ! -e /usr/bin/connaio ] || cli="${cli%connaio}$dir/connaio"
 if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] && command -v getent >/dev/null 2>&1; then
   home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
   if [ -n "$home" ] && [ -d "$home" ] && sudo -u "$SUDO_USER" mkdir -p "$home/.config/Connaio"; then
@@ -154,7 +158,8 @@ if [ -z "$profiles" ] && (: </dev/tty) 2>/dev/null; then
     fi
     # stored before the core failed to load it: asking again would add it twice
     if [ -n "$("$dir/connaio" profiles --data-dir "$data" 2>/dev/null)" ]; then
-      echo "订阅已保存，但内核加载配置失败。请稍后执行 $cli status 查看，或查看日志：$logs"
+      echo "订阅已保存，但内核加载配置失败。"
+      echo "请稍后执行 $cli status 查看，或查看日志：$logs"
       break
     fi
     echo "订阅添加失败，请检查地址后重新输入。"
@@ -166,27 +171,28 @@ opening
 if [ -n "$systemd" ]; then
   echo "Connaio 安装完成，已作为 systemd 服务 connaio 运行。"
 else
-  echo "Connaio 安装完成，已在后台运行（当前系统未使用 systemd，服务由 /etc/init.d/connaio 管理）。"
+  echo "Connaio 安装完成，已在后台运行（由 /etc/init.d/connaio 管理）。"
 fi
 line
 echo "网页界面"
 token=$(cat "$data/web-token")
 if [ -n "$domain" ]; then
   echo "  访问地址：https://$domain/?token=$token"
-  echo "  注意：需将 $domain 解析到本机，并在防火墙或安全组中放行 443 端口；首次访问时自动申请证书。"
+  echo "  注意：需将域名解析到本机并放行 443 端口，首次访问时自动申请证书。"
   if [ -n "$public" ]; then
-    echo "  注意：$port 端口仍以未加密的 HTTP 对外开放，建议将 CONNAIO_LISTEN 改回 127.0.0.1:${port}。"
+    echo "  注意：$port 端口仍以明文 HTTP 对外开放，建议将监听地址改回本机。"
   fi
 elif [ -n "$public" ]; then
   echo "  访问地址：http://<服务器 IP>:$port/?token=$token"
-  echo "  注意：需在防火墙或安全组中放行 $port 端口。连接未加密，建议改用 HTTPS：安装时指定 CONNAIO_DOMAIN=<域名>。"
+  echo "  注意：需放行 $port 端口。连接未加密，建议设置域名以启用 HTTPS。"
 elif [ "$host" = 127.0.0.1 ]; then
   echo "  访问地址：http://127.0.0.1:$port/?token=$token"
-  echo "  远程访问：在本地电脑执行 ssh -L $port:127.0.0.1:$port <服务器>，然后在浏览器中打开上述地址。"
+  echo "  远程访问：在本地电脑执行 ssh -L $port:127.0.0.1:$port <服务器>，"
+  echo "            再在浏览器中打开上述地址。"
 else
   echo "  访问地址：http://$host:$port/?token=$token"
 fi
-echo "  设置文件：${conf}（监听地址 ${listen}${domain:+，HTTPS 域名 $domain}；修改后重启服务生效）"
+echo "  设置文件：${conf}（监听地址与域名，修改后重启服务生效）"
 line
 echo "常用命令"
 row "$cli" "打开管理菜单"
@@ -197,7 +203,7 @@ row "$cli profile use|update <名称>" "切换或更新配置"
 row "$cli mode rule|global|direct" "切换出站模式"
 row "$cli groups" "查看策略组及当前节点"
 row "$cli select <策略组> <节点>" "切换节点"
-row "$cli enhanced on|off" "开启或关闭 TUN 模式（接管本机全部流量）"
+row "$cli enhanced on|off" "开启或关闭 TUN 模式"
 row "$cli url" "显示网页界面地址"
 row "$cli help" "查看全部命令"
 line
@@ -207,14 +213,18 @@ if [ -n "$systemd" ]; then
   row "systemctl status connaio" "查看服务状态"
   row "journalctl -u connaio -f" "查看日志"
   echo "  卸载（保留 $data 中的配置数据）："
-  echo "    systemctl disable --now connaio && rm -rf $dir /etc/systemd/system/connaio.service $conf"
+  echo "    systemctl disable --now connaio"
+  echo "    rm -rf $dir $conf"
+  echo "    rm -f /etc/systemd/system/connaio.service"
 else
   row "/etc/init.d/connaio start|stop|restart" "启动、停止或重启服务"
   row "/etc/init.d/connaio status" "查看服务状态"
   row "tail -f /var/log/connaio.log" "查看日志"
   echo "  卸载（保留 $data 中的配置数据）："
-  echo "    /etc/init.d/connaio stop && rm -rf $dir /etc/init.d/connaio $conf"
-  echo "  注意：容器重启后服务不会自动启动，请将 /etc/init.d/connaio start 加入容器的启动命令。"
+  echo "    /etc/init.d/connaio stop"
+  echo "    rm -rf $dir $conf /etc/init.d/connaio"
+  echo "  注意：容器重启后服务不会自动启动，"
+  echo "        请将 /etc/init.d/connaio start 加入容器的启动命令。"
 fi
 line
 echo "再次运行本安装命令即可更新 Connaio。"
