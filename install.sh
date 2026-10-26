@@ -21,6 +21,9 @@ fail() {
 [ "$(uname -s)" = Linux ] || fail "仅支持 Linux"
 [ "$(id -u)" = 0 ] || fail "需要 root：curl -fsSL $site/install.sh | sudo sh"
 line() { echo "------------------------------------------------------------------"; }
+# opening is the rule above a section, but for one closed right above it: no two rules in a row
+opening() { [ -n "${closed:-}" ] || line; closed=; }
+closing() { line; closed=1; }
 # domain_ok says $1 is a domain name only: the init script sources the file it goes into, and a
 # scheme or path never matches the certificate
 domain_ok() { case "$1" in *[!A-Za-z0-9.-]*) return 1 ;; esac; }
@@ -62,7 +65,7 @@ domain=${CONNAIO_DOMAIN-$(kept CONNAIO_DOMAIN)}
 # never asked (no CONNAIO_DOMAIN line kept, even an empty one), on a terminal, none given: asked
 # whether to serve HTTPS (curl | sh reads the script on stdin: answers come from /dev/tty)
 if ! grep -q '^CONNAIO_DOMAIN=' "$conf" 2>/dev/null && [ -z "${CONNAIO_DOMAIN+set}" ] && (: </dev/tty) 2>/dev/null; then
-  line
+  opening
   echo "HTTPS 访问"
   line
   echo "如需在浏览器中通过公网直接访问网页界面，请输入已解析到本机的域名，将自动申请 HTTPS 证书"
@@ -74,6 +77,7 @@ if ! grep -q '^CONNAIO_DOMAIN=' "$conf" 2>/dev/null && [ -z "${CONNAIO_DOMAIN+se
     domain_ok "$domain" && break
     echo "域名格式无效，只填写域名，如 connaio.example.com。"
   done
+  closing
 fi
 mkdir -p "${conf%/*}"
 cat >"$conf" <<EOF
@@ -132,7 +136,7 @@ until profiles=$("$dir/connaio" profiles --data-dir "$data" 2>/dev/null); do
   i=$((i + 1))
 done
 if [ -z "$profiles" ] && (: </dev/tty) 2>/dev/null; then
-  line
+  opening
   echo "导入配置"
   line
   echo "当前没有任何配置。可在此输入订阅地址，也可稍后在网页界面中添加。"
@@ -155,9 +159,10 @@ if [ -z "$profiles" ] && (: </dev/tty) 2>/dev/null; then
     fi
     echo "订阅添加失败，请检查地址后重新输入。"
   done
+  closing
 fi
 
-line
+opening
 if [ -n "$systemd" ]; then
   echo "Connaio 安装完成，已作为 systemd 服务 connaio 运行。"
 else
