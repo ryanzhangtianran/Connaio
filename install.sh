@@ -20,9 +20,12 @@ fail() {
 }
 [ "$(uname -s)" = Linux ] || fail "仅支持 Linux"
 [ "$(id -u)" = 0 ] || fail "需要 root：curl -fsSL $site/install.sh | sudo sh"
-# a domain name only, checked before anything changes: the init script sources the file it goes into,
-# and a scheme or path never matches the certificate
-case "${CONNAIO_DOMAIN:-}" in *[!A-Za-z0-9.-]*) fail "域名格式无效：${CONNAIO_DOMAIN}（只填写域名，如 connaio.example.com）" ;; esac
+line() { echo "------------------------------------------------------------------"; }
+# domain_ok says $1 is a domain name only: the init script sources the file it goes into, and a
+# scheme or path never matches the certificate
+domain_ok() { case "$1" in *[!A-Za-z0-9.-]*) return 1 ;; esac; }
+# checked before anything changes
+domain_ok "${CONNAIO_DOMAIN:-}" || fail "域名格式无效：${CONNAIO_DOMAIN}（只填写域名，如 connaio.example.com）"
 case "$(uname -m)" in
 x86_64 | amd64) arch=amd64 ;;
 aarch64 | arm64) arch=arm64 ;;
@@ -56,6 +59,22 @@ kept() { sed -n "s/^$1=//p" "$conf" 2>/dev/null | tr -d "\"'"; }
 listen=${CONNAIO_LISTEN:-$(kept CONNAIO_LISTEN)}
 listen=${listen:-127.0.0.1:9090}
 domain=${CONNAIO_DOMAIN-$(kept CONNAIO_DOMAIN)}
+# never asked (no CONNAIO_DOMAIN line kept, even an empty one), on a terminal, none given: asked
+# whether to serve HTTPS (curl | sh reads the script on stdin: answers come from /dev/tty)
+if ! grep -q '^CONNAIO_DOMAIN=' "$conf" 2>/dev/null && [ -z "${CONNAIO_DOMAIN+set}" ] && (: </dev/tty) 2>/dev/null; then
+  line
+  echo "HTTPS 访问"
+  line
+  echo "如需在浏览器中通过公网直接访问网页界面，请输入已解析到本机的域名，将自动申请 HTTPS 证书"
+  echo "（需在防火墙或安全组中放行 443 端口）。没有域名时，可填写 <本机公网 IP>.sslip.io。"
+  echo "留空则仅允许本机访问，可通过 SSH 隧道使用。"
+  while :; do
+    printf "域名（留空跳过）："
+    read -r domain </dev/tty || domain=
+    domain_ok "$domain" && break
+    echo "域名格式无效，只填写域名，如 connaio.example.com。"
+  done
+fi
 mkdir -p "${conf%/*}"
 cat >"$conf" <<EOF
 # Connaio 的网页界面设置，修改后重启服务生效。
@@ -96,7 +115,6 @@ if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] && command -v getent >/de
   fi
 fi
 
-line() { echo "------------------------------------------------------------------"; }
 # row prints a command and what it does, aligned: a CJK character is 3 bytes but 2 columns wide
 row() {
   w=$(printf %s "$1" | LC_ALL=C tr -d '\000-\177' | wc -c)

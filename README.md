@@ -46,7 +46,7 @@ curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo sh
 - 首次安装且在终端中运行时，会提示输入订阅地址以导入配置，可留空跳过。
 - 未使用 systemd 的系统（如容器）由 `/etc/init.d/connaio start|stop|restart|status` 管理，日志位于 `/var/log/connaio.log`。容器重启后服务不会自动启动，请将 `/etc/init.d/connaio start` 加入容器的启动命令。
 - 默认只监听本机，可经 `ssh -L 9090:127.0.0.1:9090 服务器` 访问。如需通过公网 IP 直接访问，安装时指定监听地址：`curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo CONNAIO_LISTEN=0.0.0.0:9090 sh`；该地址保存在 `/etc/default/connaio`，更新时保留，修改后重启服务生效。此方式连接未加密。
-- 推荐使用 HTTPS：将域名解析到本机并放行 443 端口，安装时指定域名：`curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo CONNAIO_DOMAIN=connaio.example.com sh`，即可通过 `https://connaio.example.com` 访问。证书自动从 Let's Encrypt 申请并续期，保存在数据目录中。域名不能经过 CDN 代理（如 Cloudflare 的代理模式），否则无法完成证书验证。
+- 推荐使用 HTTPS：将域名解析到本机并放行 443 端口，在安装时的提示中输入该域名（或安装时指定 `CONNAIO_DOMAIN=connaio.example.com`），即可通过 `https://connaio.example.com` 访问。没有域名时可使用 `<公网 IP>.sslip.io`。证书自动从 Let's Encrypt 申请并续期，保存在数据目录中。域名不能经过 CDN 代理（如 Cloudflare 的代理模式），否则无法完成证书验证。
 - 以 root 运行，可开启 TUN 模式（接管本机全部流量）；系统代理、开机启动、托盘等桌面功能不提供。
 - 也可从 Releases 下载 `Connaio-<版本>-linux-<架构>.tar.gz` 手动运行：`./connaio --listen 127.0.0.1:9090`。
 - 在终端中直接运行 `connaio` 打开管理菜单：启停服务、查看日志、更新、切换节点与配置等，按编号选择。
