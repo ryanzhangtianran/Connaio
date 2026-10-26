@@ -114,8 +114,6 @@ done
 # look after the service's), so the commands work for them without sudo
 cli=connaio # run as root itself, as in a container: no sudo needed (nor there, often)
 if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then cli="sudo connaio"; fi
-# a desktop install's connaio is the app with a window, which fails with no display: named by path
-[ ! -e /usr/bin/connaio ] || cli="${cli%connaio}$dir/connaio"
 if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] && command -v getent >/dev/null 2>&1; then
   home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
   if [ -n "$home" ] && [ -d "$home" ] && sudo -u "$SUDO_USER" mkdir -p "$home/.config/Connaio"; then
@@ -195,6 +193,10 @@ fi
 echo "  设置文件：${conf}（监听地址与域名，修改后重启服务生效）"
 line
 echo "常用命令"
+# a desktop install's connaio is the app with a window, which fails with no display
+if [ -e /usr/bin/connaio ]; then
+  echo "  注意：本机的 connaio 是桌面版，请改用 $dir/connaio。"
+fi
 row "$cli" "打开管理菜单"
 row "$cli status" "查看运行状态"
 row "$cli profile add <订阅地址> [名称]" "添加订阅"
@@ -205,6 +207,7 @@ row "$cli groups" "查看策略组及当前节点"
 row "$cli select <策略组> <节点>" "切换节点"
 row "$cli enhanced on|off" "开启或关闭 TUN 模式"
 row "$cli url" "显示网页界面地址"
+row "$cli run <命令>" "经代理运行该命令"
 row "$cli help" "查看全部命令"
 line
 echo "服务管理"

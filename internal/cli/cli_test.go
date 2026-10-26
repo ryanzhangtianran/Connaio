@@ -141,6 +141,44 @@ func TestListenAddr(t *testing.T) {
 	}
 }
 
+func TestRun(t *testing.T) {
+	addr, _ := fake(t, map[string]string{"DeviceService.Lan": `{"port":7890}`})
+	t.Setenv("CONNAIO_ADDR", addr)
+	t.Setenv("CONNAIO_TOKEN", "tok")
+	// a failing check would exit the test binary with it, as connaio exits with the command's status
+	if err := Main([]string{"run", "sh", "-c", `test "$https_proxy" = http://127.0.0.1:7890 && test "$1" = -I`, "sh", "-I"}, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if err := Main([]string{"run"}, io.Discard); err == nil {
+		t.Error("run with no command: no error")
+	}
+}
+
+func TestProxyEnv(t *testing.T) {
+	env := proxyEnv([]string{"PATH=/bin", "HTTP_PROXY=http://old:1", "https_proxy=http://old:2", "NO_PROXY=.corp"}, 7890)
+	got := map[string]string{}
+	for _, kv := range env {
+		k, v, _ := strings.Cut(kv, "=")
+		if _, dup := got[k]; dup {
+			t.Errorf("%s set twice", k)
+		}
+		got[k] = v
+	}
+	for k, want := range map[string]string{
+		"PATH": "/bin", "http_proxy": "http://127.0.0.1:7890", "HTTP_PROXY": "http://127.0.0.1:7890",
+		"https_proxy": "http://127.0.0.1:7890", "HTTPS_PROXY": "http://127.0.0.1:7890",
+		"all_proxy": "socks5h://127.0.0.1:7890", "ALL_PROXY": "socks5h://127.0.0.1:7890",
+		"no_proxy": ".corp", "NO_PROXY": ".corp", // the user's kept
+	} {
+		if got[k] != want {
+			t.Errorf("%s=%q, want %q", k, got[k], want)
+		}
+	}
+	if len(got) != 9 {
+		t.Errorf("%d variables: %v", len(got), env)
+	}
+}
+
 func TestDisplayWidth(t *testing.T) {
 	for s, w := range map[string]int{"abc": 3, "内核": 4, "隧道 OLA": 8, "规则匹配": 8} {
 		if displayWidth(s) != w {

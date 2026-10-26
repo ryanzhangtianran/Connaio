@@ -40,11 +40,12 @@ const Usage = `用法：connaio [命令] [选项] [参数]
   tunnel start|stop <名称>      启动或停止隧道
   vpns                         VPN 状态
   vpn reconnect <名称>          重新连接 VPN
-  enhanced [on|off]            查看、开启或关闭 TUN 模式（接管本机全部流量）
+  enhanced [on|off]            查看、开启或关闭 TUN 模式
   connections                  当前连接
   close-all                    断开全部连接
   restart                      重启内核
   url                          网页界面地址（含令牌）
+  run <命令> [参数]             经代理运行命令，无需 export
 `
 
 // svc prefixes a service method's name as Wails binds it.
@@ -132,6 +133,9 @@ func Main(args []string, out io.Writer) error {
 	if len(args) == 0 || args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
 		fmt.Fprint(out, Usage)
 		return nil
+	}
+	if args[0] == "run" { // what follows is the command's own, flags too: nothing parsed here
+		return runProxied(args[1:])
 	}
 	name := args[0]
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
