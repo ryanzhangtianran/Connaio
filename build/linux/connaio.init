@@ -5,9 +5,12 @@
 #   tail /var/log/connaio.log                         # the web UI's address and access token
 # Nothing starts it with the container: put /etc/init.d/connaio start in the container's command.
 exe=/opt/connaio/connaio
-# the listen address in /etc/default/connaio, as the systemd unit reads it
+# the listen address and the HTTPS domain in /etc/default/connaio, as the systemd unit reads them:
+# exported, as the domain is read from the environment
 CONNAIO_LISTEN=127.0.0.1:9090
+set -a
 [ -r /etc/default/connaio ] && . /etc/default/connaio
+set +a
 args="--listen $CONNAIO_LISTEN --data-dir /var/lib/connaio-web"
 log=/var/log/connaio.log
 

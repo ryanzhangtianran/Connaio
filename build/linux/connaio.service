@@ -3,7 +3,8 @@
 #   systemctl enable --now connaio
 #   journalctl -u connaio     # the web UI's address and access token
 # Run as root, TUN mode can be turned on. The listen address is /etc/default/connaio's CONNAIO_LISTEN,
-# kept there (not here) so an update, which replaces this file, keeps it.
+# and CONNAIO_DOMAIN there serves HTTPS on :443 for it: kept there (not here) so an update, which
+# replaces this file, keeps them.
 [Unit]
 Description=Connaio (web UI)
 After=network-online.target

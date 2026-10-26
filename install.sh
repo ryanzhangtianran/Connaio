@@ -5,8 +5,9 @@
 #   curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo sh
 # From the site: its latest names the version (v1.2.3), <tag>/ holds that version's tarballs.
 # CONNAIO_TARBALL=<path> installs that tarball instead of downloading one.
-# CONNAIO_LISTEN=0.0.0.0:9090 serves the UI on every address (kept in /etc/default/connaio, which a
-# reinstall without it keeps).
+# CONNAIO_LISTEN=0.0.0.0:9090 serves the UI on every address, CONNAIO_DOMAIN=example.com over HTTPS
+# on :443 too, a certificate from Let's Encrypt (both kept in /etc/default/connaio, which a reinstall
+# without them keeps; CONNAIO_DOMAIN= with nothing turns HTTPS off).
 set -eu
 site=https://connaio-dl.ryanzhangtianran.top
 dir=/opt/connaio
@@ -19,6 +20,9 @@ fail() {
 }
 [ "$(uname -s)" = Linux ] || fail "仅支持 Linux"
 [ "$(id -u)" = 0 ] || fail "需要 root：curl -fsSL $site/install.sh | sudo sh"
+# a domain name only, checked before anything changes: the init script sources the file it goes into,
+# and a scheme or path never matches the certificate
+case "${CONNAIO_DOMAIN:-}" in *[!A-Za-z0-9.-]*) fail "域名格式无效：${CONNAIO_DOMAIN}（只填写域名，如 connaio.example.com）" ;; esac
 case "$(uname -m)" in
 x86_64 | amd64) arch=amd64 ;;
 aarch64 | arm64) arch=arm64 ;;
@@ -47,11 +51,19 @@ tar -xzf "$tarball" -C "$dir"
 # a desktop install's /usr/bin/connaio is the app with a window: left as the command it is
 [ -e /usr/bin/connaio ] || { mkdir -p /usr/local/bin && ln -sf "$dir/connaio" /usr/local/bin/connaio; }
 
-# the listen address: the one given, else the one kept, else this machine only
-listen=${CONNAIO_LISTEN:-$(sed -n 's/^CONNAIO_LISTEN=//p' "$conf" 2>/dev/null | tr -d "\"'")}
+# the listen address and the HTTPS domain: the ones given, else the ones kept; this machine only
+kept() { sed -n "s/^$1=//p" "$conf" 2>/dev/null | tr -d "\"'"; }
+listen=${CONNAIO_LISTEN:-$(kept CONNAIO_LISTEN)}
 listen=${listen:-127.0.0.1:9090}
+domain=${CONNAIO_DOMAIN-$(kept CONNAIO_DOMAIN)}
 mkdir -p "${conf%/*}"
-printf '# Connaio 的网页界面监听地址，修改后重启服务生效；0.0.0.0:9090 表示允许从其他电脑访问\nCONNAIO_LISTEN=%s\n' "$listen" >"$conf"
+cat >"$conf" <<EOF
+# Connaio 的网页界面设置，修改后重启服务生效。
+# 监听地址：0.0.0.0:9090 表示允许从其他电脑访问
+CONNAIO_LISTEN=$listen
+# HTTPS 域名：设置后在 443 端口提供 HTTPS，证书自动从 Let's Encrypt 申请；需先将域名解析到本机
+CONNAIO_DOMAIN=$domain
+EOF
 port=${listen##*:} host=${listen%:*}
 case "$host" in "" | 0.0.0.0 | "[::]") public=1 ;; *) public= ;; esac
 case "$host" in "" | 0.0.0.0 | "[::]" | 127.0.0.1 | localhost | "[::1]") host=127.0.0.1 ;; esac
@@ -136,16 +148,22 @@ fi
 line
 echo "网页界面"
 token=$(cat "$data/web-token")
-if [ -n "$public" ]; then
+if [ -n "$domain" ]; then
+  echo "  访问地址：https://$domain/?token=$token"
+  echo "  注意：需将 $domain 解析到本机，并在防火墙或安全组中放行 443 端口；首次访问时自动申请证书。"
+  if [ -n "$public" ]; then
+    echo "  注意：$port 端口仍以未加密的 HTTP 对外开放，建议将 CONNAIO_LISTEN 改回 127.0.0.1:${port}。"
+  fi
+elif [ -n "$public" ]; then
   echo "  访问地址：http://<服务器 IP>:$port/?token=$token"
-  echo "  注意：需在防火墙或安全组中放行 $port 端口。连接未加密，长期使用建议在前面配置 HTTPS 反向代理。"
+  echo "  注意：需在防火墙或安全组中放行 $port 端口。连接未加密，建议改用 HTTPS：安装时指定 CONNAIO_DOMAIN=<域名>。"
 elif [ "$host" = 127.0.0.1 ]; then
   echo "  访问地址：http://127.0.0.1:$port/?token=$token"
   echo "  远程访问：在本地电脑执行 ssh -L $port:127.0.0.1:$port <服务器>，然后在浏览器中打开上述地址。"
 else
   echo "  访问地址：http://$host:$port/?token=$token"
 fi
-echo "  监听地址：${listen}（保存在 ${conf}，修改后重启服务生效）"
+echo "  设置文件：${conf}（监听地址 ${listen}${domain:+，HTTPS 域名 $domain}；修改后重启服务生效）"
 line
 echo "常用命令"
 row "$cli" "打开管理菜单"
