@@ -15,7 +15,7 @@ import { AboutPage, Dns, General } from "./Settings";
 import Profiles from "./Profiles";
 import ErrorBoundary from "./ErrorBoundary";
 import { Icon } from "./icons";
-import { platform, web } from "./format";
+import { platform, web, words } from "./format";
 import { on, usePoll, useClickAway } from "./hooks";
 import { start as startStore } from "./store";
 
@@ -125,7 +125,7 @@ export default function App() {
     { key: "vpn", title: "VPN", page: <Vpn status={status} /> },
     { key: "devices", title: "设备", page: <Devices status={status} /> },
     { key: "rules", title: "规则", page: <Rules status={status} /> },
-    { key: "processes", title: "增强", page: <Processes status={status} mode={enhanced} rooted={rooted} /> },
+    { key: "processes", title: web ? "TUN" : "增强", page: <Processes status={status} mode={enhanced} rooted={rooted} /> },
     { key: "profiles", title: "配置", page: <div className="grouped profiles-page"><Profiles /></div> },
     { key: "dns", title: "DNS", page: <div className="grouped"><Dns /></div> },
     { key: "dashboard", title: "连接", page: <Dashboard status={status} /> },
@@ -159,7 +159,7 @@ export default function App() {
             className={`pill ${enhanced ? "active" : ""}`}
             aria-pressed={!!enhanced}
             disabled={!status.running || enhancedBusy || !rooted}
-            title={!rooted ? (web ? "需以 root 运行 Connaio" : "需先在「通用」中授予 root 权限") : enhanced === "process-tun" ? "TUN 只接管选中的应用；点击关闭部分增强" : "TUN 接管全部流量"}
+            title={!rooted ? (web ? "需以 root 运行 Connaio" : "需先在「通用」中授予 root 权限") : enhanced === "process-tun" ? `TUN 只接管选中的应用；点击关闭${words.partial}` : "TUN 接管全部流量"}
             onClick={() => {
               // it turns off what it shows: partial enhancement when that runs, else enhanced mode
               setEnhancedBusy(true);
@@ -167,7 +167,7 @@ export default function App() {
             }}
           >
             <span className={`dot ${enhanced === "tun" ? "on" : enhanced === "process-tun" ? "part" : ""}`} />
-            {enhancedBusy ? "切换中…" : enhanced === "process-tun" ? "部分增强" : "增强模式"}
+            {enhancedBusy ? "切换中…" : enhanced === "process-tun" ? words.partial : words.enhanced}
           </button>
           {(platform === "linux" || platform === "windows") && <WindowButtons />}
         </div>

@@ -5,14 +5,18 @@
 #   tail /var/log/connaio.log                         # the web UI's address and access token
 # Nothing starts it with the container: put /etc/init.d/connaio start in the container's command.
 exe=/opt/connaio/connaio
-args="--listen 127.0.0.1:9090 --data-dir /var/lib/connaio-web"
+# the listen address in /etc/default/connaio, as the systemd unit reads it
+CONNAIO_LISTEN=127.0.0.1:9090
+[ -r /etc/default/connaio ] && . /etc/default/connaio
+args="--listen $CONNAIO_LISTEN --data-dir /var/lib/connaio-web"
 log=/var/log/connaio.log
 
 # pids prints the running instance's pid: found by its command line, since an update restarts it
-# as a new process (and minimal images have no pgrep)
+# as a new process (and minimal images have no pgrep); by its first flag, so one started before the
+# address was changed is still found
 pids() {
 	for p in /proc/[0-9]*; do
-		[ "$(tr '\0' ' ' <"$p/cmdline" 2>/dev/null)" = "$exe $args " ] && echo "${p#/proc/}"
+		case "$(tr '\0' ' ' <"$p/cmdline" 2>/dev/null)" in "$exe --listen "*) echo "${p#/proc/}" ;; esac
 	done
 }
 

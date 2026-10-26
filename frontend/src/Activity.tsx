@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CoreService, DeviceService, EnhancedService, SettingsService, SystemProxyService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Activity as ActivityData, Conn, DiagSection, Group, IPInfo, LanInfo, Latency, Memory, RepairItem, Service, Status, Usage } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { delayClass, nodesOf } from "./Proxies";
-import { copyText, errText, platform, size, sizeText, speed, web } from "./format";
+import { copyText, errText, platform, size, sizeText, speed, web, words } from "./format";
 import Dialog from "./Dialog";
 import { DiagLog } from "./ProxyDiagnose";
 import { on, usePoll, useCachedURL, useClickAway, useConfirm, useWholeRows } from "./hooks";
@@ -711,7 +711,7 @@ export default function Activity({ status, activity, sysProxy, enhanced, rooted,
     return status.error ? null : <div className="card"><div className="muted">内核启动中…</div></div>; // stopped: App's banner says why
   }
 
-  const tunSub = !rooted ? (web ? "需以 root 运行 Connaio" : "需先在「通用」中授予 root 权限") : enhanced === "tun" ? "TUN 接管全部流量" : enhanced === "process-tun" ? "部分增强运行中" : "已关闭";
+  const tunSub = !rooted ? (web ? "需以 root 运行 Connaio" : "需先在「通用」中授予 root 权限") : enhanced === "tun" ? "TUN 接管全部流量" : enhanced === "process-tun" ? `${words.partial}运行中` : "已关闭";
   return (
     <div className={`activity ${web ? "web" : ""}`}>
       <StatusCard activity={activity} mode={mode} setMode={setMode} latency={latency} />
@@ -720,7 +720,7 @@ export default function Activity({ status, activity, sysProxy, enhanced, rooted,
       <ModeCard mode={mode} setMode={setMode} />
       {!web && <ToggleCard area="sys" icon="shuffle" title="系统代理" sub={proxyOn ? `端口 ${lan?.port ?? "—"}` : "已关闭"} on={proxyOn}
         onChange={(v) => setProxyOn(v, SystemProxyService.SetEnabled(v))} />}
-      <ToggleCard area="tun" icon="processes" title="增强模式" sub={tunSub} on={tunOn} part={enhanced === "process-tun"} disabled={!rooted}
+      <ToggleCard area="tun" icon="processes" title={words.enhanced} sub={tunSub} on={tunOn} part={enhanced === "process-tun"} disabled={!rooted}
         onChange={(v) => setTunOn(v, EnhancedService.SetFull(v))} more={() => go("processes")} />
       <LanCard lan={lan} reload={loadLan} go={go} />
       <HealthCard />

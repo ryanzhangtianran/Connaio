@@ -194,7 +194,7 @@ export function General() {
         <Row title="重启内核" desc="重新载入当前配置">
           <button className="btn ctl" disabled={!!busy} onClick={() => run(CoreService.Restart(), "restart")}>{busy === "restart" ? "重启中…" : "重启"}</button>
         </Row>
-        {web ? <Row title="root 权限" desc={daemon ? "以 root 运行，可开启增强模式" : "以 root 运行后可开启增强模式"}>{null}</Row> : <Row title="root 权限" desc={daemon ? "已授予，内核以 root 运行" : "授予后才能开启增强模式"}>
+        {web ? <Row title="root 权限" desc={daemon ? "以 root 运行，可开启 TUN 模式" : "以 root 运行后可开启 TUN 模式"}>{null}</Row> : <Row title="root 权限" desc={daemon ? "已授予，内核以 root 运行" : "授予后才能开启增强模式"}>
           {daemon
             ? <button className="btn ctl" disabled={!!busy} onClick={() => run(EnhancedService.Uninstall(), "root")}>{busy === "root" ? "移除中…" : "移除"}</button>
             : <button className="btn ctl" disabled={!!busy} onClick={() => run(EnhancedService.Grant(), "root")}>{busy === "root" ? "授予中…" : "授予"}</button>}

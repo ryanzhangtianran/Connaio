@@ -2,14 +2,17 @@
 # /opt/connaio and this file in /etc/systemd/system/; then
 #   systemctl enable --now connaio
 #   journalctl -u connaio     # the web UI's address and access token
-# Run as root, enhanced mode (TUN) can be turned on.
+# Run as root, TUN mode can be turned on. The listen address is /etc/default/connaio's CONNAIO_LISTEN,
+# kept there (not here) so an update, which replaces this file, keeps it.
 [Unit]
 Description=Connaio (web UI)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/opt/connaio/connaio --listen 127.0.0.1:9090 --data-dir /var/lib/connaio-web
+Environment=CONNAIO_LISTEN=127.0.0.1:9090
+EnvironmentFile=-/etc/default/connaio
+ExecStart=/opt/connaio/connaio --listen ${CONNAIO_LISTEN} --data-dir /var/lib/connaio-web
 Restart=on-failure
 RestartSec=5
 

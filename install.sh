@@ -5,18 +5,24 @@
 #   curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo sh
 # From the site: its latest names the version (v1.2.3), <tag>/ holds that version's tarballs.
 # CONNAIO_TARBALL=<path> installs that tarball instead of downloading one.
+# CONNAIO_LISTEN=0.0.0.0:9090 serves the UI on every address (kept in /etc/default/connaio, which a
+# reinstall without it keeps).
 set -eu
 site=https://connaio-dl.ryanzhangtianran.top
 dir=/opt/connaio
 data=/var/lib/connaio-web
+conf=/etc/default/connaio
 
-fail() { echo "connaio: $*" >&2; exit 1; }
+fail() {
+  echo "connaio: $*" >&2
+  exit 1
+}
 [ "$(uname -s)" = Linux ] || fail "仅支持 Linux"
 [ "$(id -u)" = 0 ] || fail "需要 root：curl -fsSL $site/install.sh | sudo sh"
 case "$(uname -m)" in
-  x86_64 | amd64) arch=amd64 ;;
-  aarch64 | arm64) arch=arm64 ;;
-  *) fail "不支持的架构：$(uname -m)" ;;
+x86_64 | amd64) arch=amd64 ;;
+aarch64 | arm64) arch=arm64 ;;
+*) fail "不支持的架构：$(uname -m)" ;;
 esac
 
 tmp=$(mktemp -d)
@@ -25,20 +31,30 @@ tarball=${CONNAIO_TARBALL:-}
 if [ -z "$tarball" ]; then
   tag=$(curl -fsSL "$site/latest" | tr -d '[:space:]')
   case "$tag" in v*) ;; *) fail "无法获取最新版本" ;; esac
-  echo "下载 Connaio ${tag#v}（linux-$arch）…"
+  echo "下载 Connaio ${tag#v}（linux-${arch}）…"
   curl -fL --progress-bar -o "$tmp/connaio.tar.gz" "$site/$tag/Connaio-${tag#v}-linux-$arch.tar.gz"
   tarball=$tmp/connaio.tar.gz
 fi
 
 systemd=
 if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then systemd=1; fi
-if [ -n "$systemd" ]; then systemctl stop connaio 2>/dev/null || true
+if [ -n "$systemd" ]; then
+  systemctl stop connaio 2>/dev/null || true
 elif [ -x /etc/init.d/connaio ]; then /etc/init.d/connaio stop >/dev/null; fi
 mkdir -p "$dir" "$data"
 chmod 700 "$data"
 tar -xzf "$tarball" -C "$dir"
 # a desktop install's /usr/bin/connaio is the app with a window: left as the command it is
 [ -e /usr/bin/connaio ] || { mkdir -p /usr/local/bin && ln -sf "$dir/connaio" /usr/local/bin/connaio; }
+
+# the listen address: the one given, else the one kept, else this machine only
+listen=${CONNAIO_LISTEN:-$(sed -n 's/^CONNAIO_LISTEN=//p' "$conf" 2>/dev/null | tr -d "\"'")}
+listen=${listen:-127.0.0.1:9090}
+mkdir -p "${conf%/*}"
+printf '# Connaio 的网页界面监听地址，修改后重启服务生效；0.0.0.0:9090 表示允许从其他电脑访问\nCONNAIO_LISTEN=%s\n' "$listen" >"$conf"
+port=${listen##*:} host=${listen%:*}
+case "$host" in "" | 0.0.0.0 | "[::]") public=1 ;; *) public= ;; esac
+case "$host" in "" | 0.0.0.0 | "[::]" | 127.0.0.1 | localhost | "[::1]") host=127.0.0.1 ;; esac
 
 if [ -n "$systemd" ]; then
   install -m 644 "$dir/connaio.service" /etc/systemd/system/connaio.service
@@ -51,7 +67,10 @@ else
   logs="tail /var/log/connaio.log"
 fi
 i=0
-while [ ! -s "$data/web-token" ] && [ $i -lt 30 ]; do sleep 1; i=$((i + 1)); done
+while [ ! -s "$data/web-token" ] && [ $i -lt 30 ]; do
+  sleep 1
+  i=$((i + 1))
+done
 [ -s "$data/web-token" ] || fail "服务未能启动，请查看日志：$logs"
 
 # the user who ran sudo gets the token too, in their own config directory (where connaio's commands
@@ -65,6 +84,13 @@ if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] && command -v getent >/de
   fi
 fi
 
+line() { echo "------------------------------------------------------------------"; }
+# row prints a command and what it does, aligned: a CJK character is 3 bytes but 2 columns wide
+row() {
+  w=$(printf %s "$1" | LC_ALL=C tr -d '\000-\177' | wc -c)
+  printf "  %-$((46 + w / 3))s%s\n" "$1" "$2"
+}
+
 # the first install, run on a terminal: a subscription asked for, so it starts with a profile in use
 # (curl | sh reads the script on stdin: answers come from /dev/tty, and CI has none)
 # (the token is written before the UI answers: asked until it does, else a reinstall would ask too)
@@ -72,11 +98,13 @@ i=0
 until profiles=$("$dir/connaio" profiles --data-dir "$data" 2>/dev/null); do
   profiles=unknown
   [ $i -lt 30 ] || break
-  sleep 1; i=$((i + 1))
+  sleep 1
+  i=$((i + 1))
 done
 if [ -z "$profiles" ] && (: </dev/tty) 2>/dev/null; then
-  echo
-  echo "【导入配置】"
+  line
+  echo "导入配置"
+  line
   echo "当前没有任何配置。可在此输入订阅地址，也可稍后在网页界面中添加。"
   while :; do
     printf "订阅地址（留空跳过）："
@@ -94,23 +122,27 @@ if [ -z "$profiles" ] && (: </dev/tty) 2>/dev/null; then
   done
 fi
 
-# row prints a command and what it does, aligned: a CJK character is 3 bytes but 2 columns wide
-row() {
-  w=$(printf %s "$1" | LC_ALL=C tr -d '\000-\177' | wc -c)
-  printf "  %-$((46 + w / 3))s%s\n" "$1" "$2"
-}
-echo
+line
 if [ -n "$systemd" ]; then
   echo "Connaio 安装完成，已作为 systemd 服务 connaio 运行。"
 else
   echo "Connaio 安装完成，已在后台运行（当前系统未使用 systemd，服务由 /etc/init.d/connaio 管理）。"
 fi
-echo
-echo "【网页界面】"
-echo "  访问地址：http://127.0.0.1:9090/?token=$(cat "$data/web-token")"
-echo "  远程访问：在本地电脑执行 ssh -L 9090:127.0.0.1:9090 <服务器>，然后在浏览器中打开上述地址。"
-echo
-echo "【常用命令】"
+line
+echo "网页界面"
+token=$(cat "$data/web-token")
+if [ -n "$public" ]; then
+  echo "  访问地址：http://<服务器 IP>:$port/?token=$token"
+  echo "  注意：需在防火墙或安全组中放行 $port 端口。连接未加密，长期使用建议在前面配置 HTTPS 反向代理。"
+elif [ "$host" = 127.0.0.1 ]; then
+  echo "  访问地址：http://127.0.0.1:$port/?token=$token"
+  echo "  远程访问：在本地电脑执行 ssh -L $port:127.0.0.1:$port <服务器>，然后在浏览器中打开上述地址。"
+else
+  echo "  访问地址：http://$host:$port/?token=$token"
+fi
+echo "  监听地址：${listen}（保存在 ${conf}，修改后重启服务生效）"
+line
+echo "常用命令"
 row "$cli" "打开管理菜单"
 row "$cli status" "查看运行状态"
 row "$cli profile add <订阅地址> [名称]" "添加订阅"
@@ -119,25 +151,25 @@ row "$cli profile use|update <名称>" "切换或更新配置"
 row "$cli mode rule|global|direct" "切换出站模式"
 row "$cli groups" "查看策略组及当前节点"
 row "$cli select <策略组> <节点>" "切换节点"
-row "$cli enhanced on|off" "开启或关闭增强模式（TUN）"
+row "$cli enhanced on|off" "开启或关闭 TUN 模式（接管本机全部流量）"
 row "$cli url" "显示网页界面地址"
 row "$cli help" "查看全部命令"
-echo
-echo "【服务管理】"
+line
+echo "服务管理"
 if [ -n "$systemd" ]; then
   row "systemctl start|stop|restart connaio" "启动、停止或重启服务"
   row "systemctl status connaio" "查看服务状态"
   row "journalctl -u connaio -f" "查看日志"
   echo "  卸载（保留 $data 中的配置数据）："
-  echo "    systemctl disable --now connaio && rm -rf $dir /etc/systemd/system/connaio.service"
+  echo "    systemctl disable --now connaio && rm -rf $dir /etc/systemd/system/connaio.service $conf"
 else
   row "/etc/init.d/connaio start|stop|restart" "启动、停止或重启服务"
   row "/etc/init.d/connaio status" "查看服务状态"
   row "tail -f /var/log/connaio.log" "查看日志"
   echo "  卸载（保留 $data 中的配置数据）："
-  echo "    /etc/init.d/connaio stop && rm -rf $dir /etc/init.d/connaio"
-  echo
-  echo "注意：容器重启后服务不会自动启动，请将 /etc/init.d/connaio start 加入容器的启动命令。"
+  echo "    /etc/init.d/connaio stop && rm -rf $dir /etc/init.d/connaio $conf"
+  echo "  注意：容器重启后服务不会自动启动，请将 /etc/init.d/connaio start 加入容器的启动命令。"
 fi
-echo
+line
 echo "再次运行本安装命令即可更新 Connaio。"
+line

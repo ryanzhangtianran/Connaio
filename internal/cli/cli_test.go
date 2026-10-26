@@ -70,7 +70,10 @@ func TestStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	// values start at one display column (the widest label, 隧道 OLA-4090, is 13 wide, then 2 spaces)
-	want := "内核           运行中（1.19.32）\n出站模式       规则\n增强模式       开启（全部流量）\n配置           订阅\n隧道 OLA-4090  运行中\n网页界面       http://" + addr + "\n"
+	// the rules as wide as the table: the label column, 2 spaces, the address
+	rule := strings.Repeat("-", 13+2+len("http://"+addr)) + "\n"
+	want := rule + "内核           运行中（1.19.32）\n出站模式       规则\nTUN 模式       开启（全部流量）\n配置           订阅\n" + rule +
+		"隧道 OLA-4090  运行中\n" + rule + "网页界面       http://" + addr + "\n" + rule
 	if out != want {
 		t.Errorf("status:\n%s\nwant:\n%s", out, want)
 	}
@@ -114,6 +117,27 @@ func TestToken(t *testing.T) {
 	out.Reset()
 	if err := Main([]string{"url", "--addr", addr, "--data-dir", dir}, &out); err != nil || out.String() != "http://"+addr+"/?token=tok\n" {
 		t.Errorf("token from the data directory: %q %v", out.String(), err)
+	}
+}
+
+func TestListenAddr(t *testing.T) {
+	dir := t.TempDir()
+	for content, want := range map[string]string{
+		"": "127.0.0.1:9090",
+		"# a comment\nCONNAIO_LISTEN=0.0.0.0:9091\n": "127.0.0.1:9091",
+		`CONNAIO_LISTEN="[::]:9092"`:                 "127.0.0.1:9092",
+		"CONNAIO_LISTEN=:9093":                       "127.0.0.1:9093",
+		"CONNAIO_LISTEN=10.0.0.5:9094":               "10.0.0.5:9094",
+		"CONNAIO_LISTEN=nonsense":                    "127.0.0.1:9090",
+	} {
+		f := filepath.Join(dir, "connaio")
+		os.WriteFile(f, []byte(content), 0o644)
+		if got := listenAddr(f); got != want {
+			t.Errorf("%q: %s, want %s", content, got, want)
+		}
+	}
+	if got := listenAddr(filepath.Join(dir, "missing")); got != "127.0.0.1:9090" {
+		t.Errorf("no file: %s", got)
 	}
 }
 

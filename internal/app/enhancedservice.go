@@ -104,7 +104,7 @@ func (s *EnhancedService) DaemonInstalled() bool {
 }
 
 // errHeadlessRoot answers granting root headless: Connaio is run as root instead.
-var errHeadlessRoot = errors.New("以 root 运行 Connaio 即可使用增强模式")
+var errHeadlessRoot = errors.New("以 root 运行 Connaio 即可使用 TUN 模式")
 
 // Grant installs the root daemon (one administrator prompt) and moves the GUI's core onto it;
 // enhanced mode can be turned on only after this.

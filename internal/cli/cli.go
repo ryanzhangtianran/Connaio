@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -39,7 +40,7 @@ const Usage = `用法：connaio [命令] [选项] [参数]
   tunnel start|stop <名称>      启动或停止隧道
   vpns                         VPN 状态
   vpn reconnect <名称>          重新连接 VPN
-  enhanced [on|off]            查看或开关增强模式
+  enhanced [on|off]            查看、开启或关闭 TUN 模式（接管本机全部流量）
   connections                  当前连接
   close-all                    断开全部连接
   restart                      重启内核
@@ -157,7 +158,32 @@ func Main(args []string, out io.Writer) error {
 	return run(c, name, positional, *all, *addr, out)
 }
 
-func defaultAddr() string { return cmp.Or(os.Getenv("CONNAIO_ADDR"), "127.0.0.1:9090") }
+// listenFile is where install.sh keeps the service's listen address, read by its unit and init script.
+const listenFile = "/etc/default/connaio"
+
+// defaultAddr is the running instance's address: CONNAIO_ADDR, else the service's.
+func defaultAddr() string { return cmp.Or(os.Getenv("CONNAIO_ADDR"), listenAddr(listenFile)) }
+
+// listenAddr is where to reach the address file's CONNAIO_LISTEN: on loopback when it is every
+// address (0.0.0.0, [::] or no host); 127.0.0.1:9090 without one.
+func listenAddr(file string) string {
+	b, _ := os.ReadFile(file)
+	for _, l := range strings.Split(string(b), "\n") {
+		v, ok := strings.CutPrefix(strings.TrimSpace(l), "CONNAIO_LISTEN=")
+		if !ok {
+			continue
+		}
+		host, port, err := net.SplitHostPort(strings.Trim(v, `"'`))
+		if err != nil {
+			break
+		}
+		if ip := net.ParseIP(host); host == "" || ip != nil && ip.IsUnspecified() {
+			host = "127.0.0.1"
+		}
+		return net.JoinHostPort(host, port)
+	}
+	return "127.0.0.1:9090"
+}
 
 // connect is a client of the instance at addr, with the token given or the data directory's.
 func connect(addr, given, dir string) (*client, error) {
@@ -220,14 +246,20 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 				profile = p.Name
 			}
 		}
+		tw.rule()
 		tw.row("内核", core)
 		tw.row("出站模式", cmp.Or(modeLabel[mode], mode, "—"))
-		tw.row("增强模式", enhancedLabel(enhanced))
+		tw.row("TUN 模式", enhancedLabel(enhanced))
 		tw.row("配置", profile)
+		tw.rule()
 		for _, t := range tunnels {
 			tw.row("隧道 "+t.Name, cmp.Or(stateLabel[t.State], t.State))
 		}
+		if len(tunnels) > 0 {
+			tw.rule()
+		}
 		tw.row("网页界面", "http://"+addr)
+		tw.rule()
 	case "mode":
 		if len(args) == 0 {
 			var mode string
@@ -436,6 +468,9 @@ type table struct {
 
 func (t *table) row(cells ...string) { t.rows = append(t.rows, cells) }
 
+// rule adds a line of dashes, as wide as the table.
+func (t *table) rule() { t.rows = append(t.rows, nil) }
+
 func (t *table) flush() {
 	var widths []int
 	for _, r := range t.rows {
@@ -446,7 +481,15 @@ func (t *table) flush() {
 			widths[i] = max(widths[i], displayWidth(c))
 		}
 	}
+	width := 2 * max(len(widths)-1, 0)
+	for _, w := range widths {
+		width += w
+	}
 	for _, r := range t.rows {
+		if r == nil {
+			fmt.Fprintln(t.out, strings.Repeat("-", max(width, 32)))
+			continue
+		}
 		var b strings.Builder
 		for i, c := range r {
 			b.WriteString(c)
@@ -479,7 +522,7 @@ func enhancedLabel(mode string) string {
 	case "tun":
 		return "开启（全部流量）"
 	case "process-tun":
-		return "部分增强"
+		return "部分应用"
 	}
 	return "关闭"
 }

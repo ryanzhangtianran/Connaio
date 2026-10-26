@@ -45,7 +45,7 @@ var items = []item{
 	{"更新订阅", func(m *menu) error { return m.profile("update") }},
 	{},
 	{"反向隧道", (*menu).tunnels},
-	{"增强模式", (*menu).enhanced},
+	{"TUN 模式", (*menu).enhanced},
 	{"当前连接", func(m *menu) error { return m.cmd("connections") }},
 	{"网页界面地址", func(m *menu) error { return m.cmd("url") }},
 }
@@ -86,40 +86,24 @@ func Menu(in io.Reader, out io.Writer) error {
 	}
 }
 
+// rule is the line between the menu's parts.
+var rule = strings.Repeat("-", 40)
+
+// draw prints the title, the service's and the core's states, then the commands by section.
 func (m *menu) draw() {
-	const width = 36
-	line := func(colored, plain string) {
-		fmt.Fprintf(m.out, "│  %s%s│\n", colored, strings.Repeat(" ", max(width-displayWidth(plain), 0)))
-	}
-	rule := strings.Repeat("─", width+2)
-	fmt.Fprintf(m.out, "\n╔%s╗\n", rule)
-	const title = "Connaio 管理菜单"
-	pad := width + 2 - displayWidth(title)
-	fmt.Fprintf(m.out, "│%s%s%s│\n", strings.Repeat(" ", pad/2), title, strings.Repeat(" ", pad-pad/2))
-	line(green(" 0.")+" 退出", " 0. 退出")
-	n := 0
-	for _, it := range items {
-		if it.run == nil {
-			fmt.Fprintf(m.out, "│%s│\n", rule)
-			continue
-		}
-		n++
-		num := fmt.Sprintf("%2d.", n)
-		line(green(num)+" "+it.label, num+" "+it.label)
-	}
-	fmt.Fprintf(m.out, "╚%s╝\n\n", rule)
+	fmt.Fprintf(m.out, "\n%s\n  Connaio 管理菜单\n%s\n", rule, rule)
 	if systemd() {
 		active, _ := exec.Command("systemctl", "is-active", "connaio").Output()
 		enabled, _ := exec.Command("systemctl", "is-enabled", "connaio").Output()
 		state := map[string]string{"active": green("运行中"), "inactive": yellow("未运行"), "failed": red("出错")}
-		fmt.Fprintln(m.out, "服务状态："+cmp.Or(state[strings.TrimSpace(string(active))], yellow("未安装")))
-		fmt.Fprintln(m.out, "开机启动："+map[bool]string{true: green("是"), false: red("否")}[strings.TrimSpace(string(enabled)) == "enabled"])
+		fmt.Fprintln(m.out, "  服务状态："+cmp.Or(state[strings.TrimSpace(string(active))], yellow("未安装")))
+		fmt.Fprintln(m.out, "  开机启动："+map[bool]string{true: green("是"), false: red("否")}[strings.TrimSpace(string(enabled)) == "enabled"])
 	} else if _, err := os.Stat(initScript); err == nil {
 		state := green("运行中")
 		if exec.Command(initScript, "status").Run() != nil {
 			state = yellow("未运行")
 		}
-		fmt.Fprintln(m.out, "服务状态："+state)
+		fmt.Fprintln(m.out, "  服务状态："+state)
 	}
 	core := red("未运行")
 	if c, err := m.client(); err != nil {
@@ -133,8 +117,17 @@ func (m *menu) draw() {
 			core = green("运行中（" + st.Version + "）")
 		}
 	}
-	fmt.Fprintln(m.out, "内核状态："+core)
-	fmt.Fprintln(m.out)
+	fmt.Fprintln(m.out, "  内核状态："+core)
+	n := 0
+	for _, it := range items {
+		if it.run == nil {
+			fmt.Fprintln(m.out, rule)
+			continue
+		}
+		n++
+		fmt.Fprintf(m.out, "  %s %s\n", green(fmt.Sprintf("%2d.", n)), it.label)
+	}
+	fmt.Fprintf(m.out, "%s\n  %s 退出\n%s\n\n", rule, green(" 0."), rule)
 }
 
 // ask prints prompt and reads a line; false when the input has ended.

@@ -12,6 +12,9 @@ export const words = {
   showInFiles: { macos: "在 Finder 中显示", linux: "在文件管理器中显示", windows: "在资源管理器中显示", web: "" }[platform],
   pickApp: { macos: "从 Finder 添加", linux: "选择应用", windows: "选择应用", web: "" }[platform],
   tray: { macos: "菜单栏", linux: "托盘", windows: "通知区域", web: "托盘" }[platform],
+  // with no system proxy beside it, TUN is no enhancement of anything: called what it is
+  enhanced: { macos: "增强模式", linux: "增强模式", windows: "增强模式", web: "TUN 模式" }[platform],
+  partial: { macos: "部分增强", linux: "部分增强", windows: "部分增强", web: "部分 TUN" }[platform],
 };
 // openURL and copyText act where the page is seen: on the web, in this browser, not on the server
 export const openURL = (url: string) => (web ? void window.open(url, "_blank", "noopener") : void Browser.OpenURL(url));
