@@ -118,6 +118,11 @@ if [ -z "$profiles" ] && (: </dev/tty) 2>/dev/null; then
       echo "订阅已添加并启用。"
       break
     fi
+    # stored before the core failed to load it: asking again would add it twice
+    if [ -n "$("$dir/connaio" profiles --data-dir "$data" 2>/dev/null)" ]; then
+      echo "订阅已保存，但内核加载配置失败。请稍后执行 $cli status 查看，或查看日志：$logs"
+      break
+    fi
     echo "订阅添加失败，请检查地址后重新输入。"
   done
 fi

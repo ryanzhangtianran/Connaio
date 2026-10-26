@@ -191,7 +191,8 @@ func connect(addr, given, dir string) (*client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &client{base: "http://" + addr, token: tok, http: &http.Client{Timeout: 60 * time.Second}}, nil
+	// minutes: adding a subscription downloads it, checks it and has the core load it (core.Reload)
+	return &client{base: "http://" + addr, token: tok, http: &http.Client{Timeout: 3 * time.Minute}}, nil
 }
 
 var (

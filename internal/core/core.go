@@ -257,6 +257,9 @@ func (c *Core) Validate(ctx context.Context, path string) error {
 // never reads files inside the user's home. force=true: without it the core skips inbound settings
 // (ports, allow-lan); listeners whose address is unchanged are kept either way.
 func (c *Core) Reload(ctx context.Context, config []byte) error {
+	// 60s, not Do's 10s: a config's first load downloads its rule sets and geo databases first
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	return c.Do(ctx, http.MethodPut, "/configs?force=true", map[string]string{"payload": string(config)}, nil)
 }
 
