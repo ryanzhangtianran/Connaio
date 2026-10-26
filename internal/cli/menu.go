@@ -22,10 +22,15 @@ type item struct {
 
 var items = []item{
 	{},
-	{"启动服务", func(m *menu) error { return m.system("systemctl", "start", "connaio") }},
-	{"停止服务", func(m *menu) error { return m.system("systemctl", "stop", "connaio") }},
-	{"重启服务", func(m *menu) error { return m.system("systemctl", "restart", "connaio") }},
-	{"查看日志", func(m *menu) error { return m.system("journalctl", "-u", "connaio", "-n", "50", "--no-pager") }},
+	{"启动服务", func(m *menu) error { return m.service("start") }},
+	{"停止服务", func(m *menu) error { return m.service("stop") }},
+	{"重启服务", func(m *menu) error { return m.service("restart") }},
+	{"查看日志", func(m *menu) error {
+		if !systemd() {
+			return m.system("tail", "-n", "50", initLog)
+		}
+		return m.system("journalctl", "-u", "connaio", "-n", "50", "--no-pager")
+	}},
 	// -E under sudo: a proxy in the environment reaches install.sh's downloads too
 	{"更新 Connaio", func(m *menu) error { return m.system("sh", "-c", "curl -fsSL "+installURL+" | sh") }},
 	{},
@@ -51,7 +56,7 @@ type menu struct {
 }
 
 // Menu is connaio run bare in a terminal, as x-ui's: the commands as a numbered menu, the
-// service's own (systemctl) besides, until 0 or the input ends.
+// service's own (systemctl, or /etc/init.d/connaio) besides, until 0 or the input ends.
 func Menu(in io.Reader, out io.Writer) error {
 	m := &menu{in: bufio.NewScanner(in), out: out}
 	var actions []item
@@ -103,12 +108,18 @@ func (m *menu) draw() {
 		line(green(num)+" "+it.label, num+" "+it.label)
 	}
 	fmt.Fprintf(m.out, "╚%s╝\n\n", rule)
-	if _, err := exec.LookPath("systemctl"); err == nil {
+	if systemd() {
 		active, _ := exec.Command("systemctl", "is-active", "connaio").Output()
 		enabled, _ := exec.Command("systemctl", "is-enabled", "connaio").Output()
 		state := map[string]string{"active": green("运行中"), "inactive": yellow("未运行"), "failed": red("出错")}
 		fmt.Fprintln(m.out, "服务状态："+cmp.Or(state[strings.TrimSpace(string(active))], yellow("未安装")))
 		fmt.Fprintln(m.out, "开机启动："+map[bool]string{true: green("是"), false: red("否")}[strings.TrimSpace(string(enabled)) == "enabled"])
+	} else if _, err := os.Stat(initScript); err == nil {
+		state := green("运行中")
+		if exec.Command(initScript, "status").Run() != nil {
+			state = yellow("未运行")
+		}
+		fmt.Fprintln(m.out, "服务状态："+state)
 	}
 	core := red("未运行")
 	if c, err := m.client(); err != nil {
@@ -160,6 +171,26 @@ func (m *menu) cmd(args ...string) error { return Main(args, m.out) }
 
 func (m *menu) client() (*client, error) {
 	return connect(defaultAddr(), os.Getenv("CONNAIO_TOKEN"), "")
+}
+
+// initScript and initLog are the service where there is no systemd, as install.sh puts it.
+const (
+	initScript = "/etc/init.d/connaio"
+	initLog    = "/var/log/connaio.log"
+)
+
+// systemd says systemd runs this system: not so in most containers.
+func systemd() bool {
+	_, err := os.Stat("/run/systemd/system")
+	return err == nil
+}
+
+// service starts, stops or restarts the service, through systemd or else its init script.
+func (m *menu) service(action string) error {
+	if !systemd() {
+		return m.system(initScript, action)
+	}
+	return m.system("systemctl", action, "connaio")
 }
 
 // system runs a system command on the terminal, through sudo unless root: the service is root's.

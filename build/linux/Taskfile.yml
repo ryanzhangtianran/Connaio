@@ -63,8 +63,8 @@ tasks:
           GOOS: linux
           ARCH: '{{.ARCH}}'
           BIN_DIR: '{{.OUT}}'
-      - cp build/linux/connaio.service "{{.OUT}}/"
-      - tar -czf "{{.BIN_DIR}}/Connaio-{{.VERSION}}-linux-{{.ARCH}}.tar.gz" -C "{{.OUT}}" connaio connaio-core connaio.service
+      - cp build/linux/connaio.service build/linux/connaio.init "{{.OUT}}/"
+      - tar -czf "{{.BIN_DIR}}/Connaio-{{.VERSION}}-linux-{{.ARCH}}.tar.gz" -C "{{.OUT}}" connaio connaio-core connaio.service connaio.init
 
   run:
     cmds:

@@ -43,6 +43,8 @@ curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo sh
 ```
 
 - 安装到 `/opt/connaio`，以 systemd 服务 `connaio` 运行，数据在 `/var/lib/connaio-web`；结束时输出带访问令牌的地址，首次用它打开即可登录。再次运行即更新。
+- 首次安装且在终端中运行时，会提示输入订阅地址以导入配置，可留空跳过。
+- 未使用 systemd 的系统（如容器）由 `/etc/init.d/connaio start|stop|restart|status` 管理，日志位于 `/var/log/connaio.log`。容器重启后服务不会自动启动，请将 `/etc/init.d/connaio start` 加入容器的启动命令。
 - 默认只监听本机，可经 `ssh -L 9090:127.0.0.1:9090 服务器` 访问；对外开放时（`--listen 0.0.0.0:9090`）建议在前面加 HTTPS 反向代理。
 - 以 root 运行，可开启增强模式（TUN）；系统代理、开机启动、托盘等桌面功能不提供。
 - 也可从 Releases 下载 `Connaio-<版本>-linux-<架构>.tar.gz` 手动运行：`./connaio --listen 127.0.0.1:9090`。

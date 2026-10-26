@@ -97,6 +97,18 @@ jobs:
           curl -sf -b jar http://127.0.0.1:9090/ | grep -q 'id="root"' # the UI, behind the cookie
           /opt/connaio/connaio status # its commands, without sudo: install.sh gave this user the token
           sudo journalctl -u connaio --no-pager | tail -n 20
+      - name: Install it in a container, without systemd, and restart and stop it
+        working-directory: Connaio
+        run: |
+          docker run --rm -v "$PWD:/w:ro" -w /w ubuntu:22.04 sh -ec '
+            up() { i=0; until /opt/connaio/connaio status; do i=$((i + 1)); [ $i -lt 30 ] || exit 1; sleep 1; done; }
+            CONNAIO_TARBALL=$(ls bin/Connaio-*-linux-amd64.tar.gz) sh install.sh || { tail -n 40 /var/log/connaio.log; exit 1; }
+            up
+            /etc/init.d/connaio restart
+            up
+            /etc/init.d/connaio stop
+            if /etc/init.d/connaio status; then exit 1; fi
+            tail -n 20 /var/log/connaio.log'
       - name: Attach the headless build to the release
         if: startsWith(github.ref, 'refs/tags/')
         working-directory: Connaio

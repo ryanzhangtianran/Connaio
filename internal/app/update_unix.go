@@ -38,6 +38,7 @@ func relaunch(cmd []string) error {
 	wait := `while kill -0 "$0" 2>/dev/null; do sleep 0.2; done; exec "$@"`
 	c := exec.Command("sh", append([]string{"-c", wait, strconv.Itoa(os.Getpid())}, cmd...)...)
 	c.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // outlives this process
+	c.Stdout, c.Stderr = os.Stdout, os.Stderr          // /etc/init.d/connaio's log goes on
 	if err := c.Start(); err != nil {
 		return err
 	}

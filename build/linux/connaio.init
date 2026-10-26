@@ -1,0 +1,49 @@
+#!/bin/sh
+# Connaio's headless build as a service where there is no systemd (containers): install.sh puts it in
+# /etc/init.d/connaio; then
+#   /etc/init.d/connaio start|stop|restart|status     # or: service connaio …
+#   tail /var/log/connaio.log                         # the web UI's address and access token
+# Nothing starts it with the container: put /etc/init.d/connaio start in the container's command.
+exe=/opt/connaio/connaio
+args="--listen 127.0.0.1:9090 --data-dir /var/lib/connaio-web"
+log=/var/log/connaio.log
+
+# pids prints the running instance's pid: found by its command line, since an update restarts it
+# as a new process (and minimal images have no pgrep)
+pids() {
+	for p in /proc/[0-9]*; do
+		[ "$(tr '\0' ' ' <"$p/cmdline" 2>/dev/null)" = "$exe $args " ] && echo "${p#/proc/}"
+	done
+}
+
+start() {
+	[ -n "$(pids)" ] && return 0
+	# setsid: outlives the shell that started it
+	setsid $exe $args >>"$log" 2>&1 </dev/null &
+	echo "Connaio 已启动。日志文件：$log"
+}
+
+stop() {
+	p=$(pids)
+	[ -z "$p" ] && return 0
+	kill $p
+	# the core restores routes and listeners on SIGTERM: given 10s, as systemd's stop would
+	i=0
+	while [ -n "$(pids)" ] && [ $i -lt 50 ]; do sleep 0.2; i=$((i + 1)); done
+	p=$(pids)
+	[ -n "$p" ] && kill -9 $p
+	echo "Connaio 已停止。"
+}
+
+case "${1:-}" in
+start) start ;;
+stop) stop ;;
+restart) stop && start ;;
+status)
+	if [ -n "$(pids)" ]; then echo "Connaio 正在运行。"; else echo "Connaio 未运行。"; exit 3; fi
+	;;
+*)
+	echo "用法：$0 start|stop|restart|status" >&2
+	exit 2
+	;;
+esac
