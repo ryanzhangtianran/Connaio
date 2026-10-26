@@ -167,6 +167,23 @@ func Main(args []string, out io.Writer) error {
 // processesKey is the override's list of the programs partial TUN captures, as the TUN page edits it.
 const processesKey = "capture.processes"
 
+// programs is that list. Never set, it comes back as {} (an unset value, as Wails sends it), not a
+// list: read as none, as the TUN page does.
+func (c *client) programs() ([]string, error) {
+	var v any
+	if err := c.call(&v, "ProfileService.Value", processesKey); err != nil {
+		return nil, err
+	}
+	list, _ := v.([]any)
+	var out []string
+	for _, p := range list {
+		if s, ok := p.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out, nil
+}
+
 // listenFile is where install.sh keeps the service's listen address, read by its unit and init script.
 const listenFile = "/etc/default/connaio"
 
@@ -445,11 +462,11 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 		return c.call(nil, "EnhancedService.SetFull", args[0] == "on")
 	case "partial":
 		var on bool
-		var apps []string
 		if err := c.call(&on, "EnhancedService.Partial"); err != nil {
 			return err
 		}
-		if err := c.call(&apps, "ProfileService.Value", processesKey); err != nil {
+		apps, err := c.programs()
+		if err != nil {
 			return err
 		}
 		if len(args) == 0 {

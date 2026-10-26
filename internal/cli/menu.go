@@ -346,8 +346,8 @@ func (m *menu) partial() error {
 		if err != nil {
 			return err
 		}
-		var apps []string
-		if err := c.call(&apps, "ProfileService.Value", processesKey); err != nil {
+		apps, err := c.programs()
+		if err != nil {
 			return err
 		}
 		var rows [][]string

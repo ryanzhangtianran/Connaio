@@ -168,6 +168,20 @@ func TestPartial(t *testing.T) {
 	}
 }
 
+// never set, the list comes back as {}: none, and the first add starts it
+func TestPartialUnset(t *testing.T) {
+	addr, calls := fake(t, map[string]string{"EnhancedService.Partial": "false", "ProfileService.Value": `{}`})
+	if out, err := main(t, addr, "partial"); err != nil || out != "部分 TUN  关闭\n程序      —\n" {
+		t.Errorf("partial: %q %v", out, err)
+	}
+	if _, err := main(t, addr, "partial", "add", "python"); err != nil {
+		t.Fatal(err)
+	}
+	if last := (*calls)[len(*calls)-1]; last != `ProfileService.Set["capture.processes",["python"]]` {
+		t.Errorf("add: %s", last)
+	}
+}
+
 func TestRun(t *testing.T) {
 	addr, _ := fake(t, map[string]string{"DeviceService.Lan": `{"port":7890}`})
 	t.Setenv("CONNAIO_ADDR", addr)
