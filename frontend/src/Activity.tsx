@@ -713,13 +713,13 @@ export default function Activity({ status, activity, sysProxy, enhanced, rooted,
 
   const tunSub = !rooted ? (web ? "需以 root 运行 Connaio" : "需先在「通用」中授予 root 权限") : enhanced === "tun" ? "TUN 接管全部流量" : enhanced === "process-tun" ? "部分增强运行中" : "已关闭";
   return (
-    <div className="activity">
+    <div className={`activity ${web ? "web" : ""}`}>
       <StatusCard activity={activity} mode={mode} setMode={setMode} latency={latency} />
       <SpeedCard dir="up" values={history.map((t) => t.up)} />
       <SpeedCard dir="down" values={history.map((t) => t.down)} />
       <ModeCard mode={mode} setMode={setMode} />
-      <ToggleCard area="sys" icon="shuffle" title="系统代理" sub={web ? "无界面运行时不适用" : proxyOn ? `端口 ${lan?.port ?? "—"}` : "已关闭"} on={proxyOn} disabled={web}
-        onChange={(v) => setProxyOn(v, SystemProxyService.SetEnabled(v))} />
+      {!web && <ToggleCard area="sys" icon="shuffle" title="系统代理" sub={proxyOn ? `端口 ${lan?.port ?? "—"}` : "已关闭"} on={proxyOn}
+        onChange={(v) => setProxyOn(v, SystemProxyService.SetEnabled(v))} />}
       <ToggleCard area="tun" icon="processes" title="增强模式" sub={tunSub} on={tunOn} part={enhanced === "process-tun"} disabled={!rooted}
         onChange={(v) => setTunOn(v, EnhancedService.SetFull(v))} more={() => go("processes")} />
       <LanCard lan={lan} reload={loadLan} go={go} />

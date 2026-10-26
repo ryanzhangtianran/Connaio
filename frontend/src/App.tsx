@@ -87,7 +87,7 @@ export default function App() {
 
   useEffect(() => {
     CoreService.Status().then(setStatus);
-    SystemProxyService.Enabled().then(setSysProxy);
+    if (!web) SystemProxyService.Enabled().then(setSysProxy);
     const mode = () => { EnhancedService.Mode().then(setEnhanced); EnhancedService.DaemonInstalled().then(setRooted); };
     mode();
     const offs = [

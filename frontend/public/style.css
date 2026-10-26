@@ -640,6 +640,12 @@ tr.muted td.rule-actions { text-decoration: none; }
     "lan lan lan health health health svc svc svc mem mem mem"
     "list list list list list list list list list side side side"; /* the lists three quarters, the groups the rest: every edge lines up with a card above */
 }
+/* the web UI has no system proxy: enhanced mode takes its place too */
+.activity.web { grid-template-areas:
+    "hero hero hero hero hero hero up up up down down down"
+    "mode mode mode mode mode mode tun tun tun tun tun tun"
+    "lan lan lan health health health svc svc svc mem mem mem"
+    "list list list list list list list list list side side side"; }
 .activity > .card { display: flex; flex-direction: column; min-height: 0; }
 .activity .head { min-height: 22px; }
 .activity .head-actions { gap: 8px; min-width: 0; }
