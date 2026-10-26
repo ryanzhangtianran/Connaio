@@ -46,6 +46,7 @@ var items = []item{
 	{},
 	{"反向隧道", (*menu).tunnels},
 	{"TUN 模式", (*menu).enhanced},
+	{"部分 TUN", (*menu).partial},
 	{"当前连接", func(m *menu) error { return m.cmd("connections") }},
 	{"网页界面地址", func(m *menu) error { return m.cmd("url") }},
 }
@@ -322,6 +323,40 @@ func (m *menu) enhanced() error {
 	}
 	if i := m.pick("操作", [][]string{{"开启"}, {"关闭"}}); i >= 0 {
 		return m.cmd("enhanced", []string{"on", "off"}[i])
+	}
+	return nil
+}
+
+// partial shows partial TUN and its programs, then switches it or edits the programs.
+func (m *menu) partial() error {
+	if err := m.cmd("partial"); err != nil {
+		return err
+	}
+	switch m.pick("操作", [][]string{{"开启"}, {"关闭"}, {"添加程序"}, {"移除程序"}}) {
+	case 0:
+		return m.cmd("partial", "on")
+	case 1:
+		return m.cmd("partial", "off")
+	case 2:
+		if name, _ := m.ask("程序名，如 python、git、uv："); name != "" {
+			return m.cmd("partial", "add", name)
+		}
+	case 3:
+		c, err := m.client()
+		if err != nil {
+			return err
+		}
+		var apps []string
+		if err := c.call(&apps, "ProfileService.Value", processesKey); err != nil {
+			return err
+		}
+		var rows [][]string
+		for _, a := range apps {
+			rows = append(rows, []string{a})
+		}
+		if i := m.pick("要移除的程序", rows); i >= 0 {
+			return m.cmd("partial", "remove", apps[i])
+		}
 	}
 	return nil
 }

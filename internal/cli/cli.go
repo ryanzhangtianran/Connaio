@@ -41,6 +41,8 @@ const Usage = `用法：connaio [命令] [选项] [参数]
   vpns                         VPN 状态
   vpn reconnect <名称>          重新连接 VPN
   enhanced [on|off]            查看、开启或关闭 TUN 模式
+  partial [on|off]             查看、开启或关闭部分 TUN
+  partial add|remove <程序>    添加或移除部分 TUN 接管的程序
   connections                  当前连接
   close-all                    断开全部连接
   restart                      重启内核
@@ -161,6 +163,9 @@ func Main(args []string, out io.Writer) error {
 	}
 	return run(c, name, positional, *all, *addr, out)
 }
+
+// processesKey is the override's list of the programs partial TUN captures, as the TUN page edits it.
+const processesKey = "capture.processes"
 
 // listenFile is where install.sh keeps the service's listen address, read by its unit and init script.
 const listenFile = "/etc/default/connaio"
@@ -438,6 +443,37 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 			return errors.New("用法：connaio enhanced on|off")
 		}
 		return c.call(nil, "EnhancedService.SetFull", args[0] == "on")
+	case "partial":
+		var on bool
+		var apps []string
+		if err := c.call(&on, "EnhancedService.Partial"); err != nil {
+			return err
+		}
+		if err := c.call(&apps, "ProfileService.Value", processesKey); err != nil {
+			return err
+		}
+		if len(args) == 0 {
+			tw.row("部分 TUN", map[bool]string{true: "开启", false: "关闭"}[on])
+			tw.row("程序", cmp.Or(strings.Join(apps, "、"), "—"))
+			return nil
+		}
+		switch {
+		case args[0] == "on" || args[0] == "off":
+			return c.call(nil, "EnhancedService.SetPartial", args[0] == "on")
+		case (args[0] == "add" || args[0] == "remove") && len(args) == 2:
+			// names compared as the TUN page does, ignoring case
+			i := slices.IndexFunc(apps, func(a string) bool { return strings.EqualFold(a, args[1]) })
+			switch {
+			case args[0] == "add" && i < 0:
+				apps = append(apps, args[1])
+			case args[0] == "remove" && i >= 0:
+				apps = slices.Delete(apps, i, i+1)
+			default:
+				return nil // already as asked
+			}
+			return c.call(nil, "ProfileService.Set", processesKey, apps)
+		}
+		return errors.New("用法：connaio partial [on|off]，或 partial add|remove <程序>")
 	case "connections":
 		var conns []struct {
 			Process, App, Source, Host, Port, Rule, Chain string

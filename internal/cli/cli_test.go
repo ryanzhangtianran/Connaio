@@ -141,6 +141,33 @@ func TestListenAddr(t *testing.T) {
 	}
 }
 
+func TestPartial(t *testing.T) {
+	addr, calls := fake(t, map[string]string{"EnhancedService.Partial": "true", "ProfileService.Value": `["git","Python"]`})
+	out, err := main(t, addr, "partial")
+	if err != nil || out != "部分 TUN  开启\n程序      git、Python\n" {
+		t.Errorf("partial: %q %v", out, err)
+	}
+	// add: a new one appended; a name already there (in another case) left alone; remove: by any case
+	for _, args := range [][]string{{"partial", "add", "uv"}, {"partial", "add", "python"}, {"partial", "remove", "PYTHON"}, {"partial", "off"}} {
+		if _, err := main(t, addr, args...); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+	}
+	var sets []string
+	for _, c := range *calls {
+		if strings.Contains(c, "Set") {
+			sets = append(sets, c)
+		}
+	}
+	want := []string{`ProfileService.Set["capture.processes",["git","Python","uv"]]`, `ProfileService.Set["capture.processes",["git"]]`, `EnhancedService.SetPartial[false]`}
+	if strings.Join(sets, " ") != strings.Join(want, " ") {
+		t.Errorf("sets %v\nwant %v", sets, want)
+	}
+	if _, err := main(t, addr, "partial", "add"); err == nil {
+		t.Error("partial add with no program accepted")
+	}
+}
+
 func TestRun(t *testing.T) {
 	addr, _ := fake(t, map[string]string{"DeviceService.Lan": `{"port":7890}`})
 	t.Setenv("CONNAIO_ADDR", addr)
