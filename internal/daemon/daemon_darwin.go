@@ -102,6 +102,18 @@ func Install(string) error {
 	return nil
 }
 
+// Restart starts the daemon again, for one that runs but doesn't answer, as when its data dir and
+// socket were deleted under it: unregistering stops it, and Install registers it afresh. The older
+// LaunchDaemon is left to Install, which moves it over without the removal's prompt.
+func Restart(string) error {
+	if !legacy() {
+		if err := Uninstall(); err != nil {
+			return err
+		}
+	}
+	return Install("")
+}
+
 // Uninstall stops and unregisters the daemon, and removes the older LaunchDaemon if it is there; its
 // data dir is kept.
 func Uninstall() error {

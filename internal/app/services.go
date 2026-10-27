@@ -29,12 +29,16 @@ func newServices(dataDir string) (*services, error) {
 	settings := loadSettings(dataDir)
 	svc := &CoreService{core: core.New(dataDir), ledger: openLedger(filepath.Join(dataDir, "traffic.json")), settings: settings}
 	profiles := &ProfileService{store: store, core: svc.core, settings: settings}
-	svc.onReady = profiles.apply
+	enhanced := &EnhancedService{core: svc.core, profiles: profiles, settings: settings}
+	svc.onReady = func() error {
+		defer enhanced.changed(enhanced.Enabled()) // whether TUN runs depends on the core just attached
+		return profiles.apply()
+	}
 	s := &services{
 		core:     svc,
 		profiles: profiles,
 		sysProxy: &SystemProxyService{core: svc.core, settings: settings, enabled: settings.Get().SystemProxy && !headless}, // known before the menu is built; applied by the guard once the core answers
-		enhanced: &EnhancedService{core: svc.core, profiles: profiles, settings: settings},
+		enhanced: enhanced,
 		devices:  &DeviceService{core: svc, profiles: profiles},
 		settings: &SettingsService{core: svc, settings: settings},
 		conf:     settings,

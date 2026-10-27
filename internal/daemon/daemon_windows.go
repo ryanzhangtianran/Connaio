@@ -83,6 +83,9 @@ func Install(core string) error {
 	})
 }
 
+// Restart starts the service again, for one that runs but doesn't answer: Install stops it first.
+func Restart(core string) error { return Install(core) }
+
 // Stale reports whether the service runs another core binary than the one bundled with this app:
 // for an installed core, whether it still runs a copy (an older version's way, moved over once);
 // otherwise whether its copy differs.

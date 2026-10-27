@@ -194,7 +194,7 @@ func (s *CoreService) ServiceStartup(ctx context.Context, _ application.ServiceO
 		if !headless && daemon.Installed() { // headless: a desktop's daemon, if any, is not this one's
 			if err = s.core.Attach(ctx, daemon.Socket, daemon.LogPath); err != nil {
 				// a daemon that doesn't answer (launchd trouble) must not leave the app proxy-less
-				notify("warning", "root 内核没有响应（%v），改用 App 自己的内核；增强模式不可用", err)
+				notify("warning", "root 内核无响应（%v），已切换至内置内核；开启增强模式时将重启 root 内核", err)
 				err = s.core.Start(ctx)
 			}
 		} else {

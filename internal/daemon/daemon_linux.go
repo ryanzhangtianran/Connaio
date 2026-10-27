@@ -33,6 +33,9 @@ func Installed() bool {
 // Install starts the root core and keeps it on across reboots, after one administrator prompt.
 func Install(string) error { return asRoot("enable") }
 
+// Restart starts the root core again, for one that runs but doesn't answer: enable restarts it.
+func Restart(bin string) error { return Install(bin) }
+
 func Uninstall() error { return asRoot("disable") }
 
 // Stale is always false: upgrading the .deb restarts the service on the new binary itself.

@@ -23,7 +23,11 @@ type EnhancedService struct {
 	onChange func(bool) // menu bar checkbox
 }
 
-func (s *EnhancedService) Enabled() bool { return s.settings.Get().Enhanced }
+// Enabled is whether TUN runs: chosen, and on a core that can run it. Chosen but fallen back to the
+// app's core (the daemon didn't answer) reads as off, so turning it on tries the daemon again.
+func (s *EnhancedService) Enabled() bool {
+	return s.settings.Get().Enhanced && (headless || s.core.Daemon())
+}
 
 // Mode is how TUN is used: "" (off), "tun" (enhanced mode, all traffic) or "process-tun" (partial
 // enhancement: only the selected apps and their child processes).
@@ -70,12 +74,12 @@ func (s *EnhancedService) set(full, partial bool) error {
 		return err
 	}
 	switch {
-	case mode == s.Mode():
-		s.changed(s.Enabled()) // only the choice underneath changed: the views show it
-	case mode == "":
+	case mode == "" && s.settings.Get().Enhanced: // chosen though not running, too: it mustn't come back with the daemon
 		if err := s.SetEnabled(false); err != nil {
 			return undo(err)
 		}
+	case mode == s.Mode():
+		s.changed(s.Enabled()) // only the choice underneath changed: the views show it
 	default:
 		// capture.mode goes into the override without applying; SetEnabled applies once and
 		// rolls both back if the core refuses
@@ -156,11 +160,33 @@ func (s *EnhancedService) SetEnabled(on bool) error {
 func (s *EnhancedService) useDaemon() error {
 	restarting.Add(1) // the traffic stream breaks here; the caller applies the config itself
 	defer restarting.Add(-1)
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
+	attach := func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		return s.core.Attach(ctx, daemon.Socket, daemon.LogPath)
+	}
+	start := func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		return s.core.Start(ctx)
+	}
 	s.core.Stop() // frees the ports the daemon is about to take over
-	if err := s.core.Attach(ctx, daemon.Socket, daemon.LogPath); err != nil {
-		return errors.Join(err, s.core.Start(ctx)) // keep a working core either way
+	err := attach()
+	if err != nil {
+		// a daemon that runs but doesn't answer (its socket deleted under it, say) is started again,
+		// once; the app's core carries the traffic meanwhile, as the restart may wait on a prompt
+		if serr := start(); serr != nil {
+			return errors.Join(err, serr)
+		}
+		bin, berr := core.Binary()
+		if rerr := errors.Join(berr, daemon.Restart(bin)); rerr != nil {
+			return errors.Join(err, rerr)
+		}
+		s.core.Stop()
+		err = attach()
+	}
+	if err != nil {
+		return errors.Join(err, start()) // keep a working core either way
 	}
 	return nil
 }
@@ -172,7 +198,7 @@ func (s *EnhancedService) Uninstall() error {
 	}
 	restarting.Add(1) // the stream breaks as the daemon goes; the config is applied below
 	defer restarting.Add(-1)
-	if s.Enabled() {
+	if s.settings.Get().Enhanced { // chosen, running or not: it mustn't come back with the next grant
 		if err := s.SetEnabled(false); err != nil {
 			return err
 		}
