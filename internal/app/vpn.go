@@ -266,9 +266,19 @@ func (s *ProfileService) ReconnectVPN(name string) error {
 	return s.SetVPN(v, name) // a profile's VPN is still there: replaced, not taken
 }
 
-// RemoveVPN disconnects: the node, rules and group leave the override; the draft stays.
+// RemoveVPN disconnects: the node, rules and group leave the override; the draft stays, taken from
+// the override first, so one written or edited there by hand neither vanishes nor reconnects stale.
 func (s *ProfileService) RemoveVPN(name string) error {
-	return s.edit(func() error { return s.clearVPN(name) })
+	return s.edit(func() error {
+		active, err := s.activeVPNs()
+		if err != nil {
+			return err
+		}
+		if i := slices.IndexFunc(active, func(v VPN) bool { return v.name() == name && !v.Profile }); i >= 0 {
+			s.saveDraft(active[i], "")
+		}
+		return s.clearVPN(name)
+	})
 }
 
 // DeleteVPN disconnects and forgets the draft too.

@@ -63,6 +63,15 @@ export const bypassKinds: Kind[] = [
 const ruleOf = (r: KV, target: string) => `${r.t},${r.t === "IP-CIDR" && !r.v.includes("/") ? r.v + "/32" : r.v},${target}${r.t === "IP-CIDR" || r.t === "GEOIP" ? ",no-resolve" : ""}`;
 // routeOf reads a rule back, or null for a rule the page didn't write.
 const routeOf = (rule: string): KV | null => { const f = rule.split(",").map((x) => x.trim()); return routeKinds.some((k) => k.key === f[0]) ? { t: f[0], v: f[1] } : null; };
+// retarget aims a rule the page doesn't edit (PROCESS-NAME, IP-CIDR6, ...) at target: its last field,
+// past no-resolve and src, as profile.RuleTarget reads it.
+const retarget = (rule: string, target: string) => {
+  const f = rule.split(",");
+  let i = f.length - 1;
+  while (i > 1 && ["no-resolve", "src"].includes(f[i].trim())) i--;
+  f[i] = target;
+  return f.join(",");
+};
 // condOf is the subnet group's key for a bypass entry, and bypassOf reads it back.
 export const condOf = (b: KV) => (b.t === "CIDR" ? b.v : b.t.startsWith("TYPE:") ? b.t : `${b.t}:${b.v}`);
 export const bypassOf = (key: string): KV => { const [t, ...rest] = key.split(":"); return key.startsWith("TYPE:") ? { t: key, v: "" } : ["SSID", "BSSID", "ROUTER"].includes(t) ? { t, v: rest.join(":") } : { t: "CIDR", v: key }; };
@@ -102,13 +111,14 @@ function KVRow({ kinds, items, onChange, fill }: { kinds: Kind[]; items: KV[]; o
   );
 }
 
-// formOf fills the editor from a VPN as build writes it.
-function formOf(v: VPN): { form: Form; addrs: KV[]; bypass: KV[] } {
+// formOf fills the editor from a VPN as build writes it; kept are its rules the page can't show,
+// which saving would otherwise drop.
+function formOf(v: VPN): { form: Form; addrs: KV[]; kept: string[]; bypass: KV[] } {
   const p = v.proxy ?? {};
   const form: Form = { type: p["connaio-lan"] ? "lan" : String(p.type ?? "easyconnect") };
   for (const [k, x] of Object.entries(p)) if (k !== "name" && k !== "type" && k !== "connaio-lan" && (typeof x === "string" || typeof x === "number" || typeof x === "boolean")) form[k] = String(x);
   if (Array.isArray(p["allowed-ips"])) form["allowed-ips"] = p["allowed-ips"].join(", ");
-  return { form, addrs: nonNull(v.rules).map(routeOf).filter((x): x is KV => !!x), bypass: Object.keys(v.group?.rules ?? {}).map(bypassOf) };
+  return { form, addrs: nonNull(v.rules).map(routeOf).filter((x): x is KV => !!x), kept: nonNull(v.rules).filter((r) => !routeOf(r)), bypass: Object.keys(v.group?.rules ?? {}).map(bypassOf) };
 }
 
 const protocolLabel: Record<string, string> = { all: "全部", tcp: "TCP", udp: "UDP", icmp: "ICMP" };
@@ -237,7 +247,8 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
     const rules: string[] = [];
     const routes = addrs.length ? addrs : auto.filter((a) => a !== "0.0.0.0/0" && a !== "::/0").map((a) => ({ t: "IP-CIDR", v: a }));
     const seen = new Set<string>();
-    for (const r of routes) { const line = ruleOf(r, policy); if (!seen.has(line)) { seen.add(line); rules.push(line); } }
+    const lines = [...routes.map((r) => ruleOf(r, policy)), ...(init?.kept ?? []).map((r) => retarget(r, policy))];
+    for (const line of lines) if (!seen.has(line)) { seen.add(line); rules.push(line); }
     const group = conds.length ? { name: policy, type: "subnet", default: name, rules: Object.fromEntries(conds.map((b) => [b, "DIRECT"])) } : null;
     return { proxy, rules, group };
   };

@@ -68,6 +68,18 @@ func TestVPNRoundTrip(t *testing.T) {
 	}
 }
 
+// A VPN written into the override by hand, with no draft, is kept as one on disconnect.
+func TestRemoveHandWrittenVPN(t *testing.T) {
+	_, s, _ := startCore(t, "prepend-proxies:\n  - {name: TS, type: http, server: 1.2.3.4, port: 7890, connaio-lan: true}\nprepend-rules:\n  - IP-CIDR,10.0.0.0/8,TS,no-resolve\n")
+	if err := s.RemoveVPN("TS"); err != nil {
+		t.Fatal(err)
+	}
+	list, _ := s.VPNs()
+	if len(list) != 1 || list[0].Active || list[0].Proxy["server"] != "1.2.3.4" || !reflect.DeepEqual(list[0].Rules, []string{"IP-CIDR,10.0.0.0/8,TS,no-resolve"}) {
+		t.Fatalf("after disconnect: %+v", list)
+	}
+}
+
 // TestSaveVPN: saving a disconnected VPN connects nothing; a connected one takes the change. A LAN
 // Connaio (an http node marked connaio-lan) is a VPN; reconnecting one puts it back.
 func TestSaveVPN(t *testing.T) {
