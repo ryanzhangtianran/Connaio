@@ -1,4 +1,4 @@
 [submodule "connaio-core"]
 	path = connaio-core
 	url = https://github.com/ryanzhangtianran/connaio-core.git
-	branch = reverse-tunnels
+	branch = main
