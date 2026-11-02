@@ -54,6 +54,7 @@ tasks:
       - exclude: frontend/**/*
       - frontend/bindings/**/*  # Rerun when switching between dev/production mode causes changes in output
       - "**/*.go"
+      - exclude: connaio-core/**/*  # the submodule: its own module, never bound
       - go.mod
       - go.sum
     generates:

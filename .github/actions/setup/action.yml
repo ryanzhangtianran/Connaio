@@ -1,7 +1,7 @@
-# What every build job sets up after checking Connaio out to Connaio/: connaio-core next to it,
-# Go, Node and wails3 (wails3 task builds connaio-core from ../connaio-core).
+# What every build job sets up after checking Connaio out to Connaio/: its connaio-core submodule,
+# Go, Node and wails3 (wails3 task builds connaio-core from Connaio/connaio-core).
 name: setup
-description: Check out connaio-core and install Go, Node and wails3
+description: Check out the connaio-core submodule and install Go, Node and wails3
 
 inputs:
   wails-tags:
@@ -11,12 +11,9 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v4
-      with:
-        repository: ryanzhangtianran/connaio-core
-        ref: reverse-tunnels
-        path: connaio-core
-        fetch-depth: 0 # its latest tag is the mihomo version it reports
+    - shell: bash
+      # a full clone, tags and all: its latest tag is the mihomo version it reports
+      run: git -C Connaio submodule update --init connaio-core
     - uses: actions/setup-go@v5
       with:
         go-version-file: Connaio/go.mod
@@ -27,10 +24,10 @@ runs:
         # the Taskfile's GOPATH (Connaio/.go) would download the modules outside the cache
         echo "GOMODCACHE=$(go env GOMODCACHE)" >> "$GITHUB_ENV"
         # r2: main's builds put the release builds' objects in it too (Linux's since check builds them)
-        echo "key=go-r2-${{ runner.os }}-${{ runner.arch }}-$(go env GOVERSION)-${{ hashFiles('Connaio/go.sum', 'connaio-core/go.sum') }}" >> "$GITHUB_OUTPUT"
+        echo "key=go-r2-${{ runner.os }}-${{ runner.arch }}-$(go env GOVERSION)-${{ hashFiles('Connaio/go.sum', 'Connaio/connaio-core/go.sum') }}" >> "$GITHUB_OUTPUT"
         # the built core and relay by the core's commit (build:core, build:relay), not built again while it stays
         echo "CONNAIO_CORE_CACHE=${RUNNER_TEMP//\\//}/core-cache" >> "$GITHUB_ENV" # forward slashes: the tasks' cp and mkdir on Windows too
-        echo "core=core-${{ runner.os }}-${{ runner.arch }}-$(git -C connaio-core rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        echo "core=core-${{ runner.os }}-${{ runner.arch }}-$(git -C Connaio/connaio-core rev-parse HEAD)" >> "$GITHUB_OUTPUT"
         printf 'paths<<EOF\n%s\n%s\nEOF\n' "$(go env GOCACHE)" "$(go env GOMODCACHE)" >> "$GITHUB_OUTPUT"
     - if: github.ref == 'refs/heads/main'
       uses: actions/cache@v4

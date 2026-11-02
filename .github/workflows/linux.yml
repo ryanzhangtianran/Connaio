@@ -35,7 +35,7 @@ jobs:
         run: |
           CONNAIO_CORE=$PWD/bin/connaio-core go test -tags gtk3 ./internal/profile ./internal/core ./internal/sysproxy ./internal/daemon
           go test -tags gtk3 -run Linux ./internal/app  # the Linux readers of /proc, resolvectl and .desktop files
-          go -C ../connaio-core test ./adapter/outboundgroup
+          go -C connaio-core test ./adapter/outboundgroup
 
       - name: Install and start it
         working-directory: Connaio

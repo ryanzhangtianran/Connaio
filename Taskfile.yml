@@ -4,8 +4,8 @@ vars:
   APP_NAME: "connaio" # executable name
   BUNDLE_NAME: "Connaio" # the .app shown in Finder
   BIN_DIR: "bin"
-  # connaio-core checkout, built into the app bundle next to the GUI binary
-  CORE_DIR: '{{.CORE_DIR | default "../connaio-core"}}'
+  # connaio-core, a submodule, built into the app bundle next to the GUI binary
+  CORE_DIR: '{{.CORE_DIR | default "connaio-core"}}'
   # the app's version is its latest git tag
   VERSION:
     sh: git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' | grep . || echo 0.0.0
