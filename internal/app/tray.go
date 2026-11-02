@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -44,6 +45,10 @@ type trayMenu struct {
 	settings *settingsFile
 	menu     *application.Menu
 
+	open         atomic.Bool             // the menu is open; read only where that is known (trayTracksOpen)
+	opened       chan struct{}           // wakes loop as the menu opens
+	shownRate    string                  // the speed the menu bar shows; the traffic stream's own
+	latest       atomic.Pointer[Traffic] // the stream's last rates, for whichever update draws next
 	mu           sync.Mutex
 	started      bool        // the native menu exists; decorating before would block on the main thread
 	updates      chan func() // one pending update from the data path (traffic, connections); a newer one replaces it
@@ -92,16 +97,33 @@ func newTrayMenu(t *trayMenu) {
 	t.mode, t.proxy, t.enh = "rule", t.sysProxy.Enabled(), t.enhanced.Mode()
 	t.lastActive = map[string]time.Time{}
 	t.updates = make(chan func(), 1)
+	t.opened = make(chan struct{}, 1)
 	t.menu = application.NewMenu()
 	t.build(nil, Profiles{}, nil, nil)
 	t.tray.SetMenu(t.menu)
 	t.svc.onMode = t.setMode
 	// the data path (ledger count, traffic stream) must never wait on the main thread, which the
-	// administrator prompt can hold: it drops an update off here and goes on
+	// administrator prompt can hold: it drops an update off here and goes on. It skips the hop when
+	// nothing seen would change: the process rows while the menu is closed (they fill in within a
+	// second of it opening), the menu bar while its speed reads the same or isn't shown.
 	t.svc.onConns = func(conns []Conn, deltas map[string]int64) {
-		t.offer(func() { t.rows = processRows(conns, deltas, t.lastActive, time.Now()); t.showRows() })
+		if trayTracksOpen && !t.open.Load() {
+			return
+		}
+		t.offer(func() { t.takeTraffic(); t.rows = processRows(conns, deltas, t.lastActive, time.Now()); t.showRows() })
 	}
-	t.svc.onTraffic = func(tr Traffic) { t.offer(func() { t.traffic = tr }) }
+	t.svc.onTraffic = func(tr Traffic) {
+		t.latest.Store(&tr)
+		shown := ""
+		if traySpeed && !t.settings.Get().HideTraySpeed {
+			shown = rate(tr.Up) + rate(tr.Down)
+		}
+		if shown == t.shownRate {
+			return
+		}
+		t.shownRate = shown
+		t.offer(t.takeTraffic)
+	}
 	go func() {
 		for fn := range t.updates {
 			t.locked(fn)
@@ -120,6 +142,14 @@ func newTrayMenu(t *trayMenu) {
 			t.loop()
 		}()
 	})
+}
+
+// takeTraffic has the menu bar draw the latest rates; every update from the data path takes them,
+// as one may replace the traffic stream's waiting update (offer), which isn't sent again unchanged.
+func (t *trayMenu) takeTraffic() {
+	if p := t.latest.Load(); p != nil {
+		t.traffic = *p
+	}
 }
 
 // offer queues an update for the menu bar, replacing one still waiting: only the latest matters.
@@ -209,19 +239,33 @@ func (t *trayMenu) toggleEnhanced(full bool) {
 }
 
 // loop refreshes the groups and profiles every 5s (the process rows and speed come from the data
-// path), and the network quality every minute and as the menu opens.
-// ponytail: polls /proxies even while the menu is closed; hook menuWillOpen if it shows up in a profile.
+// path), and the network quality every minute and as the menu opens. Where the menu's opening is
+// known (macOS), nothing shows them while it is closed: then it waits for it to open, doing nothing.
 func (t *trayMenu) loop() {
 	watching := false
 	for i := 0; ; i += 5 {
-		if i%60 == 10 { // the first one 10s in, once the startup apply has rebuilt the TUN under it
+		if i%60 == 10 && !trayTracksOpen { // the first one 10s in, once the startup apply has rebuilt the TUN under it
 			go t.measure()
 		}
 		t.tick()
 		if !watching { // once the native menu exists
-			watching = onTrayOpen(t.menu, func() { go t.measure() })
+			watching = onTrayOpen(t.menu, t.opening, func() { t.open.Store(false) })
+		}
+		if watching && trayTracksOpen && !t.open.Load() {
+			<-t.opened
+			continue
 		}
 		time.Sleep(5 * time.Second)
+	}
+}
+
+// opening is called on the main thread as the menu opens: quality measured, loop woken to refresh.
+func (t *trayMenu) opening() {
+	t.open.Store(true)
+	go t.measure()
+	select {
+	case t.opened <- struct{}{}:
+	default:
 	}
 }
 

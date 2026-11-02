@@ -21,30 +21,49 @@ func TestLoginItemFile(t *testing.T) {
 }
 
 func TestParseApps(t *testing.T) {
-	apps := parseApps(`/Applications/Ghostty.app/Contents/MacOS/ghostty
-/Applications/Lark.app/Contents/MacOS/Feishu
-/Applications/Lark.app/Contents/Frameworks/Lark Framework.framework/Versions/1/Helpers/Lark Helper.app/Contents/MacOS/Lark Helper
-/Applications/Surge.app/Contents/Applications/Surge Dashboard.app/Contents/MacOS/Surge Dashboard
-/Applications/Ghostty.app/Contents/MacOS/ghostty
-/usr/sbin/mDNSResponder
-/System/Library/CoreServices/Dock.app/Contents/MacOS/Dock
-/Library/Apple/System/Library/CoreServices/MRT.app/Contents/MacOS/MRT
-`)
+	apps := parseApps([]string{
+		"/Applications/Ghostty.app/Contents/MacOS/ghostty",
+		"/Applications/Lark.app/Contents/MacOS/Feishu",
+		"/Applications/Lark.app/Contents/Frameworks/Lark Framework.framework/Versions/1/Helpers/Lark Helper.app/Contents/MacOS/Lark Helper",
+		"/Applications/Surge.app/Contents/Applications/Surge Dashboard.app/Contents/MacOS/Surge Dashboard",
+		"/Applications/Ghostty.app/Contents/MacOS/ghostty",
+		"/usr/sbin/mDNSResponder",
+		"/System/Library/CoreServices/Dock.app/Contents/MacOS/Dock",
+		"/Library/Apple/System/Library/CoreServices/MRT.app/Contents/MacOS/MRT",
+	})
 	if len(apps) != 2 || apps[0].Name != "Ghostty" || apps[0].Exec != "ghostty" || apps[1].Name != "Lark" || apps[1].Exec != "Feishu" {
 		t.Fatalf("apps %+v", apps)
 	}
 }
 
-func TestDarwinProcs(t *testing.T) {
-	ps := `  100     1 /Applications/Ghostty.app/Contents/MacOS/ghostty
-  101   100 /usr/bin/login
-  102   101 -/bin/zsh
-  103   102 /Users/me/.local/bin/claude
-  200     1 /usr/sbin/mDNSResponder
-  300     1 /System/Library/CoreServices/Dock.app/Contents/MacOS/Dock
-  301   300 /usr/bin/ssh
-`
-	table := darwinProcs(ps)
+// The table as the kernel gives it: this test's own process, under its parent, by its full path.
+func TestProcTable(t *testing.T) {
+	exe, _ := os.Executable()
+	exe, _ = filepath.EvalSymlinks(exe) // the kernel's path: /private/var where the temp dir says /var
+	p, ok := procTable()[os.Getpid()]
+	if !ok || p.ppid != os.Getppid() || p.comm != exe {
+		t.Fatalf("this process: %+v, want parent %d and %s", p, os.Getppid(), exe)
+	}
+}
+
+func TestParentIn(t *testing.T) {
+	table := map[int]proc{}
+	for pid, pc := range map[int]struct {
+		ppid int
+		comm string
+	}{
+		100: {1, "/Applications/Ghostty.app/Contents/MacOS/ghostty"},
+		101: {100, "/usr/bin/login"},
+		102: {101, "/bin/zsh"},
+		103: {102, "/Users/me/.local/bin/claude"},
+		200: {1, "/usr/sbin/mDNSResponder"},
+		300: {1, "/System/Library/CoreServices/Dock.app/Contents/MacOS/Dock"},
+		301: {300, "/usr/bin/ssh"},
+	} {
+		p := proc{ppid: pc.ppid, comm: pc.comm}
+		_, p.app = appOfPath(p.comm)
+		table[pid] = p
+	}
 	if p, _ := parentIn(table, "claude"); p != "/Applications/Ghostty.app/Contents/MacOS/ghostty" {
 		t.Fatalf("claude's parent %q", p)
 	}

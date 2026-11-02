@@ -129,15 +129,22 @@ func oneShotClient(port int, timeout time.Duration) *http.Client {
 }
 
 func (s *SystemProxyService) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	// where the settings are watched (macOS), a tick only asks the core for its port, and the
+	// settings are read (networksetup, a process per service and kind) only after they changed
+	changed := sysproxy.Changes(ctx)
 	go func() {
 		t := time.NewTicker(15 * time.Second)
 		defer t.Stop()
+		read := true
 		for {
-			s.guard()
+			s.guard(read || changed == nil)
 			select {
 			case <-ctx.Done():
 				return
+			case <-changed:
+				read = true
 			case <-t.C:
+				read = false
 			}
 		}
 	}()
@@ -145,8 +152,9 @@ func (s *SystemProxyService) ServiceStartup(ctx context.Context, _ application.S
 }
 
 // guard (re)applies the system proxy when enabled: at startup, after another app changed it,
-// or when a new profile moved mixed-port.
-func (s *SystemProxyService) guard() {
+// or when a new profile moved mixed-port. read false: the settings are as last checked, so only a
+// moved port (or none checked yet) needs them read.
+func (s *SystemProxyService) guard(read bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.enabled {
@@ -155,6 +163,9 @@ func (s *SystemProxyService) guard() {
 	port, err := mixedPort(s.core)
 	if err != nil {
 		return // core not up yet
+	}
+	if !read && port == s.port {
+		return
 	}
 	if sysproxy.IsSet(port) {
 		s.port = port

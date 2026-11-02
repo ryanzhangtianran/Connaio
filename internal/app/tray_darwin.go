@@ -172,11 +172,14 @@ static NSFont *monoFont(void) { return [NSFont monospacedDigitSystemFontOfSize:m
 @end
 
 extern void trayOpened(void);
+extern void trayClosed(void);
 
-// observeTrayOpen calls trayOpened each time menu opens.
+// observeTrayOpen calls trayOpened each time menu opens, and trayClosed as it closes.
 static void observeTrayOpen(void *menu) {
 	[NSNotificationCenter.defaultCenter addObserverForName:NSMenuDidBeginTrackingNotification object:(NSMenu *)menu
 		queue:nil usingBlock:^(NSNotification *n) { trayOpened(); }];
+	[NSNotificationCenter.defaultCenter addObserverForName:NSMenuDidEndTrackingNotification object:(NSMenu *)menu
+		queue:nil usingBlock:^(NSNotification *n) { trayClosed(); }];
 }
 
 // setSectionHeader draws a disabled item as a section title. Runs on the main thread.
@@ -342,20 +345,26 @@ func showTray(tray *application.SystemTray, icon []byte, t Traffic, mode, state 
 // elsewhere they wait on the main queue, which an open menu holds until it closes (setTray).
 func onMenuThread(fn func()) { application.InvokeSync(fn) }
 
-// trayOpen is called as the menu bar menu opens (onTrayOpen).
-var trayOpen func()
+// trayOpen and trayClose are called as the menu bar menu opens and closes (onTrayOpen).
+var trayOpen, trayClose func()
 
-// onTrayOpen has fn called each time the menu opens; false while the native menu doesn't exist yet.
-// Wails rebuilds the menu inside the same NSMenu, so one observer lasts.
-func onTrayOpen(menu *application.Menu, fn func()) bool {
+// onTrayOpen has open and closed called each time the menu opens and closes; false while the native
+// menu doesn't exist yet. Wails rebuilds the menu inside the same NSMenu, so one observer lasts.
+func onTrayOpen(menu *application.Menu, open, closed func()) bool {
 	p := native(menu, "nsMenu")
 	if p == nil {
 		return false
 	}
-	trayOpen = fn
+	trayOpen, trayClose = open, closed
 	C.observeTrayOpen(p)
 	return true
 }
+
+// trayTracksOpen: the menu says when it opens and closes, so what only it shows waits for it.
+const trayTracksOpen = true
+
+// traySpeed: the menu bar item shows the speed, unless hidden in the settings (showTray).
+const traySpeed = true
 
 // menuRebuilt has nothing to do: the menu bar shows the menu itself, rebuilt in place.
 func menuRebuilt(*application.SystemTray, *application.Menu) {}

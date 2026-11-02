@@ -99,7 +99,13 @@ func onMenuThread(fn func()) { fn() }
 
 // onTrayOpen does nothing here: on Linux every label change has the panel fetch the whole menu
 // again, and the network quality keeps its minute.
-func onTrayOpen(*application.Menu, func()) bool { return true }
+func onTrayOpen(*application.Menu, func(), func()) bool { return true }
+
+// trayTracksOpen: the menu's opening isn't seen here, so the menu is kept current all along.
+const trayTracksOpen = false
+
+// traySpeed: the tray shows no speed here (showTray), so the traffic stream redraws nothing.
+const traySpeed = false
 
 func decorate(details, _ map[*application.MenuItem]string) {
 	for item, detail := range details {

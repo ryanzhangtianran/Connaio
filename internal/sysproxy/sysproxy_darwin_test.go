@@ -1,8 +1,12 @@
 package sysproxy
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestCommands(t *testing.T) {
@@ -28,4 +32,46 @@ func TestPointsAt(t *testing.T) {
 	if pointsAt("Enabled: Yes\nServer: 127.0.0.1\nPort: 7892\n", 7890) {
 		t.Fatal("another client's proxy is not ours")
 	}
+}
+
+// Changes fires when preferences.plist is written in place and when it is replaced (as configd
+// saves it), and keeps firing for the replacement.
+func TestChanges(t *testing.T) {
+	prefsDir = t.TempDir()
+	plist := filepath.Join(prefsDir, "preferences.plist")
+	if err := os.WriteFile(plist, []byte("a"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	changed := Changes(ctx)
+	if changed == nil {
+		t.Fatal("not watched")
+	}
+	expect := func(what string, change func() error) {
+		t.Helper()
+		if err := change(); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-changed:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("no signal after %s", what)
+		}
+		for len(changed) > 0 { // a burst may leave one more behind
+			<-changed
+		}
+	}
+	expect("writing in place", func() error { return os.WriteFile(plist, []byte("b"), 0o644) })
+	expect("replacing", func() error {
+		if err := os.WriteFile(plist+"-new", []byte("c"), 0o644); err != nil {
+			return err
+		}
+		return os.Rename(plist+"-new", plist)
+	})
+	time.Sleep(100 * time.Millisecond) // let the replacement's own events settle
+	for len(changed) > 0 {
+		<-changed
+	}
+	expect("writing the replacement in place", func() error { return os.WriteFile(plist, []byte("d"), 0o644) })
 }

@@ -5,24 +5,29 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
+	"syscall"
+	"unsafe"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"golang.org/x/sys/unix"
 )
 
 // runningApps lists the running apps' main executables, from the process table.
 func runningApps() []ProcessChoice {
-	out, _ := exec.Command("ps", "-axo", "comm=").Output()
-	return parseApps(string(out))
+	var paths []string
+	for _, p := range procTable() {
+		paths = append(paths, p.comm)
+	}
+	return parseApps(paths)
 }
 
-// parseApps keeps the main executables of top-level app bundles from `ps -axo comm=` output.
-func parseApps(ps string) []ProcessChoice {
+// parseApps keeps the main executables of top-level app bundles among executable paths.
+func parseApps(paths []string) []ProcessChoice {
 	var apps []ProcessChoice
 	seen := map[string]bool{}
-	for _, line := range strings.Split(ps, "\n") {
-		app, ok := appOfPath(strings.TrimSpace(line))
+	for _, path := range paths {
+		app, ok := appOfPath(path)
 		if !ok || seen[strings.ToLower(app.Exec)] {
 			continue
 		}
@@ -48,27 +53,31 @@ func appOfPath(path string) (ProcessChoice, bool) {
 	return ProcessChoice{Name: strings.TrimSuffix(filepath.Base(bundle), ".app"), Exec: exe, Source: "app"}, true
 }
 
-// procTable reads the process table.
+// procTable reads the process table from the kernel, each process's executable by its path: a
+// millisecond or two, where starting ps took tens.
 func procTable() map[int]proc {
-	out, _ := exec.Command("ps", "-axo", "pid=,ppid=,comm=").Output()
-	return darwinProcs(string(out))
-}
-
-// darwinProcs reads `ps -axo pid=,ppid=,comm=` output.
-func darwinProcs(ps string) map[int]proc {
-	procs := map[int]proc{}
-	for _, line := range strings.Split(ps, "\n") {
-		f := strings.Fields(line)
-		if len(f) < 3 {
-			continue
+	kps, _ := unix.SysctlKinfoProcSlice("kern.proc.all")
+	procs := make(map[int]proc, len(kps))
+	for _, k := range kps {
+		pid := int(k.Proc.P_pid)
+		p := proc{ppid: int(k.Eproc.Ppid), comm: execPath(pid)}
+		if p.comm == "" { // gone, or not this user's to ask: its short name, as ps shows it then
+			p.comm = unix.ByteSliceToString(k.Proc.P_comm[:])
 		}
-		pid, _ := strconv.Atoi(f[0])
-		ppid, _ := strconv.Atoi(f[1])
-		p := proc{ppid: ppid, comm: strings.Join(f[2:], " ")} // ponytail: a run of spaces in a path collapses; slice the line if one ever shows up
 		_, p.app = appOfPath(p.comm)
 		procs[pid] = p
 	}
 	return procs
+}
+
+// execPath is pid's executable, by proc_pidpath's syscall (as the core's process lookup); "" if unknown.
+func execPath(pid int) string {
+	const callPIDInfo, pidPathInfo, maxPath = 2, 11, 4 * 1024 // PROC_INFO_CALL_PIDINFO, PROC_PIDPATHINFO, PROC_PIDPATHINFO_MAXSIZE
+	buf := make([]byte, maxPath)
+	if _, _, errno := syscall.Syscall6(syscall.SYS_PROC_INFO, callPIDInfo, uintptr(pid), pidPathInfo, 0, uintptr(unsafe.Pointer(&buf[0])), maxPath); errno != 0 {
+		return ""
+	}
+	return unix.ByteSliceToString(buf)
 }
 
 // PickApp lets the user choose an app in Finder and returns its executable name.
