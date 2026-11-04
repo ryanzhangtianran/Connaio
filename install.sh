@@ -28,7 +28,7 @@ else
 fi
 # on: the install runs on a screen of its own (the alternate screen, as vim's), redrawn after each
 # step and when the window is resized; the summary is printed on the terminal once it is left
-on= cur= q=
+on= cur= q= rp=
 # say prints a progress line: a coloured icon and a two-character verb, so the messages line up
 say() {
   if [ -n "$on" ]; then
@@ -188,6 +188,7 @@ ask() {
     wait "$rp" || st=$?
     [ "$st" -gt 128 ] || break
   done
+  rp=
   answer=$(cat "$tmp/answer")
   q=
   [ -z "$on" ] || printf '%s[?25l' "$esc"
@@ -204,7 +205,8 @@ aarch64 | arm64) arch=arm64 ;;
 esac
 
 tmp=$(mktemp -d)
-trap 'leave; rm -rf "$tmp"' EXIT
+# a question's read in the background ended too: left, it would take the next line typed in the shell
+trap '[ -z "$rp" ] || kill "$rp" 2>/dev/null; leave; rm -rf "$tmp"' EXIT
 trap 'exit 130' INT TERM HUP
 enter
 tarball=${CONNAIO_TARBALL:-}
