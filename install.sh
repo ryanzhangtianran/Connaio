@@ -240,47 +240,51 @@ if [ -z "$profiles" ] && (: </dev/tty) 2>/dev/null; then
   done
 fi
 
-if [ -z "$root" ]; then
-  if [ -n "$systemd" ]; then
-    say "$G" ✓ 完成 "Connaio 已为当前用户安装，作为 systemd 用户服务 connaio 运行"
-    say "$Y" ! 注意 "退出登录后继续运行需管理员执行：loginctl enable-linger $(id -un)"
-  else
-    say "$G" ✓ 完成 "Connaio 已为当前用户安装，在后台运行"
-    say "$Y" ! 注意 "重启后需再次运行本安装命令启动"
-  fi
-  say "$Y" ! 注意 "不支持 TUN 模式与 HTTPS 域名（需 root）"
-  case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) say "$Y" ! 注意 "~/.local/bin 不在 PATH 中，请将其加入 PATH 或重新登录" ;; esac
+# warn adds a warning to the box, labelled once
+warn() {
+  kv "${warned-注意}" "$Y$1$N"
+  warned=
+}
+if [ -z "$root" ] && [ -n "$systemd" ]; then
+  kv 运行方式 "systemd 用户服务 connaio"
+elif [ -z "$root" ]; then
+  kv 运行方式 "后台运行"
 elif [ -n "$systemd" ]; then
-  say "$G" ✓ 完成 "Connaio 已安装，作为 systemd 服务 connaio 运行"
+  kv 运行方式 "systemd 服务 connaio"
 else
-  say "$G" ✓ 完成 "Connaio 已安装，在后台运行（由 /etc/init.d/connaio 管理）"
-  say "$Y" ! 注意 "容器重启后服务不会自动启动，请将 /etc/init.d/connaio start 加入启动命令"
+  kv 运行方式 "后台运行（/etc/init.d/connaio）"
 fi
-# a desktop install's connaio is the app with a window, which fails with no display
-if [ -n "$root" ] && [ -e /usr/bin/connaio ]; then
-  say "$Y" ! 注意 "本机的 connaio 是桌面版，请改用 $dir/connaio"
-fi
-
 token=$(cat "$data/web-token")
 if [ -n "$domain" ]; then
   kv 访问地址 "https://$domain/?token=$token"
-  kv 注意 "需将域名解析到本机并放行 443 端口，首次访问时自动申请证书。"
-  if [ -n "$public" ]; then
-    kv 注意 "$port 端口仍以明文 HTTP 对外开放，建议将监听地址改回本机。"
-  fi
 elif [ -n "$public" ]; then
   kv 访问地址 "http://<服务器 IP>:$port/?token=$token"
-  kv 注意 "需放行 $port 端口。连接未加密，建议设置域名以启用 HTTPS。"
-elif [ "$host" = 127.0.0.1 ]; then
-  kv 访问地址 "http://127.0.0.1:$port/?token=$token"
-  kv 远程访问 "在本地电脑执行 ssh -L $port:127.0.0.1:$port <服务器>，"
-  kv "" "再在浏览器中打开上述地址。"
 else
   kv 访问地址 "http://$host:$port/?token=$token"
 fi
 kv 设置文件 "$(printf %s "$conf" | sed "s|^$HOME/|~/|")"
-kv "" "$D监听地址与域名，修改后重启服务生效$N"
-box "网页界面"
+if [ -n "$domain" ]; then
+  warn "首次访问时自动申请证书，需放行 443 端口"
+  [ -z "$public" ] || warn "$port 端口仍以明文 HTTP 对外开放"
+elif [ -n "$public" ]; then
+  warn "连接未加密，建议设置域名以启用 HTTPS"
+fi
+if [ -z "$root" ]; then
+  warn "无 root，不支持 TUN 模式与 HTTPS 域名"
+  if [ -n "$systemd" ]; then
+    warn "退出登录后继续运行：loginctl enable-linger $(id -un)（需管理员）"
+  else
+    warn "重启后需再次运行安装命令启动"
+  fi
+  case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) warn "请将 ~/.local/bin 加入 PATH" ;; esac
+elif [ -z "$systemd" ]; then
+  warn "容器重启后需执行 /etc/init.d/connaio start"
+fi
+# a desktop install's connaio is the app with a window, which fails with no display
+if [ -n "$root" ] && [ -e /usr/bin/connaio ]; then
+  warn "本机的 connaio 是桌面版，请改用 $dir/connaio"
+fi
+box "Connaio 安装完成"
 
 row "$cli" "打开管理菜单"
 row "$cli status" "查看运行状态"
@@ -300,6 +304,7 @@ row "connaio enable|disable" "设置或取消终端代理变量"
 row "$cli help" "查看全部命令"
 box "常用命令"
 
+row "再次运行安装命令" "更新 Connaio"
 if [ -z "$root" ]; then
   if [ -n "$systemd" ]; then
     row "systemctl --user start|stop|restart connaio" "启动、停止或重启服务"
@@ -308,7 +313,7 @@ if [ -z "$root" ]; then
     row "tail -f ~/.local/share/connaio-web/connaio.log" "查看日志"
   fi
   bl ""
-  bl "${B}卸载$N$D（保留 ~/.local/share/connaio-web 中的配置数据）$N"
+  bl "$B卸载$N"
   [ -z "$systemd" ] || bl "  systemctl --user disable --now connaio"
   bl "  rm -rf ~/.local/share/connaio ~/.local/bin/connaio"
   bl "  rm -f ~/.config/systemd/user/connaio.service"
@@ -320,7 +325,7 @@ elif [ -n "$systemd" ]; then
   row "systemctl status connaio" "查看服务状态"
   row "journalctl -u connaio -f" "查看日志"
   bl ""
-  bl "${B}卸载$N$D（保留 $data 中的配置数据）$N"
+  bl "$B卸载$N"
   bl "  systemctl disable --now connaio"
   bl "  rm -rf $dir $conf /etc/profile.d/connaio.sh"
   bl "  rm -f /etc/systemd/system/connaio.service"
@@ -329,10 +334,9 @@ else
   row "/etc/init.d/connaio status" "查看服务状态"
   row "tail -f /var/log/connaio.log" "查看日志"
   bl ""
-  bl "${B}卸载$N$D（保留 $data 中的配置数据）$N"
+  bl "$B卸载$N"
   bl "  /etc/init.d/connaio stop"
   bl "  rm -rf $dir $conf /etc/profile.d/connaio.sh"
   bl "  rm -f /etc/init.d/connaio"
 fi
 box "服务管理"
-printf '%s再次运行本安装命令即可更新 Connaio。%s\n' "$D" "$N"
