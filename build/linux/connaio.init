@@ -19,7 +19,7 @@ log=/var/log/connaio.log
 # address was changed is still found
 pids() {
 	for p in /proc/[0-9]*; do
-		case "$(tr '\0' ' ' <"$p/cmdline" 2>/dev/null)" in "$exe --listen "*) echo "${p#/proc/}" ;; esac
+		case "$(tr '\0' ' ' 2>/dev/null <"$p/cmdline")" in "$exe --listen "*) echo "${p#/proc/}" ;; esac
 	done
 }
 

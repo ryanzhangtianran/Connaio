@@ -58,7 +58,7 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ] && $sc sho
 # pids is the user install's instance where there is no systemd --user: found by its command line
 pids() {
   for p in /proc/[0-9]*; do
-    case "$(tr '\0' ' ' <"$p/cmdline" 2>/dev/null)" in "$dir/connaio --listen "*) echo "${p#/proc/}" ;; esac
+    case "$(tr '\0' ' ' 2>/dev/null <"$p/cmdline")" in "$dir/connaio --listen "*) echo "${p#/proc/}" ;; esac
   done
 }
 if [ -n "$systemd" ]; then
