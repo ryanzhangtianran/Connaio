@@ -24,8 +24,8 @@ fail() {
   exit 1
 }
 [ "$(uname -s)" = Linux ] || fail "仅支持 Linux"
-# line is a rule 72 wide; the text between rules is kept within it
-line() { echo "------------------------------------------------------------------------"; }
+# line is a rule 80 wide; the text between rules is kept within it
+line() { echo "--------------------------------------------------------------------------------"; }
 # opening is the rule above a section, but for one closed right above it: no two rules in a row
 opening() { [ -n "${closed:-}" ] || line; closed=; }
 closing() { line; closed=1; }
@@ -250,7 +250,7 @@ elif [ "$host" = 127.0.0.1 ]; then
 else
   echo "  访问地址：http://$host:$port/?token=$token"
 fi
-echo "  设置文件：${conf}（监听地址与域名，修改后重启服务生效）"
+echo "  设置文件：$(printf %s "$conf" | sed "s|^$HOME/|~/|")（监听地址与域名，修改后重启服务生效）"
 line
 echo "常用命令"
 # a desktop install's connaio is the app with a window, which fails with no display
@@ -271,7 +271,7 @@ if [ -n "$root" ]; then
 fi
 row "$cli url" "显示网页界面地址"
 row "$cli run <命令>" "经代理运行该命令"
-row "connaio enable|disable" "当前终端设置或取消代理变量（bash，重新登录后生效）"
+row "connaio enable|disable" "设置或取消终端代理变量"
 row "$cli help" "查看全部命令"
 line
 echo "服务管理"
@@ -284,8 +284,10 @@ if [ -z "$root" ]; then
   fi
   echo "  卸载（保留 ~/.local/share/connaio-web 中的配置数据）："
   [ -z "$systemd" ] || echo "    systemctl --user disable --now connaio"
-  echo "    rm -rf ~/.local/share/connaio ~/.local/bin/connaio ~/.config/systemd/user/connaio.service"
-  echo "    rm -f ${conf%/*}/connaio.env ${conf%/*}/web-token"
+  echo "    rm -rf ~/.local/share/connaio ~/.local/bin/connaio"
+  echo "    rm -f ~/.config/systemd/user/connaio.service"
+  c=$(printf %s "${conf%/*}" | sed "s|^$HOME/|~/|")
+  echo "    rm -f $c/connaio.env $c/web-token"
   echo "    并删除 ~/.bashrc 中 Connaio 的两行"
 elif [ -n "$systemd" ]; then
   row "systemctl start|stop|restart connaio" "启动、停止或重启服务"
@@ -301,7 +303,8 @@ else
   row "tail -f /var/log/connaio.log" "查看日志"
   echo "  卸载（保留 $data 中的配置数据）："
   echo "    /etc/init.d/connaio stop"
-  echo "    rm -rf $dir $conf /etc/init.d/connaio /etc/profile.d/connaio.sh"
+  echo "    rm -rf $dir $conf /etc/profile.d/connaio.sh"
+  echo "    rm -f /etc/init.d/connaio"
   echo "  注意：容器重启后服务不会自动启动，"
   echo "        请将 /etc/init.d/connaio start 加入容器的启动命令。"
 fi
