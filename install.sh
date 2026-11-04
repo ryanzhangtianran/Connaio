@@ -19,16 +19,52 @@ else
   root= dir=$HOME/.local/share/connaio data=$HOME/.local/share/connaio-web conf=${XDG_CONFIG_HOME:-$HOME/.config}/Connaio/connaio.env
 fi
 
+# colours on a terminal only: CI and pipes get plain text
+if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ]; then
+  esc=$(printf '\033')
+  B="$esc[1m" A="$esc[36m" D="$esc[90m" G="$esc[32m" Y="$esc[33m" R="$esc[31m" N="$esc[0m"
+else
+  esc= B= A= D= G= Y= R= N=
+fi
+# say prints a progress line: a coloured icon and a two-character verb, so the messages line up
+say() { printf '%s%s %s%s %s\n' "$1" "$2" "$3" "$N" "$4"; }
+# more continues say's message on the next line, under it
+more() { printf '       %s\n' "$1"; }
 fail() {
-  echo "connaio: $*" >&2
+  say "$R" ✗ 错误 "$*" >&2
   exit 1
 }
 [ "$(uname -s)" = Linux ] || fail "仅支持 Linux"
-# line is a rule 80 wide; the text between rules is kept within it
-line() { echo "--------------------------------------------------------------------------------"; }
-# opening is the rule above a section, but for one closed right above it: no two rules in a row
-opening() { [ -n "${closed:-}" ] || line; closed=; }
-closing() { line; closed=1; }
+# width is how many columns $1 takes on a terminal: colour codes none, and every non-ASCII character
+# here is CJK, 3 bytes and 2 columns
+width() {
+  set -- "$(if [ -n "$esc" ]; then printf %s "$1" | sed "s/$esc\[[0-9;]*m//g"; else printf %s "$1"; fi)"
+  b=$(printf %s "$1" | wc -c) n=$(printf %s "$1" | LC_ALL=C tr -d '\000-\177' | wc -c)
+  echo $((b - n + n / 3 * 2))
+}
+# sp prints $1 spaces
+sp() { [ "$1" -le 0 ] || printf "%$1s" ""; }
+# bl adds a line to the box box prints next
+bl() { printf '%s\n' "$*" >>"$tmp/box"; }
+# row adds a command and what it does, the descriptions in one column
+row() { bl "$1$(sp $((48 - $(width "$1"))))$D$2$N"; }
+# kv adds a label and its value, the values in one column
+kv() { bl "$D$1$N$(sp $((10 - $(width "$1"))))$2"; }
+# box frames bl's lines under a bold title: 80 columns, wider only for a line that can't fit
+box() {
+  w=76
+  while IFS= read -r l; do
+    x=$(width "$l")
+    [ "$x" -le "$w" ] || w=$x
+  done <"$tmp/box"
+  bar=$(printf "%$((w + 2))s" "" | sed 's/ /─/g')
+  printf '%s╭%s╮%s\n' "$D" "$bar" "$N"
+  { printf '%s\n\n' "$B$A$1$N"; cat "$tmp/box"; } | while IFS= read -r l; do
+    printf '%s│%s %s%s %s│%s\n' "$D" "$N" "$l" "$(sp $((w - $(width "$l"))))" "$D" "$N"
+  done
+  printf '%s╰%s╯%s\n' "$D" "$bar" "$N"
+  rm -f "$tmp/box"
+}
 # domain_ok says $1 is a domain name only: the init script sources the file it goes into, and a
 # scheme or path never matches the certificate
 domain_ok() { case "$1" in *[!A-Za-z0-9.-]*) return 1 ;; esac; }
@@ -46,7 +82,7 @@ tarball=${CONNAIO_TARBALL:-}
 if [ -z "$tarball" ]; then
   tag=$(curl -fsSL "$site/latest" | tr -d '[:space:]')
   case "$tag" in v*) ;; *) fail "无法获取最新版本" ;; esac
-  echo "下载 Connaio ${tag#v}（linux-${arch}）…"
+  say "$A" › 下载 "Connaio ${tag#v}（linux-$arch）"
   curl -fL --progress-bar -o "$tmp/connaio.tar.gz" "$site/$tag/Connaio-${tag#v}-linux-$arch.tar.gz"
   tarball=$tmp/connaio.tar.gz
 fi
@@ -93,20 +129,17 @@ domain=${CONNAIO_DOMAIN-$(kept CONNAIO_DOMAIN)}
 # never asked (no CONNAIO_DOMAIN line kept, even an empty one), on a terminal, none given: asked
 # whether to serve HTTPS (curl | sh reads the script on stdin: answers come from /dev/tty)
 if [ -n "$root" ] && ! grep -q '^CONNAIO_DOMAIN=' "$conf" 2>/dev/null && [ -z "${CONNAIO_DOMAIN+set}" ] && (: </dev/tty) 2>/dev/null; then
-  opening
-  echo "HTTPS 访问"
-  line
-  echo "如需在浏览器中通过公网访问网页界面，请输入已解析到本机的域名，"
-  echo "将自动申请 HTTPS 证书（需放行 443 端口）。"
-  echo "没有域名时，可填写 <本机公网 IP>.sslip.io。"
-  echo "留空则仅允许本机访问，可通过 SSH 隧道使用。"
+  bl "如需在浏览器中通过公网访问网页界面，请输入已解析到本机的域名，"
+  bl "将自动申请 HTTPS 证书（需放行 443 端口）。"
+  bl "没有域名时，可填写 <本机公网 IP>.sslip.io。"
+  bl "留空则仅允许本机访问，可通过 SSH 隧道使用。"
+  box "HTTPS 访问"
   while :; do
-    printf "域名（留空跳过）："
+    printf '%s?%s 域名（留空跳过）：' "$A" "$N"
     read -r domain </dev/tty || domain=
     domain_ok "$domain" && break
-    echo "域名格式无效，只填写域名，如 connaio.example.com。"
+    say "$R" ✗ 无效 "只填写域名，如 connaio.example.com"
   done
-  closing
 fi
 mkdir -p "${conf%/*}"
 cat >"$conf" <<EOF
@@ -172,12 +205,6 @@ if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] && command -v getent >/de
   fi
 fi
 
-# row prints a command and what it does, aligned: a CJK character is 3 bytes but 2 columns wide
-row() {
-  w=$(printf %s "$1" | LC_ALL=C tr -d '\000-\177' | wc -c)
-  printf "  %-$((48 + w / 3))s%s\n" "$1" "$2"
-}
-
 # the first install, run on a terminal: a subscription asked for, so it starts with a profile in use
 # (curl | sh reads the script on stdin: answers come from /dev/tty, and CI has none)
 # (the token is written before the UI answers: asked until it does, else a reinstall would ask too)
@@ -189,74 +216,72 @@ until profiles=$("$dir/connaio" profiles --data-dir "$data" 2>/dev/null); do
   i=$((i + 1))
 done
 if [ -z "$profiles" ] && (: </dev/tty) 2>/dev/null; then
-  opening
-  echo "导入配置"
-  line
-  echo "当前没有任何配置。可在此输入订阅地址，也可稍后在网页界面中添加。"
+  bl "当前没有任何配置。可在此输入订阅地址，也可稍后在网页界面中添加。"
+  box "导入配置"
   while :; do
-    printf "订阅地址（留空跳过）："
+    printf '%s?%s 订阅地址（留空跳过）：' "$A" "$N"
     read -r url </dev/tty || url=
     [ -n "$url" ] || break
-    printf "配置名称（留空则使用订阅域名）："
+    printf '%s?%s 配置名称（留空则使用订阅域名）：' "$A" "$N"
     read -r name </dev/tty || name=
-    echo "正在下载订阅……"
+    say "$A" › 下载 "订阅"
     # no name, no argument: the CLI names it after the host
     if "$dir/connaio" profile add --data-dir "$data" "$url" ${name:+"$name"}; then
-      echo "订阅已添加并启用。"
+      say "$G" ✓ 完成 "订阅已添加并启用"
       break
     fi
     # stored before the core failed to load it: asking again would add it twice
     if [ -n "$("$dir/connaio" profiles --data-dir "$data" 2>/dev/null)" ]; then
-      echo "订阅已保存，但内核加载配置失败。"
-      echo "请稍后执行 $cli status 查看，或查看日志：$logs"
+      say "$Y" ! 注意 "订阅已保存，但内核加载配置失败"
+      more "请稍后执行 $cli status 查看，或查看日志：$logs"
       break
     fi
-    echo "订阅添加失败，请检查地址后重新输入。"
+    say "$R" ✗ 失败 "订阅添加失败，请检查地址后重新输入"
   done
-  closing
 fi
 
-opening
 if [ -z "$root" ]; then
-  echo "Connaio 已为当前用户安装，不支持 TUN 模式与 HTTPS 域名（需 root）。"
   if [ -n "$systemd" ]; then
-    echo "已作为 systemd 用户服务 connaio 运行。退出登录后继续运行需管理员执行："
-    echo "  loginctl enable-linger $(id -un)"
+    say "$G" ✓ 完成 "Connaio 已为当前用户安装，作为 systemd 用户服务 connaio 运行"
+    say "$Y" ! 注意 "退出登录后继续运行需管理员执行：loginctl enable-linger $(id -un)"
   else
-    echo "已在后台运行。重启后需再次运行本安装命令启动。"
+    say "$G" ✓ 完成 "Connaio 已为当前用户安装，在后台运行"
+    say "$Y" ! 注意 "重启后需再次运行本安装命令启动"
   fi
-  case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "注意：~/.local/bin 不在 PATH 中，请将其加入 PATH 或重新登录。" ;; esac
+  say "$Y" ! 注意 "不支持 TUN 模式与 HTTPS 域名（需 root）"
+  case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) say "$Y" ! 注意 "~/.local/bin 不在 PATH 中，请将其加入 PATH 或重新登录" ;; esac
 elif [ -n "$systemd" ]; then
-  echo "Connaio 安装完成，已作为 systemd 服务 connaio 运行。"
+  say "$G" ✓ 完成 "Connaio 已安装，作为 systemd 服务 connaio 运行"
 else
-  echo "Connaio 安装完成，已在后台运行（由 /etc/init.d/connaio 管理）。"
+  say "$G" ✓ 完成 "Connaio 已安装，在后台运行（由 /etc/init.d/connaio 管理）"
+  say "$Y" ! 注意 "容器重启后服务不会自动启动，请将 /etc/init.d/connaio start 加入启动命令"
 fi
-line
-echo "网页界面"
-token=$(cat "$data/web-token")
-if [ -n "$domain" ]; then
-  echo "  访问地址：https://$domain/?token=$token"
-  echo "  注意：需将域名解析到本机并放行 443 端口，首次访问时自动申请证书。"
-  if [ -n "$public" ]; then
-    echo "  注意：$port 端口仍以明文 HTTP 对外开放，建议将监听地址改回本机。"
-  fi
-elif [ -n "$public" ]; then
-  echo "  访问地址：http://<服务器 IP>:$port/?token=$token"
-  echo "  注意：需放行 $port 端口。连接未加密，建议设置域名以启用 HTTPS。"
-elif [ "$host" = 127.0.0.1 ]; then
-  echo "  访问地址：http://127.0.0.1:$port/?token=$token"
-  echo "  远程访问：在本地电脑执行 ssh -L $port:127.0.0.1:$port <服务器>，"
-  echo "            再在浏览器中打开上述地址。"
-else
-  echo "  访问地址：http://$host:$port/?token=$token"
-fi
-echo "  设置文件：$(printf %s "$conf" | sed "s|^$HOME/|~/|")（监听地址与域名，修改后重启服务生效）"
-line
-echo "常用命令"
 # a desktop install's connaio is the app with a window, which fails with no display
 if [ -n "$root" ] && [ -e /usr/bin/connaio ]; then
-  echo "  注意：本机的 connaio 是桌面版，请改用 $dir/connaio。"
+  say "$Y" ! 注意 "本机的 connaio 是桌面版，请改用 $dir/connaio"
 fi
+
+token=$(cat "$data/web-token")
+if [ -n "$domain" ]; then
+  kv 访问地址 "https://$domain/?token=$token"
+  kv 注意 "需将域名解析到本机并放行 443 端口，首次访问时自动申请证书。"
+  if [ -n "$public" ]; then
+    kv 注意 "$port 端口仍以明文 HTTP 对外开放，建议将监听地址改回本机。"
+  fi
+elif [ -n "$public" ]; then
+  kv 访问地址 "http://<服务器 IP>:$port/?token=$token"
+  kv 注意 "需放行 $port 端口。连接未加密，建议设置域名以启用 HTTPS。"
+elif [ "$host" = 127.0.0.1 ]; then
+  kv 访问地址 "http://127.0.0.1:$port/?token=$token"
+  kv 远程访问 "在本地电脑执行 ssh -L $port:127.0.0.1:$port <服务器>，"
+  kv "" "再在浏览器中打开上述地址。"
+else
+  kv 访问地址 "http://$host:$port/?token=$token"
+fi
+kv 设置文件 "$(printf %s "$conf" | sed "s|^$HOME/|~/|")"
+kv "" "$D监听地址与域名，修改后重启服务生效$N"
+box "网页界面"
+
 row "$cli" "打开管理菜单"
 row "$cli status" "查看运行状态"
 row "$cli profile add <订阅地址> [名称]" "添加订阅"
@@ -273,8 +298,8 @@ row "$cli url" "显示网页界面地址"
 row "$cli run <命令>" "经代理运行该命令"
 row "connaio enable|disable" "设置或取消终端代理变量"
 row "$cli help" "查看全部命令"
-line
-echo "服务管理"
+box "常用命令"
+
 if [ -z "$root" ]; then
   if [ -n "$systemd" ]; then
     row "systemctl --user start|stop|restart connaio" "启动、停止或重启服务"
@@ -282,32 +307,32 @@ if [ -z "$root" ]; then
   else
     row "tail -f ~/.local/share/connaio-web/connaio.log" "查看日志"
   fi
-  echo "  卸载（保留 ~/.local/share/connaio-web 中的配置数据）："
-  [ -z "$systemd" ] || echo "    systemctl --user disable --now connaio"
-  echo "    rm -rf ~/.local/share/connaio ~/.local/bin/connaio"
-  echo "    rm -f ~/.config/systemd/user/connaio.service"
+  bl ""
+  bl "${B}卸载$N$D（保留 ~/.local/share/connaio-web 中的配置数据）$N"
+  [ -z "$systemd" ] || bl "  systemctl --user disable --now connaio"
+  bl "  rm -rf ~/.local/share/connaio ~/.local/bin/connaio"
+  bl "  rm -f ~/.config/systemd/user/connaio.service"
   c=$(printf %s "${conf%/*}" | sed "s|^$HOME/|~/|")
-  echo "    rm -f $c/connaio.env $c/web-token"
-  echo "    并删除 ~/.bashrc 中 Connaio 的两行"
+  bl "  rm -f $c/connaio.env $c/web-token"
+  bl "  $D并删除 ~/.bashrc 中 Connaio 的两行$N"
 elif [ -n "$systemd" ]; then
   row "systemctl start|stop|restart connaio" "启动、停止或重启服务"
   row "systemctl status connaio" "查看服务状态"
   row "journalctl -u connaio -f" "查看日志"
-  echo "  卸载（保留 $data 中的配置数据）："
-  echo "    systemctl disable --now connaio"
-  echo "    rm -rf $dir $conf /etc/profile.d/connaio.sh"
-  echo "    rm -f /etc/systemd/system/connaio.service"
+  bl ""
+  bl "${B}卸载$N$D（保留 $data 中的配置数据）$N"
+  bl "  systemctl disable --now connaio"
+  bl "  rm -rf $dir $conf /etc/profile.d/connaio.sh"
+  bl "  rm -f /etc/systemd/system/connaio.service"
 else
   row "/etc/init.d/connaio start|stop|restart" "启动、停止或重启服务"
   row "/etc/init.d/connaio status" "查看服务状态"
   row "tail -f /var/log/connaio.log" "查看日志"
-  echo "  卸载（保留 $data 中的配置数据）："
-  echo "    /etc/init.d/connaio stop"
-  echo "    rm -rf $dir $conf /etc/profile.d/connaio.sh"
-  echo "    rm -f /etc/init.d/connaio"
-  echo "  注意：容器重启后服务不会自动启动，"
-  echo "        请将 /etc/init.d/connaio start 加入容器的启动命令。"
+  bl ""
+  bl "${B}卸载$N$D（保留 $data 中的配置数据）$N"
+  bl "  /etc/init.d/connaio stop"
+  bl "  rm -rf $dir $conf /etc/profile.d/connaio.sh"
+  bl "  rm -f /etc/init.d/connaio"
 fi
-line
-echo "再次运行本安装命令即可更新 Connaio。"
-line
+box "服务管理"
+printf '%s再次运行本安装命令即可更新 Connaio。%s\n' "$D" "$N"
