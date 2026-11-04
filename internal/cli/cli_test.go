@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -256,5 +257,24 @@ func TestMenu(t *testing.T) {
 		if !strings.Contains(out.String(), s) {
 			t.Errorf("menu lacks %q:\n%s", s, out.String())
 		}
+	}
+}
+
+// TestEnableDisable: the lines enable prints, eval'd by sh, set the variables (a quote in the
+// kept no_proxy survives); disable's unset them.
+func TestEnableDisable(t *testing.T) {
+	addr, _ := fake(t, map[string]string{"DeviceService.Lan": `{"port":7890}`})
+	t.Setenv("no_proxy", "a'b")
+	var on, off strings.Builder
+	if err := Main([]string{"enable", "--addr", addr, "--token", "tok"}, &on); err != nil {
+		t.Fatal(err)
+	}
+	if err := Main([]string{"disable"}, &off); err != nil {
+		t.Fatal(err)
+	}
+	script := on.String() + `test "$HTTPS_PROXY" = http://127.0.0.1:7890 && test "$all_proxy" = socks5h://127.0.0.1:7890 && test "$no_proxy" = "a'b" || exit 1
+` + off.String() + `test -z "$http_proxy$HTTPS_PROXY$NO_PROXY" || exit 2`
+	if b, err := exec.Command("sh", "-c", script).CombinedOutput(); err != nil {
+		t.Fatalf("%v %s\n%s", err, b, script)
 	}
 }

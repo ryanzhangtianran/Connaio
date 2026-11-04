@@ -48,6 +48,8 @@ const Usage = `用法：connaio [命令] [选项] [参数]
   restart                      重启内核
   url                          网页界面地址（含令牌）
   run <命令> [参数]             经代理运行命令，无需 export
+  enable                       当前终端设置代理变量（bash；未经安装脚本时用 eval "$(connaio enable)"）
+  disable                      当前终端取消代理变量
 `
 
 // svc prefixes a service method's name as Wails binds it.
@@ -139,6 +141,10 @@ func Main(args []string, out io.Writer) error {
 	if args[0] == "run" { // what follows is the command's own, flags too: nothing parsed here
 		return runProxied(args[1:])
 	}
+	if args[0] == "disable" { // needs no running instance
+		fmt.Fprint(out, unsetLines())
+		return nil
+	}
 	name := args[0]
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -187,8 +193,20 @@ func (c *client) programs() ([]string, error) {
 // listenFile is where install.sh keeps the service's listen address, read by its unit and init script.
 const listenFile = "/etc/default/connaio"
 
-// defaultAddr is the running instance's address: CONNAIO_ADDR, else the service's.
-func defaultAddr() string { return cmp.Or(os.Getenv("CONNAIO_ADDR"), listenAddr(listenFile)) }
+// userListenFile is where install.sh run without root keeps this user's instance's listen address.
+const userListenFile = "Connaio/connaio.env"
+
+// defaultAddr is the running instance's address: CONNAIO_ADDR, else this user's own instance's,
+// else the service's.
+func defaultAddr() string {
+	file := listenFile
+	if c, err := os.UserConfigDir(); err == nil {
+		if _, err := os.Stat(filepath.Join(c, userListenFile)); err == nil {
+			file = filepath.Join(c, userListenFile)
+		}
+	}
+	return cmp.Or(os.Getenv("CONNAIO_ADDR"), listenAddr(file))
+}
 
 // listenAddr is where to reach the address file's CONNAIO_LISTEN: on loopback when it is every
 // address (0.0.0.0, [::] or no host); 127.0.0.1:9090 without one.
@@ -509,6 +527,12 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 		return c.call(nil, "CoreService.CloseAll")
 	case "restart":
 		return c.call(nil, "CoreService.Restart")
+	case "enable":
+		port, err := c.proxyPort()
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(out, exportLines(os.Environ(), port))
 	case "url":
 		fmt.Fprintf(out, "http://%s/?token=%s\n", addr, url.QueryEscape(c.token))
 	default:

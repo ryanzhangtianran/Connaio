@@ -4,22 +4,26 @@
 # container, by /etc/init.d/connaio), and prints the address to sign in with. Again, it updates it, keeping the data in /var/lib/connaio-web.
 #   curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo sh
 # From the site: its latest names the version (v1.2.3), <tag>/ holds that version's tarballs.
+# Without sudo, it installs for this user alone: into ~/.local/share, run by systemctl --user (or in the
+# background where there is none); no TUN mode, no HTTPS on :443, both root's.
 # CONNAIO_TARBALL=<path> installs that tarball instead of downloading one.
 # CONNAIO_LISTEN=0.0.0.0:9090 serves the UI on every address, CONNAIO_DOMAIN=example.com over HTTPS
 # on :443 too, a certificate from Let's Encrypt (both kept in /etc/default/connaio, which a reinstall
 # without them keeps; CONNAIO_DOMAIN= with nothing turns HTTPS off).
 set -eu
 site=https://connaio-dl.ryanzhangtianran.top
-dir=/opt/connaio
-data=/var/lib/connaio-web
-conf=/etc/default/connaio
+if [ "$(id -u)" = 0 ]; then
+  root=1 dir=/opt/connaio data=/var/lib/connaio-web conf=/etc/default/connaio
+else
+  # conf's directory is where connaio's commands look for the token and the listen address
+  root= dir=$HOME/.local/share/connaio data=$HOME/.local/share/connaio-web conf=${XDG_CONFIG_HOME:-$HOME/.config}/Connaio/connaio.env
+fi
 
 fail() {
   echo "connaio: $*" >&2
   exit 1
 }
 [ "$(uname -s)" = Linux ] || fail "仅支持 Linux"
-[ "$(id -u)" = 0 ] || fail "需要 root：curl -fsSL $site/install.sh | sudo sh"
 # line is a rule 72 wide; the text between rules is kept within it
 line() { echo "------------------------------------------------------------------------"; }
 # opening is the rule above a section, but for one closed right above it: no two rules in a row
@@ -47,25 +51,48 @@ if [ -z "$tarball" ]; then
   tarball=$tmp/connaio.tar.gz
 fi
 
+sc=systemctl
+[ -n "$root" ] || sc="systemctl --user"
 systemd=
-if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then systemd=1; fi
+if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ] && $sc show-environment >/dev/null 2>&1; then systemd=1; fi
+# pids is the user install's instance where there is no systemd --user: found by its command line
+pids() {
+  for p in /proc/[0-9]*; do
+    case "$(tr '\0' ' ' <"$p/cmdline" 2>/dev/null)" in "$dir/connaio --listen "*) echo "${p#/proc/}" ;; esac
+  done
+}
 if [ -n "$systemd" ]; then
-  systemctl stop connaio 2>/dev/null || true
-elif [ -x /etc/init.d/connaio ]; then /etc/init.d/connaio stop >/dev/null; fi
+  $sc stop connaio 2>/dev/null || true
+elif [ -n "$root" ] && [ -x /etc/init.d/connaio ]; then
+  /etc/init.d/connaio stop >/dev/null
+elif [ -z "$root" ] && [ -n "$(pids)" ]; then
+  kill $(pids)
+  sleep 1
+fi
 mkdir -p "$dir" "$data"
 chmod 700 "$data"
 tar -xzf "$tarball" -C "$dir"
-# a desktop install's /usr/bin/connaio is the app with a window: left as the command it is
-[ -e /usr/bin/connaio ] || { mkdir -p /usr/local/bin && ln -sf "$dir/connaio" /usr/local/bin/connaio; }
+# connaio enable|disable export or unset the proxy variables in the shell itself, which a program
+# can't: a function, so the shell evals what they print
+shfn='connaio() { case "$1" in enable | disable) eval "$(command connaio "$@")" ;; *) command connaio "$@" ;; esac; }'
+if [ -n "$root" ]; then
+  # a desktop install's /usr/bin/connaio is the app with a window: left as the command it is
+  # shortcut: profile.d is read by login shells only (as over ssh); a non-login bash reads ~/.bashrc
+  [ -e /usr/bin/connaio ] || { mkdir -p /usr/local/bin && ln -sf "$dir/connaio" /usr/local/bin/connaio && echo "$shfn" >/etc/profile.d/connaio.sh; }
+else
+  mkdir -p "$HOME/.local/bin" && ln -sf "$dir/connaio" "$HOME/.local/bin/connaio"
+  grep -qF "$shfn" "$HOME/.bashrc" 2>/dev/null || printf '\n# Connaio: connaio enable|disable\n%s\n' "$shfn" >>"$HOME/.bashrc"
+fi
 
 # the listen address and the HTTPS domain: the ones given, else the ones kept; this machine only
 kept() { sed -n "s/^$1=//p" "$conf" 2>/dev/null | tr -d "\"'"; }
 listen=${CONNAIO_LISTEN:-$(kept CONNAIO_LISTEN)}
 listen=${listen:-127.0.0.1:9090}
 domain=${CONNAIO_DOMAIN-$(kept CONNAIO_DOMAIN)}
+[ -n "$root" ] || domain= # :443 is root's
 # never asked (no CONNAIO_DOMAIN line kept, even an empty one), on a terminal, none given: asked
 # whether to serve HTTPS (curl | sh reads the script on stdin: answers come from /dev/tty)
-if ! grep -q '^CONNAIO_DOMAIN=' "$conf" 2>/dev/null && [ -z "${CONNAIO_DOMAIN+set}" ] && (: </dev/tty) 2>/dev/null; then
+if [ -n "$root" ] && ! grep -q '^CONNAIO_DOMAIN=' "$conf" 2>/dev/null && [ -z "${CONNAIO_DOMAIN+set}" ] && (: </dev/tty) 2>/dev/null; then
   opening
   echo "HTTPS 访问"
   line
@@ -93,15 +120,38 @@ port=${listen##*:} host=${listen%:*}
 case "$host" in "" | 0.0.0.0 | "[::]") public=1 ;; *) public= ;; esac
 case "$host" in "" | 0.0.0.0 | "[::]" | 127.0.0.1 | localhost | "[::1]") host=127.0.0.1 ;; esac
 
-if [ -n "$systemd" ]; then
+if [ -n "$root" ] && [ -n "$systemd" ]; then
   install -m 644 "$dir/connaio.service" /etc/systemd/system/connaio.service
-  systemctl daemon-reload
-  systemctl enable --now connaio >/dev/null 2>&1 || systemctl enable --now connaio
+elif [ -n "$systemd" ]; then
+  # the shipped unit has root's paths: this user's is written here, and an update leaves it be
+  mkdir -p "$HOME/.config/systemd/user"
+  cat >"$HOME/.config/systemd/user/connaio.service" <<EOF
+[Unit]
+Description=Connaio (web UI, this user's)
+
+[Service]
+Environment=CONNAIO_LISTEN=127.0.0.1:9090
+EnvironmentFile=-$conf
+ExecStart=$dir/connaio --listen \${CONNAIO_LISTEN} --data-dir $data
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+fi
+if [ -n "$systemd" ]; then
+  $sc daemon-reload
+  $sc enable --now connaio >/dev/null 2>&1 || $sc enable --now connaio
   logs="journalctl -u connaio"
-else
+  [ -n "$root" ] || logs="journalctl --user-unit connaio"
+elif [ -n "$root" ]; then
   install -m 755 "$dir/connaio.init" /etc/init.d/connaio
   /etc/init.d/connaio start >/dev/null
   logs="tail /var/log/connaio.log"
+else
+  setsid "$dir/connaio" --listen "$listen" --data-dir "$data" >>"$data/connaio.log" 2>&1 </dev/null &
+  logs="tail $data/connaio.log"
 fi
 i=0
 while [ ! -s "$data/web-token" ] && [ $i -lt 30 ]; do
@@ -112,8 +162,9 @@ done
 
 # the user who ran sudo gets the token too, in their own config directory (where connaio's commands
 # look after the service's), so the commands work for them without sudo
-cli=connaio # run as root itself, as in a container: no sudo needed (nor there, often)
+cli=connaio # run as root itself, as in a container, or this user's own: no sudo needed
 if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ]; then cli="sudo connaio"; fi
+[ -n "$root" ] || install -m 600 "$data/web-token" "${conf%/*}/web-token"
 if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != root ] && command -v getent >/dev/null 2>&1; then
   home=$(getent passwd "$SUDO_USER" | cut -d: -f6)
   if [ -n "$home" ] && [ -d "$home" ] && sudo -u "$SUDO_USER" mkdir -p "$home/.config/Connaio"; then
@@ -124,7 +175,7 @@ fi
 # row prints a command and what it does, aligned: a CJK character is 3 bytes but 2 columns wide
 row() {
   w=$(printf %s "$1" | LC_ALL=C tr -d '\000-\177' | wc -c)
-  printf "  %-$((46 + w / 3))s%s\n" "$1" "$2"
+  printf "  %-$((48 + w / 3))s%s\n" "$1" "$2"
 }
 
 # the first install, run on a terminal: a subscription asked for, so it starts with a profile in use
@@ -166,7 +217,16 @@ if [ -z "$profiles" ] && (: </dev/tty) 2>/dev/null; then
 fi
 
 opening
-if [ -n "$systemd" ]; then
+if [ -z "$root" ]; then
+  echo "Connaio 已为当前用户安装，不支持 TUN 模式与 HTTPS 域名（需 root）。"
+  if [ -n "$systemd" ]; then
+    echo "已作为 systemd 用户服务 connaio 运行。退出登录后继续运行需管理员执行："
+    echo "  loginctl enable-linger $(id -un)"
+  else
+    echo "已在后台运行。重启后需再次运行本安装命令启动。"
+  fi
+  case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "注意：~/.local/bin 不在 PATH 中，请将其加入 PATH 或重新登录。" ;; esac
+elif [ -n "$systemd" ]; then
   echo "Connaio 安装完成，已作为 systemd 服务 connaio 运行。"
 else
   echo "Connaio 安装完成，已在后台运行（由 /etc/init.d/connaio 管理）。"
@@ -194,7 +254,7 @@ echo "  设置文件：${conf}（监听地址与域名，修改后重启服务�
 line
 echo "常用命令"
 # a desktop install's connaio is the app with a window, which fails with no display
-if [ -e /usr/bin/connaio ]; then
+if [ -n "$root" ] && [ -e /usr/bin/connaio ]; then
   echo "  注意：本机的 connaio 是桌面版，请改用 $dir/connaio。"
 fi
 row "$cli" "打开管理菜单"
@@ -205,20 +265,35 @@ row "$cli profile use|update <名称>" "切换或更新配置"
 row "$cli mode rule|global|direct" "切换出站模式"
 row "$cli groups" "查看策略组及当前节点"
 row "$cli select <策略组> <节点>" "切换节点"
-row "$cli enhanced on|off" "开启或关闭 TUN 模式"
-row "$cli partial add <程序>" "让该程序经部分 TUN 联网"
+if [ -n "$root" ]; then
+  row "$cli enhanced on|off" "开启或关闭 TUN 模式"
+  row "$cli partial add <程序>" "让该程序经部分 TUN 联网"
+fi
 row "$cli url" "显示网页界面地址"
 row "$cli run <命令>" "经代理运行该命令"
+row "connaio enable|disable" "当前终端设置或取消代理变量（bash，重新登录后生效）"
 row "$cli help" "查看全部命令"
 line
 echo "服务管理"
-if [ -n "$systemd" ]; then
+if [ -z "$root" ]; then
+  if [ -n "$systemd" ]; then
+    row "systemctl --user start|stop|restart connaio" "启动、停止或重启服务"
+    row "journalctl --user-unit connaio -f" "查看日志"
+  else
+    row "tail -f ~/.local/share/connaio-web/connaio.log" "查看日志"
+  fi
+  echo "  卸载（保留 ~/.local/share/connaio-web 中的配置数据）："
+  [ -z "$systemd" ] || echo "    systemctl --user disable --now connaio"
+  echo "    rm -rf ~/.local/share/connaio ~/.local/bin/connaio ~/.config/systemd/user/connaio.service"
+  echo "    rm -f ${conf%/*}/connaio.env ${conf%/*}/web-token"
+  echo "    并删除 ~/.bashrc 中 Connaio 的两行"
+elif [ -n "$systemd" ]; then
   row "systemctl start|stop|restart connaio" "启动、停止或重启服务"
   row "systemctl status connaio" "查看服务状态"
   row "journalctl -u connaio -f" "查看日志"
   echo "  卸载（保留 $data 中的配置数据）："
   echo "    systemctl disable --now connaio"
-  echo "    rm -rf $dir $conf"
+  echo "    rm -rf $dir $conf /etc/profile.d/connaio.sh"
   echo "    rm -f /etc/systemd/system/connaio.service"
 else
   row "/etc/init.d/connaio start|stop|restart" "启动、停止或重启服务"
@@ -226,7 +301,7 @@ else
   row "tail -f /var/log/connaio.log" "查看日志"
   echo "  卸载（保留 $data 中的配置数据）："
   echo "    /etc/init.d/connaio stop"
-  echo "    rm -rf $dir $conf /etc/init.d/connaio"
+  echo "    rm -rf $dir $conf /etc/init.d/connaio /etc/profile.d/connaio.sh"
   echo "  注意：容器重启后服务不会自动启动，"
   echo "        请将 /etc/init.d/connaio start 加入容器的启动命令。"
 fi

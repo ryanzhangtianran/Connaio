@@ -29,7 +29,11 @@ func relaunch(cmd []string) error {
 	if headless && os.Getenv("INVOCATION_ID") != "" {
 		go func() {
 			time.Sleep(300 * time.Millisecond) // the page hears the call returned first
-			if out, err := exec.Command("systemctl", "--no-block", "restart", "connaio").CombinedOutput(); err != nil {
+			args := []string{"--no-block", "restart", "connaio"}
+			if os.Geteuid() != 0 { // a user's own install (install.sh without root): their own service
+				args = append([]string{"--user"}, args...)
+			}
+			if out, err := exec.Command("systemctl", args...).CombinedOutput(); err != nil {
 				notify("error", "重启服务失败：%s", out)
 			}
 		}()

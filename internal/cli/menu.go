@@ -3,10 +3,12 @@ package cli
 import (
 	"bufio"
 	"cmp"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -26,7 +28,12 @@ var items = []item{
 	{"停止服务", func(m *menu) error { return m.service("stop") }},
 	{"重启服务", func(m *menu) error { return m.service("restart") }},
 	{"查看日志", func(m *menu) error {
-		if !systemd() {
+		switch {
+		case own() && systemd():
+			return m.system("journalctl", "--user-unit", "connaio", "-n", "50", "--no-pager")
+		case own():
+			return m.system("tail", "-n", "50", filepath.Join(filepath.Dir(filepath.Dir(exe())), "connaio-web", "connaio.log"))
+		case !systemd():
 			return m.system("tail", "-n", "50", initLog)
 		}
 		return m.system("journalctl", "-u", "connaio", "-n", "50", "--no-pager")
@@ -94,8 +101,8 @@ var rule = strings.Repeat("-", 40)
 func (m *menu) draw() {
 	fmt.Fprintf(m.out, "\n%s\n  Connaio 管理菜单\n%s\n", rule, rule)
 	if systemd() {
-		active, _ := exec.Command("systemctl", "is-active", "connaio").Output()
-		enabled, _ := exec.Command("systemctl", "is-enabled", "connaio").Output()
+		active, _ := exec.Command("systemctl", systemctl("is-active", "connaio")...).Output()
+		enabled, _ := exec.Command("systemctl", systemctl("is-enabled", "connaio")...).Output()
 		state := map[string]string{"active": green("运行中"), "inactive": yellow("未运行"), "failed": red("出错")}
 		fmt.Fprintln(m.out, "  服务状态："+cmp.Or(state[strings.TrimSpace(string(active))], yellow("未安装")))
 		fmt.Fprintln(m.out, "  开机启动："+map[bool]string{true: green("是"), false: red("否")}[strings.TrimSpace(string(enabled)) == "enabled"])
@@ -181,15 +188,40 @@ func systemd() bool {
 
 // service starts, stops or restarts the service, through systemd or else its init script.
 func (m *menu) service(action string) error {
-	if !systemd() {
+	switch {
+	case own() && !systemd():
+		return errors.New("没有 systemd 用户服务：请再次运行安装命令启动 Connaio")
+	case !systemd():
 		return m.system(initScript, action)
 	}
-	return m.system("systemctl", action, "connaio")
+	return m.system("systemctl", systemctl(action, "connaio")...)
 }
 
-// system runs a system command on the terminal, through sudo unless root: the service is root's.
+// exe is this binary's path, links resolved.
+func exe() string {
+	p, _ := os.Executable()
+	return p
+}
+
+// own says this is a user's own install, as install.sh puts one without root in ~/.local/share:
+// its service is that user's (systemctl --user), run without sudo.
+func own() bool {
+	home, err := os.UserHomeDir()
+	return err == nil && os.Geteuid() != 0 && strings.HasPrefix(exe(), filepath.Join(home, ".local/share/connaio")+"/")
+}
+
+// systemctl is args for systemctl, for the user's own service on a user's own install.
+func systemctl(args ...string) []string {
+	if own() {
+		return append([]string{"--user"}, args...)
+	}
+	return args
+}
+
+// system runs a system command on the terminal, through sudo unless root or a user's own install:
+// the service is root's.
 func (m *menu) system(name string, args ...string) error {
-	if os.Geteuid() != 0 {
+	if os.Geteuid() != 0 && !own() {
 		name, args = "sudo", append([]string{"-E", name}, args...)
 	}
 	c := exec.Command(name, args...)
