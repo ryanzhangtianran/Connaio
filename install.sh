@@ -26,44 +26,171 @@ if [ -t 1 ] && [ "${TERM:-dumb}" != dumb ]; then
 else
   esc= B= A= D= G= Y= R= N=
 fi
+# on: the install runs on a screen of its own (the alternate screen, as vim's), redrawn after each
+# step and when the window is resized; the summary is printed on the terminal once it is left
+on= cur= q=
 # say prints a progress line: a coloured icon and a two-character verb, so the messages line up
-say() { printf '%s%s %s%s %s\n' "$1" "$2" "$3" "$N" "$4"; }
+say() {
+  if [ -n "$on" ]; then
+    printf '%s\n' "$1$2 $3$N $4" >>"$tmp/steps"
+    cur=
+    draw
+  else
+    printf '%s\n' "$1$2 $3$N $4"
+  fi
+}
+# doing shows the step under way on the screen, until the next say; off it, only a download's,
+# above its progress bar
+doing() {
+  if [ -n "$on" ]; then
+    cur="$A› $1$N $2"
+    draw
+  elif [ "$1" = 下载 ]; then
+    say "$A" › "$1" "$2"
+  fi
+}
 # more continues say's message on the next line, under it
-more() { printf '       %s\n' "$1"; }
+more() {
+  if [ -n "$on" ]; then
+    printf '       %s\n' "$1" >>"$tmp/steps"
+    draw
+  else
+    printf '       %s\n' "$1"
+  fi
+}
 fail() {
+  leave
+  [ -z "${tmp:-}" ] || cat "$tmp/steps" 2>/dev/null || :
   say "$R" ✗ 错误 "$*" >&2
   exit 1
 }
 [ "$(uname -s)" = Linux ] || fail "仅支持 Linux"
-# width is how many columns $1 takes on a terminal: colour codes none, and every non-ASCII character
-# here is CJK, 3 bytes and 2 columns
+# width is how many columns $1 takes on a terminal: colour codes none, the icons one, and every other
+# non-ASCII character here is CJK, 3 bytes and 2 columns
 width() {
-  set -- "$(if [ -n "$esc" ]; then printf %s "$1" | sed "s/$esc\[[0-9;]*m//g"; else printf %s "$1"; fi)"
+  set -- "$(printf %s "$1" | sed "s/✓/x/g;s/✗/x/g;s/›/x/g${esc:+;s/$esc\\[[0-9;]*m//g}")"
   b=$(printf %s "$1" | wc -c) n=$(printf %s "$1" | LC_ALL=C tr -d '\000-\177' | wc -c)
   echo $((b - n + n / 3 * 2))
 }
+# size is the window's: rows and cols; 24 by 80 without a terminal
+size() {
+  set -- $(stty size 2>/dev/null </dev/tty)
+  rows=${1:-24} cols=${2:-80}
+}
 # sp prints $1 spaces
 sp() { [ "$1" -le 0 ] || printf "%$1s" ""; }
-# bl adds a line to the box box prints next
-bl() { printf '%s\n' "$*" >>"$tmp/box"; }
-# row adds a command and what it does, the descriptions in one column
-row() { bl "$1$(sp $((48 - $(width "$1"))))$D$2$N"; }
-# kv adds a label and its value, the values in one column
-kv() { bl "$D$1$N$(sp $((10 - $(width "$1"))))$2"; }
-# box frames bl's lines under a bold title: 80 columns, wider only for a line that can't fit
+# bl adds lines to the box box prints next
+bl() { printf '%s\n' "$@" >>"$tmp/box"; }
+# inner is how many columns a box holds in this window: 20 at least
+inner() {
+  size
+  echo $((cols - 4 < 20 ? 20 : cols - 4))
+}
+# row adds a command and what it does, the descriptions in one column; in a narrow window, the
+# description on a line of its own under the command
+row() {
+  if [ $((48 + $(width "$2"))) -le "$(inner)" ]; then
+    bl "$1$(sp $((48 - $(width "$1"))))$D$2$N"
+  else
+    bl "$1" "    $D$2$N"
+  fi
+}
+# kv adds a label and its value, the values in one column; in a narrow window, the value under it
+kv() {
+  if [ $((10 + $(width "$2"))) -le "$(inner)" ]; then
+    bl "$D$1$N$(sp $((10 - $(width "$1"))))$2"
+  else
+    [ -z "$1" ] || bl "$D$1$N"
+    bl "  $2"
+  fi
+}
+# box frames bl's lines under a bold title, as wide as the window: a longer line of ASCII alone (a
+# command, an address) folded onto the next, any other left to overflow; $2 pads it to that many lines
 box() {
-  w=76
-  while IFS= read -r l; do
-    x=$(width "$l")
-    [ "$x" -le "$w" ] || w=$x
-  done <"$tmp/box"
-  bar=$(printf "%$((w + 2))s" "" | sed 's/ /─/g')
+  bw=$(inner)
+  bn=$(wc -l <"$tmp/box")
+  while [ "$bn" -lt "${2:-0}" ]; do
+    echo >>"$tmp/box"
+    bn=$((bn + 1))
+  done
+  bar=$(printf "%$((bw + 2))s" "" | sed 's/ /─/g')
   printf '%s╭%s╮%s\n' "$D" "$bar" "$N"
   { printf '%s\n\n' "$B$A$1$N"; cat "$tmp/box"; } | while IFS= read -r l; do
-    printf '%s│%s %s%s %s│%s\n' "$D" "$N" "$l" "$(sp $((w - $(width "$l"))))" "$D" "$N"
+    if [ "$(width "$l")" -gt "$bw" ] && [ "$(printf %s "$l" | LC_ALL=C tr -d '\000-\177')" = "" ]; then
+      printf '%s\n' "$l" | fold -w "$bw"
+    else
+      printf '%s\n' "$l"
+    fi
+  done | while IFS= read -r l; do
+    printf '%s│%s %s%s %s│%s\n' "$D" "$N" "$l" "$(sp $((bw - $(width "$l"))))" "$D" "$N"
   done
   printf '%s╰%s╯%s\n' "$D" "$bar" "$N"
   rm -f "$tmp/box"
+}
+# draw redraws the screen: the steps done, the one under way, and a question with its explanation;
+# the last line is left for a download's progress bar
+draw() {
+  [ -n "$on" ] || return 0
+  size
+  {
+    cat "$tmp/steps"
+    [ -z "$cur" ] || printf '%s\n' "$cur"
+    [ ! -s "$tmp/ask" ] || { echo; cat "$tmp/ask"; }
+    [ -z "$q" ] || printf '%s\n' "$q"
+  } | tail -n $((rows - 5)) >"$tmp/box"
+  k=$(wc -l <"$tmp/box")
+  printf '%s[H%s[2J' "$esc" "$esc"
+  box "Connaio 安装" $((rows - 5))
+  # the cursor at the question's end, for the answer
+  if [ -n "$q" ]; then
+    printf '%s[%d;%dH%s[?25h' "$esc" $((3 + k)) $((3 + $(width "$q"))) "$esc"
+  else
+    printf '%s[?25l' "$esc"
+  fi
+}
+# enter goes to the install's screen, on a terminal; leave back, its steps left behind
+enter() {
+  [ -n "$esc" ] && (: </dev/tty) 2>/dev/null || return 0
+  on=1
+  : >"$tmp/steps"
+  printf '%s[?1049h' "$esc"
+  trap draw WINCH 2>/dev/null || :
+  draw
+}
+leave() {
+  [ -n "$on" ] || return 0
+  on=
+  trap - WINCH 2>/dev/null || :
+  printf '%s[?25h%s[?1049l' "$esc" "$esc"
+}
+# explain puts a question's title and explanation ($2...) above it, until done; off the screen, in a box
+explain() {
+  t=$1
+  shift
+  if [ -n "$on" ]; then
+    printf '%s\n' "$B$t$N" "$@" >"$tmp/ask"
+  else
+    for l; do bl "$l"; done
+    box "$t"
+  fi
+}
+# ask asks $1 and reads the answer from the terminal into $answer
+ask() {
+  q="$A?$N $1"
+  if [ -n "$on" ]; then draw; else printf '%s' "$q"; fi
+  # read in the background: a resize's trap runs only once wait returns, which it does for a signal,
+  # where a read would carry on
+  : >"$tmp/answer"
+  (IFS= read -r a </dev/tty && printf '%s' "$a" >"$tmp/answer") &
+  rp=$!
+  while :; do
+    st=0
+    wait "$rp" || st=$?
+    [ "$st" -gt 128 ] || break
+  done
+  answer=$(cat "$tmp/answer")
+  q=
+  [ -z "$on" ] || printf '%s[?25l' "$esc"
 }
 # domain_ok says $1 is a domain name only: the init script sources the file it goes into, and a
 # scheme or path never matches the certificate
@@ -77,13 +204,19 @@ aarch64 | arm64) arch=arm64 ;;
 esac
 
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
+trap 'leave; rm -rf "$tmp"' EXIT
+trap 'exit 130' INT TERM HUP
+enter
 tarball=${CONNAIO_TARBALL:-}
 if [ -z "$tarball" ]; then
+  doing 查询 "最新版本"
   tag=$(curl -fsSL "$site/latest" | tr -d '[:space:]')
   case "$tag" in v*) ;; *) fail "无法获取最新版本" ;; esac
-  say "$A" › 下载 "Connaio ${tag#v}（linux-$arch）"
-  curl -fL --progress-bar -o "$tmp/connaio.tar.gz" "$site/$tag/Connaio-${tag#v}-linux-$arch.tar.gz"
+  doing 下载 "Connaio ${tag#v}（linux-$arch）"
+  # the progress bar on the screen's last line, under the box
+  [ -z "$on" ] || printf '%s[%d;1H' "$esc" "$rows"
+  curl -fL --progress-bar -o "$tmp/connaio.tar.gz" "$site/$tag/Connaio-${tag#v}-linux-$arch.tar.gz" || fail "下载失败"
+  say "$G" ✓ 下载 "Connaio ${tag#v}（linux-$arch）"
   tarball=$tmp/connaio.tar.gz
 fi
 
@@ -97,6 +230,7 @@ pids() {
     case "$(tr '\0' ' ' 2>/dev/null <"$p/cmdline")" in "$dir/connaio --listen "*) echo "${p#/proc/}" ;; esac
   done
 }
+doing 安装 "$(printf %s "$dir" | sed "s|^$HOME/|~/|")"
 if [ -n "$systemd" ]; then
   $sc stop connaio 2>/dev/null || true
 elif [ -n "$root" ] && [ -x /etc/init.d/connaio ]; then
@@ -107,7 +241,8 @@ elif [ -z "$root" ] && [ -n "$(pids)" ]; then
 fi
 mkdir -p "$dir" "$data"
 chmod 700 "$data"
-tar -xzf "$tarball" -C "$dir"
+tar -xzf "$tarball" -C "$dir" || fail "解压失败：$tarball"
+say "$G" ✓ 安装 "$(printf %s "$dir" | sed "s|^$HOME/|~/|")"
 # connaio enable|disable export or unset the proxy variables in the shell itself, which a program
 # can't: a function, so the shell evals what they print
 shfn='connaio() { case "$1" in enable | disable) eval "$(command connaio "$@")" ;; *) command connaio "$@" ;; esac; }'
@@ -129,17 +264,17 @@ domain=${CONNAIO_DOMAIN-$(kept CONNAIO_DOMAIN)}
 # never asked (no CONNAIO_DOMAIN line kept, even an empty one), on a terminal, none given: asked
 # whether to serve HTTPS (curl | sh reads the script on stdin: answers come from /dev/tty)
 if [ -n "$root" ] && ! grep -q '^CONNAIO_DOMAIN=' "$conf" 2>/dev/null && [ -z "${CONNAIO_DOMAIN+set}" ] && (: </dev/tty) 2>/dev/null; then
-  bl "如需在浏览器中通过公网访问网页界面，请输入已解析到本机的域名，"
-  bl "将自动申请 HTTPS 证书（需放行 443 端口）。"
-  bl "没有域名时，可填写 <本机公网 IP>.sslip.io。"
-  bl "留空则仅允许本机访问，可通过 SSH 隧道使用。"
-  box "HTTPS 访问"
+  # lines of 40 columns at most: a box folds no CJK
+  explain "HTTPS 访问" "如需通过公网访问网页界面，" "请输入已解析到本机的域名，" \
+    "将自动申请 HTTPS 证书（需放行 443 端口）。" "没有域名时，可填写 <公网 IP>.sslip.io。" "留空则仅允许本机访问。"
   while :; do
-    printf '%s?%s 域名（留空跳过）：' "$A" "$N"
-    read -r domain </dev/tty || domain=
+    ask "域名（留空跳过）："
+    domain=$answer
     domain_ok "$domain" && break
     say "$R" ✗ 无效 "只填写域名，如 connaio.example.com"
   done
+  rm -f "$tmp/ask"
+  [ -z "$domain" ] || say "$G" ✓ 域名 "$domain"
 fi
 mkdir -p "${conf%/*}"
 cat >"$conf" <<EOF
@@ -153,6 +288,7 @@ port=${listen##*:} host=${listen%:*}
 case "$host" in "" | 0.0.0.0 | "[::]") public=1 ;; *) public= ;; esac
 case "$host" in "" | 0.0.0.0 | "[::]" | 127.0.0.1 | localhost | "[::1]") host=127.0.0.1 ;; esac
 
+doing 启动 "服务"
 if [ -n "$root" ] && [ -n "$systemd" ]; then
   install -m 644 "$dir/connaio.service" /etc/systemd/system/connaio.service
 elif [ -n "$systemd" ]; then
@@ -215,19 +351,19 @@ until profiles=$("$dir/connaio" profiles --data-dir "$data" 2>/dev/null); do
   sleep 1
   i=$((i + 1))
 done
+say "$G" ✓ 启动 "服务"
 if [ -z "$profiles" ] && (: </dev/tty) 2>/dev/null; then
-  bl "当前没有任何配置。可在此输入订阅地址，也可稍后在网页界面中添加。"
-  box "导入配置"
+  explain "导入配置" "当前没有任何配置。" "可输入订阅地址，或稍后在网页界面中添加。"
   while :; do
-    printf '%s?%s 订阅地址（留空跳过）：' "$A" "$N"
-    read -r url </dev/tty || url=
+    ask "订阅地址（留空跳过）："
+    url=$answer
     [ -n "$url" ] || break
-    printf '%s?%s 配置名称（留空则使用订阅域名）：' "$A" "$N"
-    read -r name </dev/tty || name=
-    say "$A" › 下载 "订阅"
-    # no name, no argument: the CLI names it after the host
-    if "$dir/connaio" profile add --data-dir "$data" "$url" ${name:+"$name"}; then
-      say "$G" ✓ 完成 "订阅已添加并启用"
+    ask "配置名称（留空则使用订阅域名）："
+    name=$answer
+    doing 下载 "订阅"
+    # no name, no argument: the CLI names it after the host; its output kept off the screen
+    if out=$("$dir/connaio" profile add --data-dir "$data" "$url" ${name:+"$name"} 2>&1); then
+      say "$G" ✓ 订阅 "已添加并启用"
       break
     fi
     # stored before the core failed to load it: asking again would add it twice
@@ -237,7 +373,15 @@ if [ -z "$profiles" ] && (: </dev/tty) 2>/dev/null; then
       break
     fi
     say "$R" ✗ 失败 "订阅添加失败，请检查地址后重新输入"
+    more "$(printf %s "$out" | tail -n 1)"
   done
+  rm -f "$tmp/ask"
+fi
+if [ -n "$on" ]; then
+  say "$G" ✓ 完成 "安装完成"
+  sleep 1
+  leave
+  cat "$tmp/steps"
 fi
 
 # warn adds a warning to the box, labelled once
