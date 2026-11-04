@@ -125,13 +125,14 @@ func Run(assets fs.FS, trayIcon []byte) error {
 	// and opened again where it was left
 	var monitorMu sync.Mutex
 	var monitor *application.WebviewWindow
+	monitorPet := true // shown as the pet: Monitor.tsx says which as it loads, maybe before the window is ready
 	openMonitor := func() {
 		monitorMu.Lock()
 		defer monitorMu.Unlock()
 		if monitor == nil {
 			opts := application.WebviewWindowOptions{
 				Name: "monitor", Title: "进程监视", URL: "/?view=monitor",
-				Width: 340, Height: 52, MinWidth: 280, MinHeight: 52, // folded: Monitor.tsx sets the height as it opens or folds
+				Width: 140, Height: 132, MinWidth: 140, MinHeight: 52, // the pet: Monitor.tsx sets the size as it opens or folds
 				Frameless: true, AlwaysOnTop: true, BackgroundType: application.BackgroundTypeTranslucent,
 				Mac: application.MacWindow{
 					Backdrop:           application.MacBackdropTranslucent,
@@ -145,7 +146,14 @@ func Run(assets fs.FS, trayIcon []byte) error {
 				opts.InitialPosition, opts.X, opts.Y = application.WindowXY, p[0], p[1]
 			}
 			monitor = app.Window.NewWithOptions(opts)
-			monitor.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { makeFloating(monitor) })
+			monitor.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+				monitorMu.Lock()
+				defer monitorMu.Unlock()
+				if monitor != nil {
+					makeFloating(monitor)
+					setPet(monitor, monitorPet)
+				}
+			})
 			monitor.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
 				monitorMu.Lock()
 				defer monitorMu.Unlock()
@@ -158,12 +166,33 @@ func Run(assets fs.FS, trayIcon []byte) error {
 		monitor.Show()
 		monitor.Focus()
 	}
-	settingsSvc.openMonitor = openMonitor
+	settingsSvc.showMonitor = func(on bool) {
+		if on {
+			openMonitor()
+			return
+		}
+		monitorMu.Lock()
+		w := monitor
+		monitorMu.Unlock()
+		if w != nil {
+			w.Close() // its closing hook takes monitorMu
+		}
+	}
+	if settings.Get().Pet {
+		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) { openMonitor() })
+	}
+	settingsSvc.petMonitor = func(on bool) {
+		monitorMu.Lock()
+		defer monitorMu.Unlock()
+		if monitorPet = on; monitor != nil {
+			setPet(monitor, on)
+		}
+	}
 
 	tray := app.SystemTray.New()
 	tray.SetTemplateIcon(trayIcon)
 	newTrayMenu(&trayMenu{
-		app: app, tray: tray, icon: trayIcon, show: show, monitor: openMonitor,
+		app: app, tray: tray, icon: trayIcon, show: show, pets: settingsSvc,
 		svc: svc, profiles: profiles, sysProxy: sysProxy, enhanced: enhanced, settings: settings,
 	})
 

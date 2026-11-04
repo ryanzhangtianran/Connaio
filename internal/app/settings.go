@@ -24,6 +24,8 @@ type Settings struct {
 	Theme string `json:"theme,omitempty"`
 	// VPNs are the VPN page's entries by name, kept while disconnected so 连接 needs no retyping.
 	VPNs map[string]VPN `json:"vpns,omitempty"`
+	// Pet is whether the desktop pet (the floating monitor) is on: shown at launch, until it's hidden.
+	Pet bool `json:"pet,omitempty"`
 	// Monitor is where the floating process monitor was last closed, x and y, to open it there again.
 	Monitor []int `json:"monitor,omitempty"`
 	// Bypass is what the system proxy leaves alone besides local and LAN addresses (通用 不经代理).
