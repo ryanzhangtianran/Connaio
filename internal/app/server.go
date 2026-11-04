@@ -3,6 +3,7 @@
 package app
 
 import (
+	"crypto/rand"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -68,17 +69,21 @@ func Run(assets fs.FS, _ []byte) error {
 	}
 	port := inner.Addr().(*net.TCPAddr).Port
 	inner.Close()
+	secret := rand.Text()
 
 	app := application.New(application.Options{
 		Name:         "Connaio",
 		Description:  "Rule-based proxy with reverse tunnels",
 		MarshalError: marshalError,
 		Services:     sv.list(),
-		Assets:       application.AssetOptions{Handler: application.AssetFileServerFS(assets)},
+		Assets:       application.AssetOptions{Handler: application.AssetFileServerFS(assets), Middleware: innerOnly(secret)},
 		Server:       application.ServerOptions{Host: "127.0.0.1", Port: port},
 	})
-	handler := webHandler(fmt.Sprintf("127.0.0.1:%d", port), token)
-	go func() { log.Fatal(http.Serve(front, handler)) }()
+	handler := webHandler(fmt.Sprintf("127.0.0.1:%d", port), token, secret)
+	// on the internet with --listen 0.0.0.0: a client stalling its headers is dropped, as on :443
+	go func() {
+		log.Fatal((&http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}).Serve(front))
+	}()
 	if *domain != "" {
 		// the certificate got and renewed on the TLS handshake (TLS-ALPN-01: no port 80), kept in the data directory
 		// shortcut: :443 fixed, a flag for it when someone needs another port
@@ -94,6 +99,7 @@ func Run(assets fs.FS, _ []byte) error {
 			log.Printf("Connaio web UI on https://%s", *domain)
 		}
 	}
-	log.Printf("Connaio web UI on http://%s — open http://%s/?token=%s once to sign in", *listen, *listen, token)
+	// the token itself never in the log: the journal is readable by more than root
+	log.Printf("Connaio web UI on http://%s — sign in with the access token in %s", *listen, filepath.Join(*dataDir, "web-token"))
 	return app.Run()
 }

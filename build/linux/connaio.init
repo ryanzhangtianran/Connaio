@@ -2,7 +2,7 @@
 # Connaio's headless build as a service where there is no systemd (containers): install.sh puts it in
 # /etc/init.d/connaio; then
 #   /etc/init.d/connaio start|stop|restart|status     # or: service connaio …
-#   tail /var/log/connaio.log                         # the web UI's address and access token
+#   tail /var/log/connaio.log                         # the web UI's address (the token: /var/lib/connaio-web/web-token)
 # Nothing starts it with the container: put /etc/init.d/connaio start in the container's command.
 exe=/opt/connaio/connaio
 # the listen address and the HTTPS domain in /etc/default/connaio, as the systemd unit reads them:

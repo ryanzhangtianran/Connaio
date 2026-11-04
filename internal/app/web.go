@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // webCookie holds the access token in the browser, once given; webFlag tells the page it runs in a
@@ -20,11 +22,22 @@ const (
 	webFlag   = "connaio_web"
 )
 
+// frontHeader carries the front's secret to the Wails server, which answers nothing without it
+// (innerOnly): any local user can reach its loopback port, the front alone knows the secret.
+const frontHeader = "X-Connaio-Front"
+
 // webHandler is Connaio's front: every request, WebSockets included, needs the access token,
 // from the cookie a first visit with ?token= (the address printed at start) or the login form sets,
-// and goes on to the Wails server at upstream.
-func webHandler(upstream, token string) http.Handler {
+// and goes on to the Wails server at upstream with secret, never the cookie (were another process
+// to hold upstream's port, it would get no token).
+func webHandler(upstream, token, secret string) http.Handler {
 	proxy := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: upstream}) // the Host header passes through: Wails' WebSocket origin check sees the browser's
+	director := proxy.Director
+	proxy.Director = func(r *http.Request) {
+		director(r)
+		r.Header.Del("Cookie")
+		r.Header.Set(frontHeader, secret)
+	}
 	valid := func(t string) bool { return t != "" && subtle.ConstantTimeCompare([]byte(t), []byte(token)) == 1 }
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		given := r.URL.Query().Get("token")
@@ -52,6 +65,21 @@ func webHandler(upstream, token string) http.Handler {
 		}
 		loginPage(w, "")
 	})
+}
+
+// innerOnly is the Wails server's middleware: a request without the front's secret is refused.
+// shortcut: Wails serves its events WebSocket outside the middleware, so a local user can still
+// read the events it broadcasts (no calls); a unix socket for Wails when it offers one.
+func innerOnly(secret string) application.Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if subtle.ConstantTimeCompare([]byte(r.Header.Get(frontHeader)), []byte(secret)) != 1 {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // loginPage asks for the access token, with problem when the last one given was wrong.

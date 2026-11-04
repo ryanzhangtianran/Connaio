@@ -16,7 +16,10 @@ import (
 // TestWebHandler: nothing reaches the app without the token; the token sets the cookie, which then
 // passes requests and WebSocket upgrades through.
 func TestWebHandler(t *testing.T) {
-	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	upstream := httptest.NewServer(innerOnly("inner")(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Cookie") != "" {
+			t.Errorf("the cookie reached the app: %q", r.Header.Get("Cookie"))
+		}
 		if r.Header.Get("Upgrade") == "websocket" { // answers the upgrade, then echoes
 			c, rw, _ := w.(http.Hijacker).Hijack()
 			defer c.Close()
@@ -26,9 +29,12 @@ func TestWebHandler(t *testing.T) {
 			return
 		}
 		io.WriteString(w, "app "+r.Host)
-	}))
+	})))
 	defer upstream.Close()
-	front := httptest.NewServer(webHandler(strings.TrimPrefix(upstream.URL, "http://"), "secret"))
+	if resp, err := http.Get(upstream.URL + "/wails/runtime"); err != nil || resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("the app reached without the front: %v %v", resp, err) // any local user could
+	}
+	front := httptest.NewServer(webHandler(strings.TrimPrefix(upstream.URL, "http://"), "secret", "inner"))
 	defer front.Close()
 	noRedirect := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
