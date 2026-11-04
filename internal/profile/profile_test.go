@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -910,7 +911,7 @@ func TestSubscriptionTunnels(t *testing.T) {
 	if err := s.Remove(p.ID); err != nil {
 		t.Error(err)
 	}
-	if fi, err := os.Stat(filepath.Join(dir, "profiles", "index.json")); err != nil || fi.Mode().Perm() != 0o600 {
+	if fi, err := os.Stat(filepath.Join(dir, "profiles", "index.json")); err != nil || runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 { // Windows has no mode bits
 		t.Errorf("index.json: %v %v", fi.Mode(), err)
 	}
 }
