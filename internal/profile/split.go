@@ -187,8 +187,11 @@ func mergeNode(base, over *yaml.Node, overFirst bool) *yaml.Node {
 		out.Content = append(out.Content, base.Content...)
 		for i := 0; i+1 < len(over.Content); i += 2 {
 			k, v := over.Content[i], over.Content[i+1]
-			j := slices.IndexFunc(out.Content, func(n *yaml.Node) bool { return n.Value == k.Value })
-			if j%2 == 0 && j >= 0 { // a key, not a value that happens to be spelt the same
+			j := 0 // the keys alone: a value spelt as the key comes before it
+			for j < len(out.Content) && out.Content[j].Value != k.Value {
+				j += 2
+			}
+			if j < len(out.Content) {
 				out.Content[j+1] = mergeNode(out.Content[j+1], v, overFirst)
 			} else {
 				out.Content = append(out.Content, k, v)

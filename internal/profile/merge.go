@@ -80,6 +80,7 @@ func tunnelDirect(cfg map[string]any) {
 func (s *Store) merged(enhanced bool) (map[string]any, error) {
 	s.mu.Lock()
 	current := s.index.Current
+	remote := slices.ContainsFunc(s.index.Profiles, func(p Profile) bool { return p.ID == current && p.URL != "" })
 	s.mu.Unlock()
 
 	profile := emptyProfile()
@@ -90,6 +91,13 @@ func (s *Store) merged(enhanced bool) (map[string]any, error) {
 		}
 		if profile, err = parseMap(b); err != nil {
 			return nil, fmt.Errorf("配置文件无效: %w", err)
+		}
+	}
+	// a subscription's provider sets no reverse tunnel (which would open this machine's services on
+	// its server) nor capture: those are the user's, in the override or a local profile
+	if remote {
+		for _, k := range connaioKeys {
+			delete(profile, k)
 		}
 	}
 	override := map[string]any{}
@@ -266,14 +274,13 @@ func Merge(profile, override map[string]any) map[string]any {
 		if len(ours) > 0 {
 			list = slices.DeleteFunc(slices.Clone(list), func(x any) bool { return ours[groupName(x)] })
 		}
+		if key == "rules" && len(hidden) > 0 { // the profile's rules alone: a user rule of the same text stays
+			list = slices.DeleteFunc(slices.Clone(list), func(r any) bool { return slices.Contains(hidden, r) })
+		}
 		list = append(append(slices.Clone(pre), list...), post...)
 		if len(list) > 0 {
 			cfg[key] = list
 		}
-	}
-	if len(hidden) > 0 {
-		rules, _ := cfg["rules"].([]any)
-		cfg["rules"] = slices.DeleteFunc(slices.Clone(rules), func(r any) bool { return slices.Contains(hidden, r) })
 	}
 	// group-members: the GUI's own key, prepends user proxies into existing groups
 	groups, _ := cfg["proxy-groups"].([]any)
