@@ -351,7 +351,36 @@ func (s *ProfileService) edit(change func() error) error {
 }
 
 // UserItems are the proxies, groups, rules and tunnels added from the GUI (kept in the override).
-func (s *ProfileService) UserItems() (profile.UserItems, error) { return s.store.UserItems() }
+// Rules are the ones the config kept, in the core's order (see ownRules): the Rules page numbers them as the core does.
+func (s *ProfileService) UserItems() (profile.UserItems, error) {
+	items, err := s.store.UserItems()
+	if err != nil {
+		return items, err
+	}
+	items.Rules, _, err = s.ownRules()
+	return items, err
+}
+
+// ownRules are the GUI-added rules the config kept, first in the core's list, and at[i] the
+// prepend-rules index of the core's rule i: Merge drops one whose policy is gone, which would
+// otherwise shift every index after it onto the wrong rule.
+func (s *ProfileService) ownRules() (rules []string, at []int, err error) {
+	items, err := s.store.UserItems()
+	if err != nil {
+		return nil, nil, err
+	}
+	v, err := s.store.Value(false, []string{"rules"})
+	if err != nil {
+		return nil, nil, err
+	}
+	list, _ := v.([]any)
+	for i, r := range items.Rules {
+		if len(at) < len(list) && list[len(at)] == any(r) {
+			rules, at = append(rules, r), append(at, i)
+		}
+	}
+	return rules, at, nil
+}
 
 // AddRule makes rule permanent by prepending it in the override.
 // AddRule puts rule ahead of the rest of the user's rules but behind the connected VPNs' routes:
@@ -457,20 +486,35 @@ func (s *ProfileService) RemoveTunnel(name string) error {
 	return s.edit(func() error { return s.store.RemoveTunnel(name) })
 }
 
-// EditRule rewrites the GUI-added rule at index, where it stands.
+// EditRule rewrites the GUI-added rule at index (the core's numbering), where it stands.
 func (s *ProfileService) EditRule(index int, rule string) error {
-	return s.edit(func() error { return s.store.ReplaceRule(index, rule) })
+	_, at, err := s.ownRules()
+	if err != nil {
+		return err
+	}
+	if index < 0 || index >= len(at) {
+		return errors.New("只能编辑自己添加的规则")
+	}
+	return s.edit(func() error { return s.store.ReplaceRule(at[index], rule) })
 }
 
-// MoveRule moves the GUI-added rule at index one place up (delta -1) or down (+1).
+// MoveRule moves the GUI-added rule at index (the core's numbering) one place up (delta -1) or
+// down (+1), past the next one shown.
 func (s *ProfileService) MoveRule(index, delta int) error {
-	return s.edit(func() error { return s.store.MoveRule(index, delta) })
+	_, at, err := s.ownRules()
+	if err != nil {
+		return err
+	}
+	if j := index + delta; min(index, j) < 0 || max(index, j) >= len(at) {
+		return errors.New("只能调整自己添加的规则的顺序")
+	}
+	return s.edit(func() error { return s.store.MoveRule(at[index], at[index+delta]-at[index]) })
 }
 
 // DeleteRule removes the rule at index (the core's numbering): a GUI-added one from the override,
 // one of the profile's by hiding it, so the profile's other rules keep following the subscription.
 func (s *ProfileService) DeleteRule(index int) error {
-	items, err := s.store.UserItems()
+	own, _, err := s.ownRules()
 	if err != nil {
 		return err
 	}
@@ -483,7 +527,7 @@ func (s *ProfileService) DeleteRule(index int) error {
 		return fmt.Errorf("没有第 %d 条规则", index)
 	}
 	rule, _ := list[index].(string)
-	if index < len(items.Rules) {
+	if index < len(own) {
 		return s.edit(func() error { return s.store.RemoveRule(rule) })
 	}
 	if strings.HasPrefix(strings.ToUpper(rule), "MATCH,") {

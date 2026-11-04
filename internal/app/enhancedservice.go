@@ -83,13 +83,20 @@ func (s *EnhancedService) set(full, partial bool) error {
 	default:
 		// capture.mode goes into the override without applying; SetEnabled applies once and
 		// rolls both back if the core refuses
+		// under the profiles' lock, as their edits are: one running alongside would write over this
+		// (SetEnabled takes the lock itself, to apply)
+		setMode := func(v any) error {
+			s.profiles.mu.Lock()
+			defer s.profiles.mu.Unlock()
+			return s.profiles.store.SetPath([]string{"capture", "mode"}, v)
+		}
 		old, _ := s.profiles.Value("capture.mode")
-		if err := s.profiles.store.SetPath([]string{"capture", "mode"}, mode); err != nil {
+		if err := setMode(mode); err != nil {
 			return undo(err)
 		}
 		if err := s.SetEnabled(true); err != nil {
 			if old != nil {
-				_ = s.profiles.store.SetPath([]string{"capture", "mode"}, old)
+				_ = setMode(old)
 			}
 			return undo(err)
 		}

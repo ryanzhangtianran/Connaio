@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/ryanzhangtianran/Connaio/internal/profile"
 )
 
 const localProfile = `proxies:
@@ -197,5 +199,25 @@ func TestInstallConfig(t *testing.T) {
 		if _, ok := installConfig(raw); ok {
 			t.Errorf("%s offered", raw)
 		}
+	}
+}
+
+// TestOwnRulesSkipDropped: a GUI rule whose policy is gone is dropped from the config, and the
+// core's numbering then maps past it, not onto the next rule.
+func TestOwnRulesSkipDropped(t *testing.T) {
+	store, err := profile.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetOverride("prepend-rules:\n  - DOMAIN,a.com,Gone\n  - DOMAIN,b.com,DIRECT\n  - DOMAIN,c.com,DIRECT\n"); err != nil {
+		t.Fatal(err)
+	}
+	s := &ProfileService{store: store}
+	rules, at, err := s.ownRules()
+	if err != nil || !slices.Equal(rules, []string{"DOMAIN,b.com,DIRECT", "DOMAIN,c.com,DIRECT"}) || !slices.Equal(at, []int{1, 2}) {
+		t.Fatalf("%v %v %v", rules, at, err)
+	}
+	if items, _ := s.UserItems(); len(items.Rules) != 2 {
+		t.Fatalf("UserItems rules %v", items.Rules)
 	}
 }
