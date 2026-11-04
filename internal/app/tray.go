@@ -563,7 +563,7 @@ func menuLayout(groups []Group, list Profiles, vpns map[string]string, apps []pa
 func processRows(conns []Conn, deltas map[string]int64, lastActive map[string]time.Time, now time.Time) []procRow {
 	byName := map[string]*procRow{}
 	for _, c := range conns {
-		name, icon := clientOf(c)
+		name, icon := connClient(c)
 		r := byName[name]
 		if r == nil {
 			r = &procRow{name: name, icon: icon}

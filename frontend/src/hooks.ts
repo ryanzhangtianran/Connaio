@@ -52,14 +52,15 @@ export function useConfirm(): [string, (key: string, run: () => void) => void] {
   return [armed, (key, run) => { if (armed === key) { setArmed(""); run(); } else setArmed(key); }];
 }
 
-// useCachedURL is fetch(key)'s data URL (an icon from Go), fetched once per key for the app's lifetime.
+// useCachedURL is fetch(key)'s data URL (an icon from Go), fetched once per key for the app's
+// lifetime; none ("") is not kept, so the next mount asks again (the core may not have been up).
 const urls = new Map<string, Promise<string>>();
 export function useCachedURL(key: string | undefined, fetch: (key: string) => Promise<string>) {
   const [src, setSrc] = useState<string>();
   useEffect(() => {
     if (!key) return;
     let alive = true;
-    if (!urls.has(key)) urls.set(key, fetch(key).catch(() => ""));
+    if (!urls.has(key)) urls.set(key, fetch(key).catch(() => "").then((u) => { if (!u) urls.delete(key); return u; }));
     urls.get(key)!.then((u) => alive && setSrc(u));
     return () => { alive = false; };
   }, [key]);

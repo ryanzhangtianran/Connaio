@@ -88,7 +88,7 @@ func (s *CoreService) Activity() (Activity, error) {
 	a := Activity{Network: s.networkName(ctx), Mode: cfg.Mode, Tun: cfg.Tun.Enable, Connections: len(conns)}
 	processes, hosts, devices := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, c := range conns {
-		name, _ := clientOf(c)
+		name, _ := connClient(c)
 		processes[name], hosts[c.Host] = true, true
 		if c.Process == "" && c.Path == "" && c.Tunnel == nil && net.ParseIP(c.Source) != nil && !fromHere(c.Source) { // a LAN device using us as a proxy or gateway
 			devices[c.Source] = true
@@ -351,6 +351,15 @@ type Split struct {
 	Proxy  int64 `json:"proxy"`
 }
 
+// connClient is the connection's client as Connections named it (clientOf, once per refresh), else
+// named here: clientOf walks process ancestors under a lock, on Windows by listing processes.
+func connClient(c Conn) (name, icon string) {
+	if c.App != "" {
+		return c.App, c.Icon
+	}
+	return clientOf(c)
+}
+
 // clientOf names a connection's client, an app folded into its bundle, the LAN device's address,
 // or Connaio for the core's own connections (rule sets, health checks), with the file whose
 // Finder icon stands for it: a command counts towards the app it was started from (claude run
@@ -439,11 +448,13 @@ type Day struct {
 
 // ledger keeps per-day traffic in traffic.json.
 type ledger struct {
-	path  string
-	mu    sync.Mutex
-	days  map[string]*Day  // "2006-01-02" -> traffic
-	seen  map[string]int64 // bytes per live connection at the last count; nil before the first
-	dirty bool             // changed since the last save
+	path string
+	mu   sync.Mutex
+	// saveMu: one save at a time, so one writing older data never lands after a newer one (a clear)
+	saveMu sync.Mutex
+	days   map[string]*Day  // "2006-01-02" -> traffic
+	seen   map[string]int64 // bytes per live connection at the last count; nil before the first
+	dirty  bool             // changed since the last save
 }
 
 func openLedger(path string) *ledger {
@@ -495,7 +506,7 @@ func (l *ledger) add(conns []Conn, now time.Time) map[string]int64 {
 		}
 		deltas[c.ID] = delta
 		direct := c.Chain[strings.LastIndex(c.Chain, " ")+1:] == "DIRECT"
-		name, icon := clientOf(c)
+		name, icon := connClient(c)
 		policy, _, _ := strings.Cut(c.Chain, " → ") // the outermost group the rule chose
 		d.Split.add(direct, delta)
 		d.Hours[now.Hour()].add(direct, delta)
@@ -606,6 +617,8 @@ func (s *CoreService) ClearTraffic() error {
 }
 
 func (l *ledger) save() error {
+	l.saveMu.Lock()
+	defer l.saveMu.Unlock()
 	l.mu.Lock()
 	if !l.dirty {
 		l.mu.Unlock()
@@ -619,6 +632,11 @@ func (l *ledger) save() error {
 		}
 		// ponytail: hosts and clients grow without bound in a day; keep the 500 busiest
 		d.Host, d.Client = trimUsage(d.Host, 500), trimUsage(d.Client, 500)
+		for name := range d.Icons {
+			if _, ok := d.Client[name]; !ok {
+				delete(d.Icons, name) // its client trimmed: the icon with it
+			}
+		}
 	}
 	b, err := json.Marshal(l.days)
 	l.dirty = err != nil

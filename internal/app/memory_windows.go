@@ -33,7 +33,13 @@ func appMemory() int64 {
 		children[e.ParentProcessID] = append(children[e.ParentProcessID], e.ProcessID)
 	}
 	var total int64
+	// seen: a descendant can take a pid of an exited ancestor, and its parent pid then leads back up
+	seen := map[uint32]bool{}
 	for queue := []uint32{uint32(os.Getpid())}; len(queue) > 0; queue = queue[1:] {
+		if seen[queue[0]] {
+			continue
+		}
+		seen[queue[0]] = true
 		total += workingSet(queue[0])
 		queue = append(queue, children[queue[0]]...)
 	}

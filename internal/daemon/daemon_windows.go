@@ -45,6 +45,11 @@ func installScript(core, stage string) string {
 	lines := []string{
 		"@echo off",
 		"if not exist " + q(Dir) + " mkdir " + q(Dir) + " || exit /b 1",
+		// ProgramData lets any user make a folder there, then own it: whoever made this one first
+		// could swap the file the service runs as SYSTEM. Administrators own it, users only read
+		// (by SID: the names are localised)
+		"icacls " + q(Dir) + " /setowner *S-1-5-32-544 /T /C >nul || exit /b 1",
+		"icacls " + q(Dir) + " /inheritance:r /grant:r *S-1-5-18:(OI)(CI)F *S-1-5-32-544:(OI)(CI)F *S-1-5-32-545:(OI)(CI)RX /T /C >nul || exit /b 1",
 		"if not exist " + q(filepath.Join(Dir, "config.yaml")) + " copy /Y " + q(filepath.Join(stage, "config.yaml")) + " " + q(filepath.Join(Dir, "config.yaml")) + " >nul || exit /b 1",
 		"sc stop " + Service + " >nul 2>&1",
 	}
@@ -53,6 +58,7 @@ func installScript(core, stage string) string {
 	} else {
 		lines = append(lines,
 			"copy /Y "+q(core)+" "+q(Helper)+" >nul || exit /b 1",
+			"del /F /Q "+q(filepath.Join(Dir, "wintun.dll"))+" >nul 2>&1", // none but the one copied next: a DLL planted there loads into the service
 			"if exist "+q(filepath.Join(filepath.Dir(core), "wintun.dll"))+" copy /Y "+q(filepath.Join(filepath.Dir(core), "wintun.dll"))+" "+q(filepath.Join(Dir, "wintun.dll"))+" >nul")
 	}
 	binPath := q(`\"` + exe + `\" -d \"` + Dir + `\" -ext-ctl-pipe ` + Socket)

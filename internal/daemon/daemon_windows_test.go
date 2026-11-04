@@ -8,7 +8,7 @@ import (
 func TestScripts(t *testing.T) {
 	t.Setenv("ProgramFiles", `C:\Program Files`)
 	installed := installScript(`C:\Program Files\Connaio\connaio-core.exe`, `C:\Temp\stage`)
-	for _, want := range []string{"sc create " + Service, "sc config " + Service, "-ext-ctl-pipe " + Socket, `\"C:\Program Files\Connaio\connaio-core.exe\" -d`, "sc start " + Service, `del /F /Q "` + Helper + `"`} {
+	for _, want := range []string{"sc create " + Service, "sc config " + Service, "-ext-ctl-pipe " + Socket, `\"C:\Program Files\Connaio\connaio-core.exe\" -d`, "sc start " + Service, `del /F /Q "` + Helper + `"`, `icacls "` + Dir + `" /setowner *S-1-5-32-544`, `/inheritance:r`} {
 		if !strings.Contains(installed, want) {
 			t.Errorf("installed core's script lacks %q:\n%s", want, installed)
 		}
