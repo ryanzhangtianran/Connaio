@@ -70,6 +70,7 @@ type trayMenu struct {
 	partialItem  *application.MenuItem
 	qualityItem  *application.MenuItem
 	procItems    []*application.MenuItem
+	rowsShown    int // process rows visible; 0 after a rebuild, when any count may show
 	details      map[*application.MenuItem]string // right of the label: grey text, or a dot (see dot)
 	icons        map[*application.MenuItem]string // file whose Finder icon the item shows
 	groupItems   map[string]*application.MenuItem
@@ -251,7 +252,10 @@ func (t *trayMenu) loop() {
 		}
 		t.tick()
 		if !watching { // once the native menu exists
-			watching = onTrayOpen(t.menu, t.opening, func() { t.open.Store(false) })
+			watching = onTrayOpen(t.menu, t.opening, func() {
+				t.open.Store(false)
+				go t.locked(t.showRows) // the row count frozen while open fits the rows again
+			})
 		}
 		if watching && trayTracksOpen && !t.open.Load() {
 			<-t.opened
@@ -595,15 +599,24 @@ func processRows(conns []Conn, deltas map[string]int64, lastActive map[string]ti
 }
 
 func (t *trayMenu) showRows() {
+	n := max(1, len(t.rows))
+	if t.open.Load() && t.rowsShown > 0 {
+		// AppKit doesn't lay an open menu out again as rows come and go: it leaves a blank on top and
+		// cuts the end off. The count holds until the menu closes; a row gone quiet reads 0 KB/s.
+		n = t.rowsShown
+	}
+	t.rowsShown = n
 	for i, item := range t.procItems {
 		switch {
-		case i < len(t.rows):
+		case i < len(t.rows) && i < n:
 			r := t.rows[i]
 			item.SetLabel(r.name).SetEnabled(true).SetHidden(false)
 			t.details[item], t.icons[item] = rate(max(0, r.rate)), r.icon
 		case i == 0:
 			item.SetLabel("暂无流量").SetEnabled(false).SetHidden(false)
 			t.details[item], t.icons[item] = "", ""
+		case i < n:
+			t.details[item] = rate(0)
 		default:
 			item.SetHidden(true)
 		}
@@ -736,6 +749,7 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, 
 	t.details[shortcut(m.Add("退出"), "CmdOrCtrl+Q").OnClick(func(*application.Context) { t.app.Quit() })] = ""
 	m.Update()
 	sectionHeaders(headers)
+	t.rowsShown = 0 // the rows are new and unlabelled: show what there is
 	t.showRows()
 }
 
