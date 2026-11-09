@@ -91,18 +91,6 @@ static void makeFloating(void *p) {
 	});
 }
 
-// setPet shows the floating monitor as the desktop pet (on), nothing but the page on a clear window,
-// or as the panel again, on its blur and shadow.
-static void setPet(void *p, bool on) {
-	dispatch_async(dispatch_get_main_queue(), ^{
-		NSWindow *w = p;
-		for (NSView *v in w.contentView.subviews)
-			if ([v isKindOfClass:NSVisualEffectView.class]) v.hidden = on;
-		w.hasShadow = !on;
-		[w invalidateShadow];
-	});
-}
-
 // setAppearance forces the window light (1) or dark (2), or back to the system's (0): the blur, the
 // traffic lights and the web view's prefers-color-scheme follow it.
 static void setAppearance(void *p, int kind) {
@@ -209,12 +197,6 @@ func freeWebView(w *application.WebviewWindow) {
 func makeFloating(w *application.WebviewWindow) {
 	if p := w.NativeWindow(); p != nil {
 		C.makeFloating(p)
-	}
-}
-
-func setPet(w *application.WebviewWindow, on bool) {
-	if p := w.NativeWindow(); p != nil {
-		C.setPet(p, C.bool(on))
 	}
 }
 

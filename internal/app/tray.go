@@ -37,7 +37,7 @@ type trayMenu struct {
 	tray     *application.SystemTray
 	icon     []byte
 	show     func(page string) // opens the window on page, or where it was left when ""
-	pets     *SettingsService  // shows or hides the desktop pet, the floating process monitor
+	monitor  func()            // shows the floating process monitor
 	svc      *CoreService
 	profiles *ProfileService
 	sysProxy *SystemProxyService
@@ -64,7 +64,6 @@ type trayMenu struct {
 	vpnItem      *application.MenuItem            // the VPN submenu: the connected ones as its detail
 	vpnItems     map[string]*application.MenuItem // the VPN page's entries: state shown, click connects or disconnects
 	proxyItem    *application.MenuItem
-	petItem      *application.MenuItem
 	enhancedItem *application.MenuItem
 	modeItems    map[string]*application.MenuItem
 	partialItem  *application.MenuItem
@@ -130,7 +129,6 @@ func newTrayMenu(t *trayMenu) {
 			t.locked(fn)
 		}
 	}()
-	t.pets.onPet = func(on bool) { t.locked(func() { t.setOn(t.petItem, on) }) }
 	t.sysProxy.onChange = func(on bool) { t.locked(func() { t.proxy = on; t.setOn(t.proxyItem, on) }) }
 	t.enhanced.onChange = func(bool) { t.locked(func() { t.enh = t.enhanced.Mode(); t.checkEnhanced() }) }
 	t.app.Event.On("setting", func(e *application.CustomEvent) {
@@ -632,11 +630,7 @@ func (t *trayMenu) build(groups []Group, list Profiles, vpns map[string]string, 
 		return item.SetAccelerator(key)
 	}
 	t.details[shortcut(m.Add("显示主窗口"), "CmdOrCtrl+M").OnClick(func(*application.Context) { t.show("") })] = "" // no detail; on Linux a blank where the others have their dot (markState)
-	t.petItem = t.addSwitch(m, "桌宠", t.settings.Get().Pet).OnClick(func(*application.Context) {
-		if err := t.pets.ShowPet(!t.settings.Get().Pet); err != nil {
-			notify("error", "切换桌宠失败：%v", err)
-		}
-	})
+	t.details[m.Add("显示进程监视").OnClick(func(*application.Context) { t.monitor() })] = ""
 	var headers []*application.MenuItem
 	header := func(title string) {
 		if runtime.GOOS != "darwin" { // elsewhere a title is a plain disabled item, read as a greyed-out option

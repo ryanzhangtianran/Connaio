@@ -5,7 +5,6 @@
 @font-face { font-family: "Maple Mono Normal NL NF"; src: url("fonts/MapleMonoNormalNL-NF-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; }
 
 :root {
-  --pet-card: rgba(255, 255, 255, 0.94); /* the pet's buttons and menu, on a clear window: no blur behind them */
   --mono: "Maple Mono Normal NL NF", ui-monospace, "SF Mono", Menlo, "DejaVu Sans Mono", monospace;
   --bg: linear-gradient(160deg, rgba(231, 236, 242, 0.62) 0%, rgba(223, 229, 237, 0.62) 45%, rgba(232, 229, 239, 0.62) 100%); /* the window's native blur shows through */
   --panel: rgba(255, 255, 255, 0.55); /* the floating sidebar */
@@ -41,7 +40,6 @@
 }
 /* theme.js sets .dark: the system's appearance, or the one chosen in 外观 */
 .dark {
-  --pet-card: rgba(40, 40, 44, 0.94);
   color-scheme: dark;
   --bg: linear-gradient(160deg, rgba(29, 32, 38, 0.62) 0%, rgba(32, 35, 41, 0.62) 50%, rgba(35, 33, 42, 0.62) 100%);
   --panel: rgba(255, 255, 255, 0.06);
@@ -593,28 +591,6 @@ tr.muted td.rule-actions { text-decoration: none; }
 .monitor:hover .monitor-btn { opacity: 1; }
 .monitor-btn:hover { background: var(--hover); color: var(--text); }
 .monitor-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; }
-
-/* the folded monitor, the desktop pet (Pet in Monitor.tsx): a sprite on a clear window, a card under
-   it with the application and its speed, round buttons at the top right on hover */
-.pet { position: relative; height: 100%; display: flex; flex-direction: column; align-items: center; padding-top: 4px; --wails-draggable: drag; }
-.pet .sprite { width: 96px; height: 104px; flex: none; background-repeat: no-repeat; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.25)); }
-.pet-tag { display: flex; align-items: center; gap: 8px; height: 16px; margin-top: 2px; padding: 0 7px; border-radius: 8px; background: rgba(28, 28, 30, 0.6); color: #fff; font: 500 10px var(--rounded); font-variant-numeric: tabular-nums; white-space: nowrap; opacity: 0; transition: opacity 0.2s; } /* the figures in the app's number face; a light caption on any desktop, light or dark */
-.pet.shown .pet-tag, .pet:hover .pet-tag { opacity: 1; }
-.pet-tag .down { color: #64d2ff; }
-.pet-tag .up { color: #b4a9ff; }
-/* a state: its dot and a few words (a failure's reason is the tag's tooltip) */
-.pet-tag i { width: 6px; height: 6px; margin-right: -3px; border-radius: 50%; background: #aeaeb2; }
-.pet-tag.busy i { background: #ff9f0a; animation: pet-blink 1s ease-in-out infinite; }
-.pet-tag.bad i { background: #ff453a; }
-@keyframes pet-blink { 50% { opacity: 0.3; } }
-.pet-btns { position: absolute; top: 4px; right: 4px; display: flex; flex-direction: column; gap: 4px; opacity: 0; transition: opacity 0.2s; }
-.pet:hover .pet-btns { opacity: 1; }
-.pet-btns .monitor-btn { width: 20px; height: 20px; border-radius: 50%; background: var(--pet-card); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); opacity: 1; }
-.pet-btns .monitor-btn.on { color: var(--good); }
-.pet-menu { position: absolute; z-index: 1; width: 108px; padding: 4px; border-radius: 8px; background: var(--pet-card); color: var(--text); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3); font: 12px var(--sans); --wails-draggable: no-drag; }
-.pet-menu button { display: block; width: 100%; height: 24px; padding: 0 8px; border: 0; border-radius: 5px; background: none; color: inherit; font: inherit; text-align: left; }
-.pet-menu button:hover { background: var(--accent); color: #fff; }
-.pet-menu hr { margin: 4px 6px; border: 0; border-top: 1px solid var(--line); }
 
 /* Linux: no native blur shows through the window, and the window is frameless, its buttons at the
    topbar's end as GNOME places them, round like Adwaita's and as tall as the pills */

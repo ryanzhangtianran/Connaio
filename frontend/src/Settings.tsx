@@ -3,7 +3,7 @@ import { CoreService, EnhancedService, ProfileService, SettingsService, SystemPr
 import type { About, DNSLeak, LeakServer, Update, UpdateProgress } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { on } from "./hooks";
 import Dialog from "./Dialog";
-import { copyText, errText, openURL, platform, plain, sizeText, words, validPort, web } from "./format";
+import { copyText, errText, platform, plain, sizeText, words, validPort, web } from "./format";
 
 
 // Row is one setting: title and description, the control at the right; a list row lists its items below.
@@ -149,7 +149,6 @@ export function General() {
   const [busy, setBusy] = useState("");
   const [login, setLogin] = useState(false);
   const [traySpeed, setTraySpeed] = useState(true);
-  const [pet, setPet] = useState(false);
   const [port, setPort] = useSetting<number>("mixed-port", 7890);
   const [portText, setPortText] = useState("");
   const [logLevel, setLogLevel] = useSetting<string>("log-level", "info");
@@ -158,13 +157,11 @@ export function General() {
   const [progress, setProgress] = useState<UpdateProgress | null>(null); // the update's download, then install
   useEffect(() => { SettingsService.About().then((a) => setVersion(a.version)); }, []);
   useEffect(() => on("update-progress", setProgress), []);
-  useEffect(() => on("pet", setPet), []); // hidden from the pet itself or the menu bar
 
   const load = useCallback(() => {
     EnhancedService.DaemonInstalled().then(setDaemon);
     SettingsService.LaunchAtLogin().then(setLogin);
     SettingsService.TraySpeed().then(setTraySpeed);
-    SettingsService.PetShown().then(setPet);
   }, []);
   useEffect(() => { load(); return on("enhanced", load); }, [load]);
   useEffect(() => setPortText(String(port)), [port]);
@@ -210,9 +207,6 @@ export function General() {
         <div className="section-title">应用</div>
         <Row title="开机时启动">
           <Switch on={login} onChange={(v) => { setLogin(v); run(SettingsService.SetLaunchAtLogin(v)); }} />
-        </Row>
-        <Row title="桌宠" desc="浮在桌面上的八条，随代理和流量变换动作；开着时随 Connaio 启动">
-          <Switch on={pet} onChange={(v) => { setPet(v); run(SettingsService.ShowPet(v)); }} />
         </Row>
         {platform === "macos" && ( // only the menu bar has room for it: the Linux and Windows trays show the icon alone
           <Row title={`${words.tray}显示网速`}>
@@ -437,7 +431,6 @@ export function AboutPage() {
       <Row title="Connaio">{about.version}</Row>
       <Row title="内核">{about.coreVersion || "—"}</Row>
       <Row title="内核运行方式">{about.attached ? "root" : "当前用户"}</Row>
-      <Row title="桌宠" desc="形象来自微博画师「呆猫八条」，非官方个人适配，仅作非商业使用">{!web && <button className="btn" onClick={() => openURL("https://www.sina.cn/media/7950264034")}>作者主页</button>}</Row>
       <Row title="数据目录" desc={web ? "保存在运行 Connaio 的服务器上" : undefined}>{!web && <button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button>}</Row>
     </div>
   );

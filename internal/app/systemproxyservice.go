@@ -18,7 +18,6 @@ import (
 
 func init() {
 	application.RegisterEvent[bool]("sysproxy")
-	application.RegisterEvent[bool]("pet") // the desktop pet shown or hidden (SettingsService.ShowPet)
 }
 
 // SystemProxyService points the macOS system proxy at the core's mixed-port while enabled, and

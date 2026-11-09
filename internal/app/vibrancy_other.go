@@ -13,9 +13,6 @@ func setDockVisible(bool) {}
 
 func makeFloating(*application.WebviewWindow) {}
 
-// shortcut: the pet sits on the window's acrylic/system background here; clear it if Windows users ask
-func setPet(*application.WebviewWindow, bool) {}
-
 // setAppearance: a Windows window takes its theme only as it's built (app.go), Linux's has none.
 func setAppearance(application.Window, string) {}
 

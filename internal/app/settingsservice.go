@@ -21,9 +21,7 @@ var appVersion = "dev"
 type SettingsService struct {
 	core        *CoreService
 	settings    *settingsFile
-	showMonitor func(on bool)      // app.go: shows the floating process monitor, or closes it
-	petMonitor  func(on bool)      // app.go: shows it as the desktop pet or as the panel
-	onPet       func(on bool)      // tray.go: the pet was shown or hidden
+	openMonitor func()             // app.go: shows the floating process monitor
 	setTheme    func(theme string) // app.go: dresses the open windows
 }
 
@@ -45,30 +43,9 @@ func (s *SettingsService) SetTheme(theme string) error {
 }
 
 // OpenMonitor shows the floating process monitor, a small window kept above the others.
-func (s *SettingsService) OpenMonitor() { _ = s.ShowPet(true) }
-
-// ShowPet shows the desktop pet, the floating monitor, or hides it; it's shown at launch while on.
-func (s *SettingsService) ShowPet(on bool) error {
-	if s.showMonitor != nil {
-		s.showMonitor(on)
-	}
-	if err := s.settings.Update(func(st *Settings) { st.Pet = on }); err != nil {
-		return err
-	}
-	if s.onPet != nil {
-		s.onPet(on)
-	}
-	emit("pet", on)
-	return nil
-}
-
-// PetShown is whether the desktop pet is on (ShowPet).
-func (s *SettingsService) PetShown() bool { return s.settings.Get().Pet }
-
-// MonitorPet shows the floating monitor as the desktop pet, a clear window, or as the panel (on false).
-func (s *SettingsService) MonitorPet(on bool) {
-	if s.petMonitor != nil {
-		s.petMonitor(on)
+func (s *SettingsService) OpenMonitor() {
+	if s.openMonitor != nil {
+		s.openMonitor()
 	}
 }
 
