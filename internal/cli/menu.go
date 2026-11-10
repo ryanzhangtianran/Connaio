@@ -180,8 +180,14 @@ const (
 	initLog    = "/var/log/connaio.log"
 )
 
-// systemd says systemd runs this system: not so in most containers.
+// systemd says systemd runs this system: not so in most containers. On a user's own install, that
+// the user's service is there: install.sh writes its unit only when systemctl --user works, and
+// runs it in the background otherwise.
 func systemd() bool {
+	if home, err := os.UserHomeDir(); err == nil && own() {
+		_, err = os.Stat(filepath.Join(home, ".config/systemd/user/connaio.service"))
+		return err == nil
+	}
 	_, err := os.Stat("/run/systemd/system")
 	return err == nil
 }
