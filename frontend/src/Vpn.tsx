@@ -187,7 +187,7 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
   const [name, setName] = useState(prevName || defaultName);
   const nameOK = !!name.trim() && !name.includes(","); // the name goes into rule lines
   const [saved, setSaved] = useState(!!initial?.active);
-  const fromProfile = !!initial?.profile; // the subscription's: 保存 puts a copy of it in the override
+  const fromProfile = !!initial?.profile; // the subscription's, as on 策略: 保存 puts a copy in the override, 删除 hides it, no 断开
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [probe, setProbe] = useState<string[]>([]);
@@ -321,7 +321,7 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
 
   return (
     <Dialog title={initial ? `编辑 ${prevName}` : "添加 VPN"} className="wide vpn-editor" locked={dirty || busy || probing} onClose={onDone} foot={<>
-      {initial && !fromProfile && <button className={`btn ${armed ? "armed" : ""}`} disabled={busy} onClick={() => confirm("remove", remove)}>{armed ? "确认删除" : "删除"}</button>}
+      {initial && <button className={`btn ${armed ? "armed" : ""}`} disabled={busy} onClick={() => confirm("remove", remove)}>{armed ? "确认删除" : "删除"}</button>}
       {form.type === "easyconnect" && tunnel?.state !== "up" && <button className="btn" disabled={probing || !ready || !status.running || tunnel?.state === "connecting"} onClick={probeGateway}>{probing ? "登录中…" : "测试登录"}</button>}
       <span className="grow" />
       {saved && !fromProfile && <button className="btn" disabled={busy} onClick={disconnect}>断开</button>}
@@ -338,26 +338,25 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
         {!noServer.has(form.type) && text("server", { easyconnect: "网关地址，如 vpn.example.edu.cn", lan: "另一台设备的局域网 IP，如 192.168.1.20" }[form.type] ?? "服务器地址")}
         {!noServer.has(form.type) && <input style={{ width: 80 }} placeholder={defaultPort[form.type] ?? "端口"} value={form.port ?? ""} onChange={set("port")} />}
       </div>
-      {fromProfile && <div className="muted small" style={{ margin: "4px 0 8px" }}>此 VPN 来自订阅，断开或删除需在订阅中进行；保存后以本页为准。</div>}
       {form.type === "lan" && <div className="muted small" style={{ margin: "4px 0 8px" }}>
         经另一台已连接 VPN 的 Connaio 访问：对方在「设备」页允许局域网设备连接，此处填它的地址与代理端口。
       </div>}
       {form.type === "easyconnect" && <>
-        <div className="form">{text("username", "用户名")}{secret("password", "密码")}</div>
+        <div className="form pair">{text("username", "用户名")}{secret("password", "密码")}</div>
         <div className="form">{secret("totp-secret", "TOTP 密钥，可选")}</div>
       </>}
       {form.type === "wireguard" && <>
-        <div className="form">{secret("private-key", "本机私钥")}{text("public-key", "对端公钥")}</div>
-        <div className="form">{secret("pre-shared-key", "预共享密钥，可选")}{text("ip", "本机地址，如 10.0.0.2")}{text("mtu", "MTU，可选", { style: { width: 80, flex: "none" } })}</div>
+        <div className="form pair">{secret("private-key", "本机私钥")}{text("public-key", "对端公钥")}</div>
+        <div className="form pair">{secret("pre-shared-key", "预共享密钥，可选")}{text("ip", "本机地址，如 10.0.0.2")}{text("mtu", "MTU，可选", { style: { width: 80, flex: "none" } })}</div>
         <div className="form">{text("allowed-ips", "对端网段，逗号分隔，如 10.0.0.0/8")}</div>
       </>}
       {form.type === "openvpn" && <>
         <div className="form"><textarea className="grow" rows={5} placeholder="粘贴 .ovpn 文件内容" value={form["ovpn-config"] ?? ""} onChange={set("ovpn-config")} /></div>
-        <div className="form">{text("username", "用户名，可选")}{secret("password", "密码，可选")}</div>
+        <div className="form pair">{text("username", "用户名，可选")}{secret("password", "密码，可选")}</div>
       </>}
       {form.type === "tailscale" && <>
-        <div className="form">{secret("auth-key", "Auth key，可选，留空则在浏览器中登录")}{text("hostname", "本机在 tailnet 中的名称（可选）")}</div>
-        <div className="form">{text("control-url", "控制服务器，Headscale 时填，可选")}{text("exit-node", "出口节点，可选")}</div>
+        <div className="form pair">{text("control-url", "控制服务器，Headscale 时填，可选")}{secret("auth-key", "Auth key，可选，留空则在浏览器中登录")}</div>
+        <div className="form pair">{text("hostname", "本机在 tailnet 中的名称（可选）")}{text("exit-node", "出口节点，可选")}</div>
         <div className="setting-row option-row">
           <div>接受子网路由</div>
           <Switch on={form["accept-routes"] === "true"} onChange={(on) => setForm({ ...form, "accept-routes": String(on) })} />

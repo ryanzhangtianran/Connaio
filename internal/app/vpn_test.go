@@ -2,6 +2,7 @@ package app
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/ryanzhangtianran/Connaio/internal/profile"
@@ -132,5 +133,17 @@ func TestProfileVPN(t *testing.T) {
 	}
 	if list, _ = s.activeVPNs(); len(list) != 1 || list[0].Profile || list[0].Proxy["server"] != "5.6.7.8" {
 		t.Fatalf("the override copy should replace it: %+v", list)
+	}
+	// DeleteVPN's two steps: the copy goes, then the profile's is hidden with its rules
+	for range 2 {
+		if err := store.RemoveProxy("Campus"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if list, _ = s.activeVPNs(); len(list) != 0 {
+		t.Fatalf("a deleted profile VPN should be gone: %+v", list)
+	}
+	if rules, _ := store.Value(false, []string{"rules"}); slices.Contains(rules.([]any), any("IP-CIDR,10.0.0.0/8,Campus")) {
+		t.Fatalf("its rules should go with it: %v", rules)
 	}
 }

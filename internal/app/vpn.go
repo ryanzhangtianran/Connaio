@@ -35,8 +35,8 @@ type VPN struct {
 	Kicked bool `json:"kicked"`
 	// Kicks is how often the gateway ended the session in the last 10 minutes.
 	Kicks int `json:"kicks"`
-	// Profile says the node comes from the profile, not the override: 断开 and 删除 are the
-	// subscription's to do; 保存 puts an override copy in its place.
+	// Profile says the node comes from the profile, not the override: 保存 puts an override copy in
+	// its place, 删除 hides it (DeleteVPN); there is no 断开.
 	Profile bool `json:"profile"`
 }
 
@@ -281,10 +281,20 @@ func (s *ProfileService) RemoveVPN(name string) error {
 	})
 }
 
-// DeleteVPN disconnects and forgets the draft too.
+// DeleteVPN disconnects and forgets the draft too. A subscription's VPN is deleted as the 策略 page
+// deletes the subscription's nodes: listed under remove-proxies, its rules dropped at Merge.
 func (s *ProfileService) DeleteVPN(name string) error {
 	if err := s.RemoveVPN(name); err != nil {
 		return err
+	}
+	active, err := s.activeVPNs()
+	if err != nil {
+		return err
+	}
+	if slices.ContainsFunc(active, func(v VPN) bool { return v.name() == name && v.Profile }) {
+		if err := s.edit(func() error { return s.store.RemoveProxy(name) }); err != nil {
+			return err
+		}
 	}
 	return s.settings.Update(func(st *Settings) { delete(st.VPNs, name) })
 }

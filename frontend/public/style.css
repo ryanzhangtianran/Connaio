@@ -810,6 +810,8 @@ tr.muted td.rule-actions { text-decoration: none; }
 /* the editor's rows fit the card: a field gives way rather than pushing the next one past the edge */
 .vpn-editor .form > * { min-width: 0; }
 .vpn-editor .form > .grow { flex: 1 1 0; }
+/* a pair's first field spans 名称 and 类型 (150 + 8 + 150), so it ends where the server field starts */
+.vpn-editor .form.pair > :first-child { flex: none; width: 308px; }
 .vpn-editor .form > .radio { flex: none; white-space: nowrap; }
 .vpn-editor .vpn-facts { margin-top: 10px; }
 .vpn-offered-head { display: flex; align-items: baseline; gap: 12px; margin-top: 18px; white-space: nowrap; overflow: hidden; }
