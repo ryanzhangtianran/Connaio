@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -92,7 +93,11 @@ func formTheme() *huh.Theme {
 // Menu is connaio run bare in a terminal: a full-screen menu, as homie's, the result of each entry
 // beside it; what runs the service (systemctl, sudo) gets the plain terminal while it runs.
 func Menu(in io.Reader, out io.Writer) error {
-	_, err := tea.NewProgram(newModel(), tea.WithAltScreen(), tea.WithInput(in), tea.WithOutput(out)).Run()
+	last, err := tea.NewProgram(newModel(), tea.WithAltScreen(), tea.WithInput(in), tea.WithOutput(out)).Run()
+	if m, ok := last.(model); ok && m.updated && err == nil {
+		// the binary on disk is the new version now: it takes over, else this one would go on as the old
+		return syscall.Exec(exe(), os.Args, os.Environ())
+	}
 	return err
 }
 
@@ -106,11 +111,13 @@ type model struct {
 	submit  func() tea.Cmd
 	head    string
 	busy    bool
+	updated bool // 更新 Connaio succeeded: the menu quits and starts again as the new version
 }
 
 type (
 	contentMsg struct{ title, body string }
 	headMsg    string // the header, read off the loop: it asks the service and the core
+	updatedMsg struct{}
 	doneMsg    struct {
 		title string
 		err   error
@@ -177,9 +184,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case doneMsg:
 		body := fg(cOK).Render("✓ " + msg.title + "完成")
 		if msg.err != nil {
-			body = fg(cErr).Render("✗ " + msg.err.Error())
+			body = errLine(msg.err)
 		}
 		return m, show(msg.title, body+"\n\n"+dim.Render("输出已显示在终端中"))
+	case updatedMsg:
+		m.updated = true
+		return m, tea.Quit
 	case formMsg:
 		m.busy = false
 		return m, m.openForm(msg.title, msg.submit, msg.fields...)
@@ -266,7 +276,12 @@ func show(title, body string) tea.Cmd {
 }
 
 // failed shows err in the content pane.
-func failed(title string, err error) tea.Cmd { return show(title, fg(cErr).Render("✗ "+err.Error())) }
+func failed(title string, err error) tea.Cmd { return show(title, errLine(err)) }
+
+// errLine is err after a ✗, its further lines (an error joined from two tries) under its text.
+func errLine(err error) string {
+	return fg(cErr).Render("✗ " + strings.ReplaceAll(err.Error(), "\n", "\n  "))
+}
 
 // capture runs a command as typed on the command line, in the background, and shows what it printed.
 func capture(title string, args ...string) tea.Cmd {
@@ -277,14 +292,30 @@ func captureFn(title string, fn func(io.Writer) error) tea.Cmd {
 	return func() tea.Msg {
 		var b bytes.Buffer
 		if err := fn(&b); err != nil {
-			b.WriteString("\n" + fg(cErr).Render("✗ "+err.Error()))
+			b.WriteString("\n" + errLine(err))
 		}
-		body := strings.Trim(b.String(), "\n")
+		body := unruled(b.String())
 		if body == "" {
 			body = fg(cOK).Render("✓ 完成")
 		}
 		return contentMsg{title, body}
 	}
+}
+
+// unruled is a command's output for the content pane: the table's rules, which part its sections
+// on a terminal, left out at the ends and a blank line between sections; the pane frames it already.
+func unruled(out string) string {
+	var lines []string
+	for _, l := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if strings.Trim(l, "─") == "" && l != "" {
+			l = ""
+		}
+		if l == "" && (len(lines) == 0 || lines[len(lines)-1] == "") {
+			continue // none at the start, nor two in a row
+		}
+		lines = append(lines, l)
+	}
+	return strings.TrimRight(strings.Join(lines, "\n"), "\n")
 }
 
 // termRun hands the plain terminal to fn (sudo asks for a password, the installer draws its own
@@ -294,7 +325,7 @@ type termRun func() error
 func (f termRun) Run() error {
 	err := f()
 	if err != nil {
-		fmt.Println(fg(cErr).Render("✗ " + err.Error()))
+		fmt.Println(errLine(err))
 	}
 	fmt.Print(dim.Render("\n↩ 按回车返回菜单 "))
 	_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
@@ -379,7 +410,12 @@ func (m *model) choose(id string) tea.Cmd {
 		return runTerm(label, logs)
 	case "self-update":
 		// -E under sudo: a proxy in the environment reaches install.sh's downloads too
-		return runTerm(label, func() error { return system("sh", "-c", "curl -fsSL "+installURL+" | sh") })
+		return tea.Exec(termRun(func() error { return system("sh", "-c", "curl -fsSL "+installURL+" | sh") }), func(err error) tea.Msg {
+			if err != nil {
+				return doneMsg{label, err}
+			}
+			return updatedMsg{}
+		})
 	}
 	return nil
 }

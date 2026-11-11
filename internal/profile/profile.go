@@ -387,7 +387,9 @@ func download(url string, clients []*http.Client) ([]byte, *Usage, int, error) {
 		if err == nil {
 			return content, usage, interval, nil
 		}
-		errs = append(errs, err)
+		if !slices.ContainsFunc(errs, func(e error) bool { return e.Error() == err.Error() }) { // a 404 both ways says so once
+			errs = append(errs, err)
+		}
 	}
 	return nil, nil, 0, errors.Join(errs...)
 }

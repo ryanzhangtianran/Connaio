@@ -394,3 +394,12 @@ func TestVPNLogin(t *testing.T) {
 		t.Error("an unknown VPN signed in")
 	}
 }
+
+// The menu shows a command's output without the table's rules: none at the ends, a blank line
+// between sections.
+func TestUnruled(t *testing.T) {
+	got := unruled("────\n内核  运行中\n────\n隧道 a  运行中\n────\n")
+	if got != "内核  运行中\n\n隧道 a  运行中" {
+		t.Fatalf("%q", got)
+	}
+}

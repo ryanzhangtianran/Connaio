@@ -996,3 +996,13 @@ rules:
 		t.Fatalf("signed in: proxies = %v", got)
 	}
 }
+
+// A subscription failing the same way on every try (direct, then through the proxy) says so once.
+func TestDownloadSameErrorOnce(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	defer srv.Close()
+	_, _, _, err := download(srv.URL, []*http.Client{srv.Client(), srv.Client()})
+	if err == nil || strings.Contains(err.Error(), "\n") {
+		t.Fatalf("%q", err)
+	}
+}

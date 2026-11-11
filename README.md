@@ -65,6 +65,17 @@ curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo sh
   connaio help                   # 全部命令
   ```
 
+- 卸载（以 root 安装、systemd 运行时；无 systemd 时把第一行换成 `/etc/init.d/connaio stop` 并删除 `/etc/init.d/connaio`）：
+
+  ```sh
+  sudo systemctl disable --now connaio
+  sudo rm -rf /opt/connaio /etc/default/connaio /etc/profile.d/connaio.sh /etc/systemd/system/connaio.service
+  ```
+
+  为当前用户安装的：`systemctl --user disable --now connaio`，再删除 `~/.local/share/connaio`、`~/.local/bin/connaio`、`~/.config/systemd/user/connaio.service`、`~/.config/Connaio/connaio.env` 与 `~/.config/Connaio/web-token`，以及 `~/.bashrc` 中 Connaio 的两行。
+
+  配置与流量统计在数据目录（`/var/lib/connaio-web`，或为当前用户安装时的 `~/.local/share/connaio-web`），卸载时保留，不再需要时一并删除。
+
 ## Contributions
 
 Issue and PR welcome!
