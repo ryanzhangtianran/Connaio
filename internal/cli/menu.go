@@ -222,7 +222,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if k, ok := msg.(tea.KeyMsg); ok && k.String() == "esc" {
+	if k, ok := msg.(tea.KeyMsg); ok && (k.String() == "esc" || k.String() == "left" && picking(m.form)) {
 		m.form, m.content = nil, false
 		return m, nil
 	}
@@ -238,6 +238,16 @@ func (m model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.form, m.content = nil, false
 	}
 	return m, cmd
+}
+
+// picking says the form's field is a list to pick from: ← there goes back to the menu, as esc does;
+// in a text field it moves the cursor, in a yes/no one it picks yes.
+func picking(f *huh.Form) bool {
+	switch f.GetFocusedField().(type) {
+	case *huh.Input, *huh.Confirm:
+		return false
+	}
+	return true
 }
 
 // openForm shows fields in the content pane; submit runs once they are filled in. submit must not
@@ -388,7 +398,8 @@ func (m *model) choose(id string) tea.Cmd {
 				}
 				return pickProfile(label, action)
 			}, huh.NewSelect[string]().Title("配置").Description(report("profiles")+"\n").
-				Options(huh.NewOption("使用配置", "use"), huh.NewOption("更新订阅", "update"), huh.NewOption("添加订阅", "add")).Value(&action))
+				Options(huh.NewOption("使用配置", "use"), huh.NewOption("更新订阅", "update"), huh.NewOption("添加订阅", "add"),
+					huh.NewOption("修改订阅地址", "edit"), huh.NewOption("删除配置", "remove")).Value(&action))
 		})
 	case "vpn":
 		return bg(func() tea.Cmd {
@@ -409,17 +420,21 @@ func (m *model) choose(id string) tea.Cmd {
 func nodesForm(label string) tea.Cmd {
 	return pickGroup(label, func(g group) tea.Cmd {
 		const test = "\x00test" // no node's name
-		node := g.Now
+		node, desc := g.Now, "当前 "+cmp.Or(g.Now, "—")
 		opts := []huh.Option[string]{huh.NewOption(fg(cAccent).Render("测试延迟"), test)}
-		for _, p := range g.All {
-			opts = append(opts, huh.NewOption(p.Name+"  "+dim.Render(delay(p.Delay)), p.Name))
+		if g.Type == "Selector" {
+			for _, p := range g.All {
+				opts = append(opts, huh.NewOption(p.Name+"  "+dim.Render(delay(p.Delay)), p.Name))
+			}
+		} else { // a subnet group picks by the network, an url-test by delay: the core takes no pick
+			node, desc = test, "自动选择，当前 "+cmp.Or(g.Now, "—")+"；不能手动切换"
 		}
 		return ask(label, func() tea.Cmd {
 			if node == test {
 				return capture(label, "test", g.Name)
 			}
 			return capture(label, "select", g.Name, node)
-		}, huh.NewSelect[string]().Title(g.Name).Description("当前 "+cmp.Or(g.Now, "—")).Options(opts...).Value(&node))
+		}, huh.NewSelect[string]().Title(g.Name).Description(desc).Options(opts...).Value(&node))
 	})
 }
 
@@ -509,7 +524,8 @@ type group struct {
 	}
 }
 
-// pickProfile asks for a profile to use or update (action).
+// pickProfile asks for a profile, then uses, updates or removes it (asking first), or asks for its
+// new link (action edit; subscriptions only).
 func pickProfile(label, action string) tea.Cmd {
 	c, err := client0()
 	if err != nil {
@@ -517,25 +533,54 @@ func pickProfile(label, action string) tea.Cmd {
 	}
 	var ps struct {
 		Current  string
-		Profiles []struct{ ID, Name string }
+		Profiles []profileEntry
 	}
 	if err := c.call(&ps, "ProfileService.Profiles"); err != nil {
 		return failed(label, err)
 	}
-	if len(ps.Profiles) == 0 {
-		return show(label, dim.Render("暂无配置"))
-	}
-	var opts []huh.Option[string]
-	for _, p := range ps.Profiles {
+	var opts []huh.Option[int]
+	for i, p := range ps.Profiles {
+		if (action == "update" || action == "edit") && p.URL == "" {
+			continue // a local profile has no link
+		}
 		name := p.Name
 		if p.ID == ps.Current {
 			name += dim.Render("  使用中")
 		}
-		opts = append(opts, huh.NewOption(name, p.ID))
+		opts = append(opts, huh.NewOption(name, i))
 	}
-	picked := ps.Current
-	return ask(label, func() tea.Cmd { return capture(label, "profile", action, picked) },
-		huh.NewSelect[string]().Title("配置").Options(opts...).Value(&picked))
+	if len(opts) == 0 {
+		return show(label, dim.Render(map[bool]string{true: "暂无订阅", false: "暂无配置"}[action == "update" || action == "edit"]))
+	}
+	i := opts[0].Value
+	for _, o := range opts {
+		if ps.Profiles[o.Value].ID == ps.Current {
+			i = o.Value // the one in use, first
+		}
+	}
+	return ask(label, func() tea.Cmd {
+		p := ps.Profiles[i]
+		switch action {
+		case "edit":
+			link := p.URL
+			return ask(label, func() tea.Cmd { return capture(label, "profile", "edit", p.ID, link) },
+				huh.NewInput().Title(p.Name+" 的订阅地址").Value(&link).Validate(func(s string) error {
+					if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
+						return errors.New("以 http:// 或 https:// 开头")
+					}
+					return nil
+				}))
+		case "remove":
+			sure := false
+			return ask(label, func() tea.Cmd {
+				if !sure {
+					return show(label, dim.Render("未删除"))
+				}
+				return capture(label, "profile", "remove", p.ID)
+			}, huh.NewConfirm().Title("删除 "+p.Name+"？").Description("配置文件一并删除，无法恢复").Affirmative("删除").Negative("取消").Value(&sure))
+		}
+		return capture(label, "profile", action, p.ID)
+	}, huh.NewSelect[int]().Title("配置").Options(opts...).Value(&i))
 }
 
 // pickGroup asks for a strategy group, then hands it to next.
@@ -629,12 +674,14 @@ func (m model) View() string {
 		body = m.menuView()
 	}
 	hint := entries[m.cursor][2]
-	keys := "↑↓ 移动 · 回车 打开 · pgup/pgdn 滚动 · q 退出"
+	keys := "↑↓ 移动 · 回车或 → 打开 · pgup/pgdn 滚动 · q 退出"
 	switch {
+	case m.form != nil && picking(m.form):
+		keys = "↑↓ 选择 · 回车 确定 · ← 或 esc 返回菜单"
 	case m.form != nil:
-		hint, keys = "esc 取消", "回车 下一步 · shift+tab 上一步 · esc 取消"
+		keys = "回车 确定 · shift+tab 上一项 · esc 返回菜单"
 	case !m.wide():
-		keys = "↑↓ 移动 · 回车 打开 · esc 返回 · q 退出"
+		keys = "↑↓ 移动 · 回车或 → 打开 · ← 或 esc 返回 · q 退出"
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, m.header(),
 		lipgloss.NewStyle().Height(m.bodyHeight()).MaxHeight(m.bodyHeight()).Render(body),

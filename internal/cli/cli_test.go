@@ -238,9 +238,10 @@ func TestDisplayWidth(t *testing.T) {
 // reach the same calls as the commands.
 func TestMenu(t *testing.T) {
 	addr, calls := fake(t, map[string]string{
-		"CoreService.Status":         `{"running":true,"version":"1.19.32"}`,
-		"CoreService.Mode":           "text:rule",
-		"CoreService.Groups":         `[{"name":"GLOBAL"},{"name":"Proxy","now":"A","all":[{"name":"A","delay":80},{"name":"B"}]}]`,
+		"CoreService.Status": `{"running":true,"version":"1.19.32"}`,
+		"CoreService.Mode":   "text:rule",
+		"CoreService.Groups": `[{"name":"GLOBAL"},{"name":"Proxy","type":"Selector","now":"A","all":[{"name":"A","delay":80},{"name":"B"}]},` +
+			`{"name":"Sub","type":"Subnet","now":"A","all":[{"name":"A"},{"name":"DIRECT"}]}]`,
 		"CoreService.ReverseTunnels": `[]`,
 	})
 	t.Setenv("CONNAIO_ADDR", addr)
@@ -269,13 +270,21 @@ func TestMenu(t *testing.T) {
 	key(tea.KeyEnter) // Proxy
 	key(tea.KeyUp)    // from A to 测试延迟, above the nodes
 	key(tea.KeyEnter)
+	at("nodes")
+	key(tea.KeyDown) // Sub: it picks by the network, so only 测试延迟 is offered
+	key(tea.KeyEnter)
+	key(tea.KeyEnter)
+	at("nodes")
+	if key(tea.KeyLeft); m.(model).form != nil { // ← in a list goes back to the menu
+		t.Error("← left the form open")
+	}
 	var got []string
 	for _, c := range *calls {
 		if strings.HasPrefix(c, "CoreService.Select") || strings.HasPrefix(c, "CoreService.SetMode") || strings.HasPrefix(c, "CoreService.TestGroup") {
 			got = append(got, c)
 		}
 	}
-	want := []string{`CoreService.Select["Proxy","B"]`, `CoreService.SetMode["global"]`, `CoreService.TestGroup["Proxy"]`}
+	want := []string{`CoreService.Select["Proxy","B"]`, `CoreService.SetMode["global"]`, `CoreService.TestGroup["Proxy"]`, `CoreService.TestGroup["Sub"]`}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("calls %v\nwant  %v", got, want)
 	}
@@ -405,5 +414,47 @@ func TestUnruled(t *testing.T) {
 	got := unruled("────\n内核  运行中\n────\n隧道 a  运行中\n────\n")
 	if got != "内核  运行中\n\n隧道 a  运行中" {
 		t.Fatalf("%q", got)
+	}
+}
+
+// profile edit changes a subscription's link, its name and interval kept; remove deletes; a local
+// profile has no link to change. The menu's 删除配置 asks first.
+func TestProfileEditRemove(t *testing.T) {
+	addr, calls := fake(t, map[string]string{
+		"ProfileService.Profiles": `{"current":"a","profiles":[{"id":"a","name":"VPS","url":"https://old/x","interval":24},{"id":"b","name":"本地"}]}`,
+	})
+	for _, args := range [][]string{{"profile", "edit", "VPS", "https://new/y"}, {"profile", "remove", "本地"}} {
+		if _, err := main(t, addr, args...); err != nil {
+			t.Fatal(args, err)
+		}
+	}
+	if _, err := main(t, addr, "profile", "edit", "本地", "https://z"); err == nil {
+		t.Error("a local profile's link edited")
+	}
+	t.Setenv("CONNAIO_ADDR", addr)
+	t.Setenv("CONNAIO_TOKEN", "tok")
+	var m tea.Model = newModel()
+	m = feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = feed(t, m, contentMsg{"状态", ""}) // the first screen read: the menu takes keys
+	for m.(model).cursor != slices.IndexFunc(entries, func(e [3]string) bool { return e[0] == "profiles" }) {
+		m = feed(t, m, tea.KeyMsg{Type: tea.KeyDown})
+	}
+	m = feed(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	for range 4 { // 使用配置 → … → 删除配置
+		m = feed(t, m, tea.KeyMsg{Type: tea.KeyDown})
+	}
+	m = feed(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = feed(t, m, tea.KeyMsg{Type: tea.KeyEnter}) // VPS, the one in use
+	m = feed(t, m, tea.KeyMsg{Type: tea.KeyLeft})  // 删除, not the default 取消
+	feed(t, m, tea.KeyMsg{Type: tea.KeyEnter})
+	var got []string
+	for _, c := range *calls {
+		if !strings.HasPrefix(c, "ProfileService.Profiles") && !strings.HasPrefix(c, "CoreService") {
+			got = append(got, c)
+		}
+	}
+	want := []string{`ProfileService.Edit["a","VPS","https://new/y",24]`, `ProfileService.Remove["b"]`, `ProfileService.Remove["a"]`}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("calls %v\nwant  %v", got, want)
 	}
 }

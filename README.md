@@ -59,7 +59,7 @@ curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo sh
   connaio status                 # 运行状态
   connaio mode global            # 出站模式：rule / global / direct
   connaio groups -a              # 策略组与节点；select <策略组> <节点> 切换，test <策略组> 测延迟
-  connaio profiles               # 配置；profile use|update <名称>，profile add <URL>
+  connaio profiles               # 配置；profile use|update|remove <名称>，profile add <URL>，profile edit <名称> <URL>
   connaio tunnels                # 反向隧道；tunnel start|stop <名称>
   connaio vpns                   # VPN；vpn login|logout|reconnect <名称>
   connaio help                   # 全部命令

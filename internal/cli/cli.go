@@ -23,38 +23,53 @@ import (
 	"golang.org/x/term"
 )
 
-// Usage is the command line's help, printed by connaio help.
-const Usage = `用法：connaio [命令] [选项] [参数]
+// Usage is the command line's help, printed by connaio help: the commands with what each does, the
+// descriptions in one column by display width (a Chinese placeholder takes two).
+var Usage = usage(`用法：connaio [命令] [选项] [参数]
 
 在终端中不带参数时打开管理菜单；带选项时运行 Connaio（--listen 127.0.0.1:9090 --data-dir 目录 --token 令牌）。
 以下命令控制运行中的 Connaio，选项写在参数之前：--addr 地址（默认 127.0.0.1:9090）、
---token 令牌（默认读服务数据目录或 ~/.config/Connaio 中的 web-token）、--data-dir 目录。
+--token 令牌（默认读服务数据目录或 ~/.config/Connaio 中的 web-token）、--data-dir 目录。`, [][2]string{
+	{"status", "运行状态"},
+	{"mode [rule|global|direct]", "查看或切换出站模式"},
+	{"groups [-a]", "策略组及当前节点（-a 列出全部节点）"},
+	{"select <策略组> <节点>", "切换节点"},
+	{"test <策略组>", "测试策略组延迟"},
+	{"profiles", "配置列表"},
+	{"profile use <名称>", "使用配置"},
+	{"profile update <名称>", "更新订阅"},
+	{"profile add <URL> [名称]", "添加订阅"},
+	{"profile edit <名称> <URL>", "修改订阅地址"},
+	{"profile remove <名称>", "删除配置"},
+	{"tunnels", "反向隧道"},
+	{"tunnel start|stop <名称>", "启动或停止隧道"},
+	{"vpns", "VPN 状态"},
+	{"vpn reconnect <名称>", "重新连接 VPN"},
+	{"vpn login <名称>", "登录订阅中的 VPN（EasyConnect 在此输入账号，Tailscale 给出登录链接）"},
+	{"vpn logout <名称>", "退出登录（断开 VPN）"},
+	{"enhanced [on|off]", "查看、开启或关闭 TUN 模式"},
+	{"partial [on|off]", "查看、开启或关闭部分 TUN"},
+	{"partial add|remove <程序>", "添加或移除部分 TUN 接管的程序"},
+	{"connections", "当前连接"},
+	{"close-all", "断开全部连接"},
+	{"restart", "重启内核"},
+	{"run <命令> [参数]", "经代理运行命令，无需 export"},
+	{"enable", "当前终端设置代理变量（bash；未经安装脚本时用 eval \"$(connaio enable)\"）"},
+	{"disable", "当前终端取消代理变量"},
+})
 
-  status                       运行状态
-  mode [rule|global|direct]    查看或切换出站模式
-  groups [-a]                  策略组及当前节点（-a 列出全部节点）
-  select <策略组> <节点>        切换节点
-  test <策略组>                 测试策略组延迟
-  profiles                     配置列表
-  profile use <名称>            使用配置
-  profile update <名称>         更新订阅
-  profile add <URL> [名称]      添加订阅
-  tunnels                      反向隧道
-  tunnel start|stop <名称>      启动或停止隧道
-  vpns                         VPN 状态
-  vpn reconnect <名称>          重新连接 VPN
-  vpn login <名称>              登录订阅中的 VPN（EasyConnect 在此输入账号，Tailscale 给出登录链接）
-  vpn logout <名称>             退出登录（断开 VPN）
-  enhanced [on|off]            查看、开启或关闭 TUN 模式
-  partial [on|off]             查看、开启或关闭部分 TUN
-  partial add|remove <程序>    添加或移除部分 TUN 接管的程序
-  connections                  当前连接
-  close-all                    断开全部连接
-  restart                      重启内核
-  run <命令> [参数]             经代理运行命令，无需 export
-  enable                       当前终端设置代理变量（bash；未经安装脚本时用 eval "$(connaio enable)"）
-  disable                      当前终端取消代理变量
-`
+func usage(intro string, commands [][2]string) string {
+	w := 0
+	for _, c := range commands {
+		w = max(w, displayWidth(c[0]))
+	}
+	var b strings.Builder
+	b.WriteString(intro + "\n\n")
+	for _, c := range commands {
+		b.WriteString("  " + c[0] + strings.Repeat(" ", w-displayWidth(c[0])+3) + c[1] + "\n")
+	}
+	return b.String()
+}
 
 // svc prefixes a service method's name as Wails binds it.
 const svc = "github.com/ryanzhangtianran/Connaio/internal/app."
@@ -248,6 +263,13 @@ var (
 	stateLabel = map[string]string{"running": "运行中", "connecting": "连接中", "retrying": "重试中", "stopped": "已停止"}
 	vpnLabel   = map[string]string{"up": "已连接", "connecting": "连接中", "login": "待登录", "down": "未连接"}
 )
+
+// profileEntry is what the commands read of a profile.
+type profileEntry struct {
+	ID, Name, URL string
+	Interval      int // auto-update hours, kept as it is when the link is edited
+	UpdatedAt     time.Time
+}
 
 // vpnState is what the commands read of a VPN.
 type vpnState struct {
@@ -486,10 +508,7 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 	case "profiles", "profile":
 		var profiles struct {
 			Current  string
-			Profiles []struct {
-				ID, Name, URL string
-				UpdatedAt     time.Time
-			}
+			Profiles []profileEntry
 		}
 		if err := c.call(&profiles, "ProfileService.Profiles"); err != nil {
 			return err
@@ -508,25 +527,32 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 			n := cmp.Or(strings.Join(args[2:], " "), hostOf(args[1]))
 			return c.call(nil, "ProfileService.Add", n, args[1])
 		}
-		if err := need(args, 2, "profile use|update <名称>"); err != nil {
+		const form = "profile use|update|remove <名称>，profile edit <名称> <URL>，或 profile add <URL> [名称]"
+		if err := need(args, 2, form); err != nil {
 			return err
 		}
-		id := ""
-		for _, p := range profiles.Profiles {
-			if p.ID == args[1] || p.Name == args[1] {
-				id = p.ID
-			}
-		}
-		if id == "" {
+		i := slices.IndexFunc(profiles.Profiles, func(p profileEntry) bool { return p.ID == args[1] || p.Name == args[1] })
+		if i < 0 {
 			return fmt.Errorf("没有名为 %s 的配置", args[1])
 		}
+		p := profiles.Profiles[i]
 		switch args[0] {
 		case "use":
-			return c.call(nil, "ProfileService.Select", id)
+			return c.call(nil, "ProfileService.Select", p.ID)
 		case "update":
-			return c.call(nil, "ProfileService.Update", id)
+			return c.call(nil, "ProfileService.Update", p.ID)
+		case "remove":
+			return c.call(nil, "ProfileService.Remove", p.ID)
+		case "edit":
+			switch {
+			case len(args) < 3:
+				return errors.New("用法：connaio profile edit <名称> <URL>")
+			case p.URL == "":
+				return fmt.Errorf("%s 是本地配置，没有订阅地址", p.Name)
+			}
+			return c.call(nil, "ProfileService.Edit", p.ID, p.Name, args[2], p.Interval)
 		}
-		return errors.New("用法：connaio profile use|update <名称>，或 profile add <URL> [名称]")
+		return errors.New("用法：connaio " + form)
 	case "tunnels":
 		var tunnels []struct {
 			Name, State, Error string
@@ -631,7 +657,10 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 		}
 		if len(conns) == 0 {
 			fmt.Fprintln(out, "当前没有连接")
+			return nil
 		}
+		tw.row("应用", "目标", "规则", "策略", "流量")
+		tw.rule()
 		for _, x := range conns {
 			tw.row(cmp.Or(x.App, x.Process, x.Source, "—"), x.Host+":"+x.Port, cmp.Or(x.Rule, "—"), cmp.Or(x.Chain, "DIRECT"), "↑"+size(x.Upload)+" ↓"+size(x.Download))
 		}
