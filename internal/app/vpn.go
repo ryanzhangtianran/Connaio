@@ -281,8 +281,9 @@ func (s *ProfileService) ReconnectVPN(name string) error {
 
 // LoginVPN signs in a profile's VPN that waits for it: a copy of its node, with the account for
 // EasyConnect, goes into the override in its place (SetVPN), so it stays signed in across restarts
-// until RemoveVPN takes the copy out. A Tailscale one starts then, and reports its login link.
-func (s *ProfileService) LoginVPN(name, username, password, totp string) error {
+// until RemoveVPN takes the copy out. A Tailscale one starts then, named hostname when given, and
+// reports its login link.
+func (s *ProfileService) LoginVPN(name, username, password, totp, hostname string) error {
 	active, err := s.activeVPNs()
 	if err != nil {
 		return err
@@ -306,6 +307,9 @@ func (s *ProfileService) LoginVPN(name, username, password, totp string) error {
 		if totp != "" {
 			p["totp-secret"] = totp
 		}
+	}
+	if p["type"] == "tailscale" && hostname != "" { // else the core names it after the computer
+		p["hostname"] = hostname
 	}
 	return s.SetVPN(VPN{Proxy: p}, name)
 }

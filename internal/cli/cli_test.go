@@ -301,7 +301,7 @@ func TestVPNLogin(t *testing.T) {
 	if _, err := main(t, addr, "vpn", "logout", "校园网"); err != nil {
 		t.Fatal(err)
 	}
-	want := `ProfileService.VPNs[] ProfileService.LoginVPN["校园网","alice","secret",""] ProfileService.VPNs[] ProfileService.RemoveVPN["校园网"]`
+	want := `ProfileService.VPNs[] ProfileService.LoginVPN["校园网","alice","secret","",""] ProfileService.VPNs[] ProfileService.RemoveVPN["校园网"]`
 	if strings.Join(*calls, " ") != want {
 		t.Errorf("calls %v", *calls)
 	}

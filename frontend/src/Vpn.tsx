@@ -268,7 +268,7 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
   // logging in takes the account from wherever else it is signed in: after a recent kick, ask first
   const [askKick, setAskKick] = useState(false);
   // a subscription's VPN signs in as the command line does: its node as the subscription has it, plus the account
-  const signIn = () => run(ProfileService.LoginVPN(prevName, form.username?.trim() ?? "", form.password ?? "", form["totp-secret"]?.trim() ?? "").then(() => { setSaved(true); connected(); }));
+  const signIn = () => run(ProfileService.LoginVPN(prevName, form.username?.trim() ?? "", form.password ?? "", form["totp-secret"]?.trim() ?? "", form.hostname?.trim() ?? "").then(() => { setSaved(true); connected(); }));
   const login = () => { setAskKick(false); (saved ? reconnect : needsLogin ? signIn : connect)(); };
   const disconnect = () => run(ProfileService.RemoveVPN(name).then(onDone));
   const remove = () => run(ProfileService.DeleteVPN(prevName || name).then(onDone));

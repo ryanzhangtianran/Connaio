@@ -180,21 +180,32 @@ func TestLoginProfileVPN(t *testing.T) {
 	if err := s.ReconnectVPN("校园网"); err == nil {
 		t.Fatal("reconnect before signing in")
 	}
-	if err := s.LoginVPN("校园网", "alice", "", ""); err == nil {
+	if err := s.LoginVPN("校园网", "alice", "", "", ""); err == nil {
 		t.Fatal("signed in without a password")
 	}
-	if err := s.LoginVPN("校园网", "alice", "secret", ""); err != nil {
+	if err := s.LoginVPN("校园网", "alice", "secret", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	items, _ := s.store.UserItems()
 	if len(items.Proxies) != 1 || items.Proxies[0]["username"] != "alice" || waiting("校园网") {
 		t.Fatalf("signed in: %+v", items.Proxies)
 	}
-	if err := s.LoginVPN("校园网", "alice", "secret", ""); err == nil {
+	if err := s.LoginVPN("校园网", "alice", "secret", "", ""); err == nil {
 		t.Fatal("signed in twice")
 	}
 	if err := s.RemoveVPN("校园网"); err != nil || !waiting("校园网") {
 		t.Fatal("signing out should leave it waiting again:", err)
+	}
+	// a Tailscale one takes the name given (the core starts it, its login left waiting)
+	if err := s.LoginVPN("ts", "", "", "", "mybox"); err != nil {
+		t.Fatal(err)
+	}
+	items, _ = s.store.UserItems()
+	if len(items.Proxies) != 1 || items.Proxies[0]["hostname"] != "mybox" {
+		t.Fatalf("named: %+v", items.Proxies)
+	}
+	if err := s.RemoveVPN("ts"); err != nil || !waiting("ts") {
+		t.Fatal(err)
 	}
 }
 

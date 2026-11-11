@@ -302,7 +302,7 @@ func vpnLogin(c *client, name string, out io.Writer) error {
 			return err
 		}
 	}
-	if err := c.call(nil, "ProfileService.LoginVPN", name, user, pass, totp); err != nil {
+	if err := c.call(nil, "ProfileService.LoginVPN", name, user, pass, totp, ""); err != nil {
 		return err
 	}
 	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(time.Second) {
