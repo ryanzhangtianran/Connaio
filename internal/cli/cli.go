@@ -515,7 +515,10 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 		}
 		if name == "profiles" {
 			for _, p := range profiles.Profiles {
-				mark, source := " ", cmp.Or(p.URL, "本地")
+				mark, source := " ", "本地"
+				if p.URL != "" {
+					source = hostOf(p.URL) // the link holds its token: not shown on a screen others may see
+				}
 				if p.ID == profiles.Current {
 					mark = "*"
 				}

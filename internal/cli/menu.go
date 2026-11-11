@@ -360,7 +360,7 @@ func (m *model) choose(id string) tea.Cmd {
 	case "mode":
 		mode := "rule"
 		return m.openForm(label, func() tea.Cmd { return capture(label, "mode", mode) },
-			huh.NewSelect[string]().Title("出站模式").Options(huh.NewOption("规则", "rule"), huh.NewOption("全局", "global"), huh.NewOption("直连", "direct")).Value(&mode))
+			huh.NewSelect[string]().Options(huh.NewOption("规则", "rule"), huh.NewOption("全局", "global"), huh.NewOption("直连", "direct")).Value(&mode))
 	case "service":
 		action := "restart"
 		return m.openForm(label, func() tea.Cmd {
@@ -377,7 +377,7 @@ func (m *model) choose(id string) tea.Cmd {
 				})
 			}
 			return runTerm(map[string]string{"start": "启动服务", "stop": "停止服务", "restart": "重启服务"}[action], func() error { return service(action) })
-		}, huh.NewSelect[string]().Title("服务").Description("在终端中运行，完成后按回车返回").Options(
+		}, huh.NewSelect[string]().Description("在终端中运行，完成后按回车返回").Options(
 			huh.NewOption("重启服务", "restart"), huh.NewOption("启动服务", "start"), huh.NewOption("停止服务", "stop"),
 			huh.NewOption("查看日志", "logs"), huh.NewOption("更新 Connaio", "self-update")).Value(&action))
 	}
@@ -397,7 +397,7 @@ func (m *model) choose(id string) tea.Cmd {
 					return addForm(label)
 				}
 				return pickProfile(label, action)
-			}, huh.NewSelect[string]().Title("配置").Description(report("profiles")+"\n").
+			}, huh.NewSelect[string]().Description(report("profiles")+"\n").
 				Options(huh.NewOption("使用配置", "use"), huh.NewOption("更新订阅", "update"), huh.NewOption("添加订阅", "add"),
 					huh.NewOption("修改订阅地址", "edit"), huh.NewOption("删除配置", "remove")).Value(&action))
 		})
@@ -405,7 +405,7 @@ func (m *model) choose(id string) tea.Cmd {
 		return bg(func() tea.Cmd {
 			action := "login"
 			return ask(label, func() tea.Cmd { return vpnForm(action, label) },
-				huh.NewSelect[string]().Title("VPN").Description(report("vpns")+"\n").
+				huh.NewSelect[string]().Description(report("vpns")+"\n").
 					Options(huh.NewOption("登录 VPN", "login"), huh.NewOption("断开 VPN", "logout")).Value(&action))
 		})
 	case "tun":
@@ -491,7 +491,7 @@ func tunForm(label string) tea.Cmd {
 			return removeProgram(label)
 		}
 		return capture(label, strings.Fields(action)...)
-	}, huh.NewSelect[string]().Title("TUN").Description("TUN 模式  "+report("enhanced")+"\n"+report("partial")+"\n").Options(
+	}, huh.NewSelect[string]().Description("TUN 模式  "+report("enhanced")+"\n"+report("partial")+"\n").Options(
 		huh.NewOption("接管全部流量", "enhanced on"), huh.NewOption("关闭全部接管", "enhanced off"),
 		huh.NewOption("只接管选中的程序", "partial on"), huh.NewOption("关闭部分接管", "partial off"),
 		huh.NewOption("添加程序", "add"), huh.NewOption("移除程序", "remove")).Value(&action))
@@ -580,7 +580,7 @@ func pickProfile(label, action string) tea.Cmd {
 			}, huh.NewConfirm().Title("删除 "+p.Name+"？").Description("配置文件一并删除，无法恢复").Affirmative("删除").Negative("取消").Value(&sure))
 		}
 		return capture(label, "profile", action, p.ID)
-	}, huh.NewSelect[int]().Title("配置").Options(opts...).Value(&i))
+	}, huh.NewSelect[int]().Title(map[string]string{"use": "要使用的配置", "update": "要更新的订阅", "edit": "要修改地址的订阅", "remove": "要删除的配置"}[action]).Options(opts...).Value(&i))
 }
 
 // pickGroup asks for a strategy group, then hands it to next.
@@ -660,7 +660,7 @@ func vpnForm(id, title string) tea.Cmd {
 			huh.NewInput().Title("用户名").Value(&user),
 			huh.NewInput().Title("密码").EchoMode(huh.EchoModePassword).Value(&pass),
 			huh.NewInput().Title("TOTP 密钥").Description("没有则留空").EchoMode(huh.EchoModePassword).Value(&totp))
-	}, huh.NewSelect[int]().Title("VPN").Options(opts...).Value(&i))
+	}, huh.NewSelect[int]().Title(map[string]string{"login": "要登录的 VPN", "logout": "要断开的 VPN"}[id]).Options(opts...).Value(&i))
 }
 
 func (m model) View() string {
