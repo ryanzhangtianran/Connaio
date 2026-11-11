@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	tea "github.com/charmbracelet/bubbletea"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -275,32 +277,63 @@ func TestMenu(t *testing.T) {
 	}
 }
 
+// TestMenuNotHeldUp: with the core not answering, opening an entry returns at once, its choices
+// read off the loop; the window keeps taking keys.
+func TestMenuNotHeldUp(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0") // takes connections, never answers
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	t.Setenv("CONNAIO_ADDR", ln.Addr().String())
+	t.Setenv("CONNAIO_TOKEN", "tok")
+	var m tea.Model = newModel()
+	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m, _ = m.Update(contentMsg{"运行状态", ""})
+	for m.(model).cursor != slices.IndexFunc(entries, func(e [3]string) bool { return e[0] == "select" }) {
+		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	}
+	start := time.Now()
+	m, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if d := time.Since(start); d > 200*time.Millisecond {
+		t.Fatalf("Update held up %v", d)
+	}
+	if !strings.Contains(m.View(), "读取中") {
+		t.Fatalf("no loading note:\n%s", m.View())
+	}
+}
+
 // feed hands msg to m, then whatever its commands bring back, as the program would.
 func feed(t *testing.T, m tea.Model, msg tea.Msg) tea.Model {
 	m, cmd := m.Update(msg)
 	return drive(t, m, cmd)
 }
 
-// drive runs cmd and feeds back its messages; one that takes long (a cursor's blink) is dropped.
+// drive runs cmd and feeds back its messages, as the program would, but a text cursor's blink:
+// fed back, it would tick forever.
 func drive(t *testing.T, m tea.Model, cmd tea.Cmd) tea.Model {
+	t.Helper()
 	if cmd == nil {
 		return m
 	}
 	got := make(chan tea.Msg, 1)
 	go func() { got <- cmd() }()
+	var msg tea.Msg
 	select {
-	case msg := <-got:
-		switch msg := msg.(type) {
-		case nil:
-		case tea.BatchMsg:
-			for _, c := range msg {
-				m = drive(t, m, c)
-			}
-		case tea.QuitMsg:
-		default:
+	case msg = <-got:
+	case <-time.After(5 * time.Second):
+		t.Fatalf("a command still running after 5s: %T", cmd)
+	}
+	switch msg := msg.(type) {
+	case nil, tea.QuitMsg:
+	case tea.BatchMsg:
+		for _, c := range msg {
+			m = drive(t, m, c)
+		}
+	default:
+		if !strings.HasSuffix(reflect.TypeOf(msg).PkgPath(), "bubbles/cursor") {
 			m = feed(t, m, msg)
 		}
-	case <-time.After(300 * time.Millisecond):
 	}
 	return m
 }
@@ -325,10 +358,12 @@ func TestEnableDisable(t *testing.T) {
 }
 
 // vpn login asks for an EasyConnect account on stdin (not a terminal here: read as lines) and
-// waits for the tunnel; logout disconnects.
+// waits for the tunnel; logout disconnects one signed in or added by hand, and refuses the rest.
 func TestVPNLogin(t *testing.T) {
 	addr, calls := fake(t, map[string]string{
-		"ProfileService.VPNs": `[{"proxy":{"name":"校园网","type":"easyconnect"},"state":"up","needsLogin":true}]`,
+		"ProfileService.VPNs": `[{"proxy":{"name":"校园网","type":"easyconnect"},"state":"up","needsLogin":true},` +
+			`{"proxy":{"name":"家里","type":"tailscale"},"state":"up","active":true},` +
+			`{"proxy":{"name":"订阅","type":"wireguard"},"state":"up","active":true,"profile":true}]`,
 	})
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -343,10 +378,15 @@ func TestVPNLogin(t *testing.T) {
 	if err != nil || !strings.HasSuffix(out, "校园网 已连接\n") {
 		t.Fatalf("%q %v", out, err)
 	}
-	if _, err := main(t, addr, "vpn", "logout", "校园网"); err != nil {
+	if _, err := main(t, addr, "vpn", "logout", "家里"); err != nil {
 		t.Fatal(err)
 	}
-	want := `ProfileService.VPNs[] ProfileService.LoginVPN["校园网","alice","secret","",""] ProfileService.VPNs[] ProfileService.RemoveVPN["校园网"]`
+	for _, name := range []string{"校园网", "订阅"} { // waiting to be signed in; the subscription's own
+		if _, err := main(t, addr, "vpn", "logout", name); err == nil {
+			t.Errorf("%s disconnected", name)
+		}
+	}
+	want := `ProfileService.VPNs[] ProfileService.LoginVPN["校园网","alice","secret","",""] ProfileService.VPNs[] ProfileService.VPNs[] ProfileService.RemoveVPN["家里"] ProfileService.VPNs[] ProfileService.VPNs[]`
 	if strings.Join(*calls, " ") != want {
 		t.Errorf("calls %v", *calls)
 	}

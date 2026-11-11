@@ -256,6 +256,29 @@ type vpnState struct {
 	AuthURL    string
 	NeedsLogin bool
 	Active     bool
+	Profile    bool
+}
+
+// connected says v can be disconnected: in the override, signed in or added by hand; a
+// subscription's own node isn't (RemoveVPN leaves it be), nor one waiting to be signed in.
+func (v vpnState) connected() bool { return v.Active && !v.NeedsLogin && !v.Profile }
+
+// vpnLogout disconnects a VPN, saying so when there is nothing to disconnect.
+func vpnLogout(c *client, name string) error {
+	vpns, err := listVPNs(c)
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(vpns, func(v vpnState) bool { return v.Proxy["name"] == name })
+	switch {
+	case i < 0:
+		return errors.New("没有名为 " + name + " 的 VPN")
+	case vpns[i].NeedsLogin:
+		return errors.New(name + " 未登录")
+	case !vpns[i].connected():
+		return errors.New(name + " 来自订阅，无法断开；可在 VPN 页删除")
+	}
+	return c.call(nil, "ProfileService.RemoveVPN", name)
 }
 
 func listVPNs(c *client) ([]vpnState, error) {
@@ -549,7 +572,7 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 		case "reconnect":
 			return c.call(nil, "ProfileService.ReconnectVPN", args[1])
 		case "logout":
-			return c.call(nil, "ProfileService.RemoveVPN", args[1])
+			return vpnLogout(c, args[1])
 		case "login":
 			return vpnLogin(c, args[1], out)
 		}

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -109,6 +110,7 @@ type model struct {
 
 type (
 	contentMsg struct{ title, body string }
+	headMsg    string // the header, read off the loop: it asks the service and the core
 	doneMsg    struct {
 		title string
 		err   error
@@ -122,10 +124,12 @@ type (
 )
 
 func newModel() model {
-	return model{head: summary(), vp: viewport.New(0, 0), title: "运行状态", busy: true}
+	return model{head: fg(cAccent).Bold(true).Render("Connaio"), vp: viewport.New(0, 0), title: "运行状态", busy: true}
 }
 
-func (m model) Init() tea.Cmd { return capture("运行状态", "status") }
+func (m model) Init() tea.Cmd { return tea.Batch(refreshHead, capture("运行状态", "status")) }
+
+func refreshHead() tea.Msg { return headMsg(summary()) }
 
 func (m model) wide() bool { return m.w >= wideMin }
 
@@ -162,12 +166,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.w, m.h = msg.Width, msg.Height
 		m.layout()
 		return m, nil
+	case headMsg:
+		m.head = string(msg)
+		return m, nil
 	case contentMsg:
-		m.head = summary() // whatever just ran may have changed the mode, the profile or the service
 		m.busy, m.title = false, msg.title
 		m.vp.SetContent(msg.body)
 		m.vp.GotoTop()
-		return m, nil
+		return m, refreshHead // whatever just ran may have changed the mode, the profile or the service
 	case doneMsg:
 		body := fg(cOK).Render("✓ " + msg.title + "完成")
 		if msg.err != nil {
@@ -223,7 +229,7 @@ func (m model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 		submit := m.submit
 		m.form, m.busy = nil, true
 		m.vp.SetContent(dim.Render("处理中…"))
-		return m, tea.Batch(cmd, submit())
+		return m, tea.Batch(cmd, bg(submit)) // what it does next may call the core: off the loop
 	case huh.StateAborted:
 		m.form, m.content = nil, false
 	}
@@ -237,6 +243,17 @@ func (m *model) openForm(title string, submit func() tea.Cmd, fields ...huh.Fiel
 	m.form = huh.NewForm(huh.NewGroup(fields...)).WithTheme(theme).WithShowHelp(false) // the keys are on the bottom line
 	m.layout()
 	return m.form.Init()
+}
+
+// bg runs step off the loop, which no call to the core may hold up, then what it returns: the
+// form it asks for (ask) or what it shows.
+func bg(step func() tea.Cmd) tea.Cmd {
+	return func() tea.Msg {
+		if c := step(); c != nil {
+			return c()
+		}
+		return nil
+	}
 }
 
 // ask opens a form from a step's result, as a message: the step runs off the model.
@@ -301,6 +318,11 @@ func (m *model) choose(id string) tea.Cmd {
 		}
 	}
 	switch id {
+	case "select", "test", "use", "update", "login", "logout", "tunnels", "enhanced", "partial":
+		m.busy, m.title = true, label // its choices are read off the loop
+		m.vp.SetContent(dim.Render("读取中…"))
+	}
+	switch id {
 	case "quit":
 		return tea.Quit
 	case "status", "profiles", "vpns", "connections":
@@ -313,44 +335,22 @@ func (m *model) choose(id string) tea.Cmd {
 		return m.openForm(label, func() tea.Cmd { return capture(label, "mode", mode) },
 			huh.NewSelect[string]().Title("出站模式").Options(huh.NewOption("规则", "rule"), huh.NewOption("全局", "global"), huh.NewOption("直连", "direct")).Value(&mode))
 	case "select", "test":
-		return pickGroup(label, func(g group) tea.Cmd {
-			if id == "test" {
-				return capture(label, "test", g.Name)
-			}
-			node := g.Now
-			var opts []huh.Option[string]
-			for _, p := range g.All {
-				opts = append(opts, huh.NewOption(p.Name+"  "+dim.Render(delay(p.Delay)), p.Name))
-			}
-			return ask(label, func() tea.Cmd { return capture(label, "select", g.Name, node) },
-				huh.NewSelect[string]().Title(g.Name).Description("当前 "+cmp.Or(g.Now, "—")).Options(opts...).Value(&node))
+		return bg(func() tea.Cmd {
+			return pickGroup(label, func(g group) tea.Cmd {
+				if id == "test" {
+					return capture(label, "test", g.Name)
+				}
+				node := g.Now
+				var opts []huh.Option[string]
+				for _, p := range g.All {
+					opts = append(opts, huh.NewOption(p.Name+"  "+dim.Render(delay(p.Delay)), p.Name))
+				}
+				return ask(label, func() tea.Cmd { return capture(label, "select", g.Name, node) },
+					huh.NewSelect[string]().Title(g.Name).Description("当前 "+cmp.Or(g.Now, "—")).Options(opts...).Value(&node))
+			})
 		})
 	case "use", "update":
-		c, err := client0()
-		if err != nil {
-			return failed(label, err)
-		}
-		var ps struct {
-			Current  string
-			Profiles []struct{ ID, Name string }
-		}
-		if err := c.call(&ps, "ProfileService.Profiles"); err != nil {
-			return failed(label, err)
-		}
-		if len(ps.Profiles) == 0 {
-			return show(label, dim.Render("暂无配置"))
-		}
-		var opts []huh.Option[string]
-		for _, p := range ps.Profiles {
-			name := p.Name
-			if p.ID == ps.Current {
-				name += dim.Render("  使用中")
-			}
-			opts = append(opts, huh.NewOption(name, p.ID))
-		}
-		picked := ps.Current
-		return m.openForm(label, func() tea.Cmd { return capture(label, "profile", id, picked) },
-			huh.NewSelect[string]().Title("配置").Options(opts...).Value(&picked))
+		return bg(func() tea.Cmd { return pickProfile(label, id) })
 	case "add":
 		link, name := "", ""
 		return m.openForm(label, func() tea.Cmd { return capture(label, "profile", "add", link, name) },
@@ -362,49 +362,17 @@ func (m *model) choose(id string) tea.Cmd {
 			}),
 			huh.NewInput().Title("名称").Placeholder("留空用域名").Value(&name))
 	case "login", "logout":
-		return m.vpn(id, label)
+		return bg(func() tea.Cmd { return vpnForm(id, label) })
 	case "tunnels":
-		c, err := client0()
-		if err != nil {
-			return failed(label, err)
-		}
-		var tunnels []struct{ Name, State string }
-		if err := c.call(&tunnels, "CoreService.ReverseTunnels"); err != nil {
-			return failed(label, err)
-		}
-		if len(tunnels) == 0 {
-			return show(label, dim.Render("暂无反向隧道"))
-		}
-		var opts []huh.Option[int]
-		for i, t := range tunnels {
-			opts = append(opts, huh.NewOption(t.Name+"  "+dim.Render(cmp.Or(stateLabel[t.State], t.State)), i))
-		}
-		i := 0
-		return m.openForm(label, func() tea.Cmd {
-			action := "stop"
-			if tunnels[i].State == "stopped" {
-				action = "start"
-			}
-			return capture(label, "tunnel", action, tunnels[i].Name)
-		}, huh.NewSelect[int]().Title("要启动或停止的隧道").Options(opts...).Value(&i))
+		return bg(func() tea.Cmd { return pickTunnel(label) })
 	case "enhanced":
-		on := "on"
-		return m.openForm(label, func() tea.Cmd { return capture(label, "enhanced", on) },
-			huh.NewSelect[string]().Title("TUN 模式").Description(now("enhanced")).Options(huh.NewOption("开启", "on"), huh.NewOption("关闭", "off")).Value(&on))
+		return bg(func() tea.Cmd {
+			on := "on"
+			return ask(label, func() tea.Cmd { return capture(label, "enhanced", on) },
+				huh.NewSelect[string]().Title("TUN 模式").Description(now("enhanced")).Options(huh.NewOption("开启", "on"), huh.NewOption("关闭", "off")).Value(&on))
+		})
 	case "partial":
-		action := "on"
-		return m.openForm(label, func() tea.Cmd {
-			switch action {
-			case "add":
-				name := ""
-				return ask(label, func() tea.Cmd { return capture(label, "partial", "add", name) },
-					huh.NewInput().Title("程序名").Placeholder("如 python、git、uv").Value(&name))
-			case "remove":
-				return removeProgram(label)
-			}
-			return capture(label, "partial", action)
-		}, huh.NewSelect[string]().Title("部分 TUN").Description(now("partial")).
-			Options(huh.NewOption("开启", "on"), huh.NewOption("关闭", "off"), huh.NewOption("添加程序", "add"), huh.NewOption("移除程序", "remove")).Value(&action))
+		return bg(func() tea.Cmd { return partialForm(label) })
 	case "start", "stop", "restart":
 		return runTerm(label, func() error { return service(id) })
 	case "logs":
@@ -416,6 +384,50 @@ func (m *model) choose(id string) tea.Cmd {
 	return nil
 }
 
+// pickTunnel asks for a reverse tunnel, then starts it, or stops it when running.
+func pickTunnel(label string) tea.Cmd {
+	c, err := client0()
+	if err != nil {
+		return failed(label, err)
+	}
+	var tunnels []struct{ Name, State string }
+	if err := c.call(&tunnels, "CoreService.ReverseTunnels"); err != nil {
+		return failed(label, err)
+	}
+	if len(tunnels) == 0 {
+		return show(label, dim.Render("暂无反向隧道"))
+	}
+	var opts []huh.Option[int]
+	for i, t := range tunnels {
+		opts = append(opts, huh.NewOption(t.Name+"  "+dim.Render(cmp.Or(stateLabel[t.State], t.State)), i))
+	}
+	i := 0
+	return ask(label, func() tea.Cmd {
+		action := "stop"
+		if tunnels[i].State == "stopped" {
+			action = "start"
+		}
+		return capture(label, "tunnel", action, tunnels[i].Name)
+	}, huh.NewSelect[int]().Title("要启动或停止的隧道").Options(opts...).Value(&i))
+}
+
+// partialForm switches partial TUN, or adds or removes one of its programs.
+func partialForm(label string) tea.Cmd {
+	action := "on"
+	return ask(label, func() tea.Cmd {
+		switch action {
+		case "add":
+			name := ""
+			return ask(label, func() tea.Cmd { return capture(label, "partial", "add", name) },
+				huh.NewInput().Title("程序名").Placeholder("如 python、git、uv").Value(&name))
+		case "remove":
+			return removeProgram(label)
+		}
+		return capture(label, "partial", action)
+	}, huh.NewSelect[string]().Title("部分 TUN").Description(now("partial")).
+		Options(huh.NewOption("开启", "on"), huh.NewOption("关闭", "off"), huh.NewOption("添加程序", "add"), huh.NewOption("移除程序", "remove")).Value(&action))
+}
+
 // now is what a command prints, on one line, for a form's description: the setting as it is.
 func now(args ...string) string {
 	var b bytes.Buffer
@@ -425,7 +437,14 @@ func now(args ...string) string {
 	return "当前：" + strings.Join(strings.Fields(b.String()), " ")
 }
 
-func client0() (*client, error) { return connect(defaultAddr(), os.Getenv("CONNAIO_TOKEN"), "") }
+// client0 is the menu's client: a call that takes long (the core busy) fails in 10s, not 3 minutes.
+func client0() (*client, error) {
+	c, err := connect(defaultAddr(), os.Getenv("CONNAIO_TOKEN"), "")
+	if err == nil {
+		c.http.Timeout = 10 * time.Second
+	}
+	return c, err
+}
 
 type group struct {
 	Name, Type, Now string
@@ -433,6 +452,35 @@ type group struct {
 		Name  string
 		Delay int
 	}
+}
+
+// pickProfile asks for a profile to use or update (action).
+func pickProfile(label, action string) tea.Cmd {
+	c, err := client0()
+	if err != nil {
+		return failed(label, err)
+	}
+	var ps struct {
+		Current  string
+		Profiles []struct{ ID, Name string }
+	}
+	if err := c.call(&ps, "ProfileService.Profiles"); err != nil {
+		return failed(label, err)
+	}
+	if len(ps.Profiles) == 0 {
+		return show(label, dim.Render("暂无配置"))
+	}
+	var opts []huh.Option[string]
+	for _, p := range ps.Profiles {
+		name := p.Name
+		if p.ID == ps.Current {
+			name += dim.Render("  使用中")
+		}
+		opts = append(opts, huh.NewOption(name, p.ID))
+	}
+	picked := ps.Current
+	return ask(label, func() tea.Cmd { return capture(label, "profile", action, picked) },
+		huh.NewSelect[string]().Title("配置").Options(opts...).Value(&picked))
 }
 
 // pickGroup asks for a strategy group, then hands it to next.
@@ -477,7 +525,7 @@ func removeProgram(title string) tea.Cmd {
 
 // vpn signs a subscription's VPN in (EasyConnect with the account typed here, Tailscale with its
 // login link shown), or disconnects one.
-func (m *model) vpn(id, title string) tea.Cmd {
+func vpnForm(id, title string) tea.Cmd {
 	c, err := client0()
 	if err != nil {
 		return failed(title, err)
@@ -488,7 +536,7 @@ func (m *model) vpn(id, title string) tea.Cmd {
 	}
 	var opts []huh.Option[int]
 	for i, v := range vpns {
-		if id == "login" && v.NeedsLogin || id == "logout" && v.Active && !v.NeedsLogin {
+		if id == "login" && v.NeedsLogin || id == "logout" && v.connected() {
 			opts = append(opts, huh.NewOption(fmt.Sprintf("%v  %s", v.Proxy["name"], dim.Render(fmt.Sprint(v.Proxy["type"]))), i))
 		}
 	}
@@ -496,7 +544,7 @@ func (m *model) vpn(id, title string) tea.Cmd {
 		return show(title, dim.Render(map[string]string{"login": "没有待登录的 VPN", "logout": "没有已连接的 VPN"}[id]))
 	}
 	i := opts[0].Value
-	return m.openForm(title, func() tea.Cmd {
+	return ask(title, func() tea.Cmd {
 		name := fmt.Sprint(vpns[i].Proxy["name"])
 		if id == "logout" {
 			return capture(title, "vpn", "logout", name)
