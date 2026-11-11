@@ -2,14 +2,17 @@ package cli
 
 import (
 	"encoding/json"
+	tea "github.com/charmbracelet/bubbletea"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fake is a running instance's front: it answers calls by method name and records them.
@@ -72,7 +75,7 @@ func TestStatus(t *testing.T) {
 	}
 	// values start at one display column (the widest label, 隧道 OLA-4090, is 13 wide, then 2 spaces)
 	// the rules as wide as the table: the label column, 2 spaces, the widest value (运行中（1.19.32）, 17 wide)
-	rule := strings.Repeat("-", 13+2+17) + "\n"
+	rule := strings.Repeat("─", 13+2+17) + "\n"
 	want := rule + "内核           运行中（1.19.32）\n出站模式       规则\nTUN 模式       开启（全部流量）\n配置           订阅\n" + rule +
 		"隧道 OLA-4090  运行中\n" + rule
 	if out != want {
@@ -229,35 +232,77 @@ func TestDisplayWidth(t *testing.T) {
 	}
 }
 
-// TestMenu: a node and a mode chosen by number reach the same calls as the commands; an invalid
-// choice and the end of the input leave the menu.
+// TestMenu: the full-screen menu shows the status first; a node and a mode picked in its forms
+// reach the same calls as the commands.
 func TestMenu(t *testing.T) {
 	addr, calls := fake(t, map[string]string{
-		"CoreService.Status": `{"running":true,"version":"1.19.32"}`,
-		"CoreService.Groups": `[{"name":"GLOBAL"},{"name":"Proxy","now":"A","all":[{"name":"A","delay":80},{"name":"B"}]}]`,
+		"CoreService.Status":         `{"running":true,"version":"1.19.32"}`,
+		"CoreService.Mode":           "text:rule",
+		"CoreService.Groups":         `[{"name":"GLOBAL"},{"name":"Proxy","now":"A","all":[{"name":"A","delay":80},{"name":"B"}]}]`,
+		"CoreService.ReverseTunnels": `[]`,
 	})
 	t.Setenv("CONNAIO_ADDR", addr)
 	t.Setenv("CONNAIO_TOKEN", "tok")
-	var out strings.Builder
-	// 8 切换节点 → group 1 → node 2; 7 出站模式 → 全局; 99 invalid; then the input ends
-	if err := Menu(strings.NewReader("8\n1\n2\n\n7\n2\n\n99\n"), &out); err != nil {
-		t.Fatal(err)
+	var m tea.Model = newModel()
+	m = feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = drive(t, m, m.Init())
+	if v := m.View(); !strings.Contains(v, "运行状态") || !strings.Contains(v, "运行中（1.19.32）") || !strings.Contains(v, "出站 规则") {
+		t.Fatalf("first screen:\n%s", v)
 	}
+	key := func(k tea.KeyType) { m = feed(t, m, tea.KeyMsg{Type: k}) }
+	at := func(id string) { // the cursor moved to the entry, then opened
+		for m.(model).cursor != slices.IndexFunc(entries, func(e [3]string) bool { return e[0] == id }) {
+			key(tea.KeyDown)
+		}
+		key(tea.KeyEnter)
+	}
+	at("select")
+	key(tea.KeyEnter) // the group: Proxy, the only one
+	key(tea.KeyDown)  // node B
+	key(tea.KeyEnter)
+	at("mode")
+	key(tea.KeyDown) // 全局
+	key(tea.KeyEnter)
 	var got []string
 	for _, c := range *calls {
-		if c != "CoreService.Status[]" {
+		if strings.HasPrefix(c, "CoreService.Select") || strings.HasPrefix(c, "CoreService.SetMode") {
 			got = append(got, c)
 		}
 	}
-	want := []string{`CoreService.Groups[]`, `CoreService.Select["Proxy","B"]`, `CoreService.SetMode["global"]`}
+	want := []string{`CoreService.Select["Proxy","B"]`, `CoreService.SetMode["global"]`}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("calls %v\nwant  %v", got, want)
 	}
-	for _, s := range []string{"Connaio 管理菜单", "运行中（1.19.32）", "Proxy  → A", "*  A  80 ms", "   B  —", "无效的选项"} {
-		if !strings.Contains(out.String(), s) {
-			t.Errorf("menu lacks %q:\n%s", s, out.String())
-		}
+}
+
+// feed hands msg to m, then whatever its commands bring back, as the program would.
+func feed(t *testing.T, m tea.Model, msg tea.Msg) tea.Model {
+	m, cmd := m.Update(msg)
+	return drive(t, m, cmd)
+}
+
+// drive runs cmd and feeds back its messages; one that takes long (a cursor's blink) is dropped.
+func drive(t *testing.T, m tea.Model, cmd tea.Cmd) tea.Model {
+	if cmd == nil {
+		return m
 	}
+	got := make(chan tea.Msg, 1)
+	go func() { got <- cmd() }()
+	select {
+	case msg := <-got:
+		switch msg := msg.(type) {
+		case nil:
+		case tea.BatchMsg:
+			for _, c := range msg {
+				m = drive(t, m, c)
+			}
+		case tea.QuitMsg:
+		default:
+			m = feed(t, m, msg)
+		}
+	case <-time.After(300 * time.Millisecond):
+	}
+	return m
 }
 
 // TestEnableDisable: the lines enable prints, eval'd by sh, set the variables (a quote in the

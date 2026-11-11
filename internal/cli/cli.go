@@ -255,6 +255,7 @@ type vpnState struct {
 	State      string
 	AuthURL    string
 	NeedsLogin bool
+	Active     bool
 }
 
 func listVPNs(c *client) ([]vpnState, error) {
@@ -302,9 +303,17 @@ func vpnLogin(c *client, name string, out io.Writer) error {
 			return err
 		}
 	}
+	return signIn(c, name, user, pass, totp, out)
+}
+
+// signIn signs a VPN in with the account given, then waits up to 30s for its tunnel, or for a
+// Tailscale one's login link, and says which.
+func signIn(c *client, name, user, pass, totp string, out io.Writer) error {
 	if err := c.call(nil, "ProfileService.LoginVPN", name, user, pass, totp, ""); err != nil {
 		return err
 	}
+	var vpns []vpnState
+	var err error
 	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(time.Second) {
 		if vpns, err = listVPNs(c); err != nil {
 			return err
@@ -628,7 +637,7 @@ type table struct {
 
 func (t *table) row(cells ...string) { t.rows = append(t.rows, cells) }
 
-// rule adds a line of dashes, as wide as the table.
+// rule adds a line, as wide as the table.
 func (t *table) rule() { t.rows = append(t.rows, nil) }
 
 func (t *table) flush() {
@@ -647,7 +656,7 @@ func (t *table) flush() {
 	}
 	for _, r := range t.rows {
 		if r == nil {
-			fmt.Fprintln(t.out, strings.Repeat("-", max(width, 32)))
+			fmt.Fprintln(t.out, strings.Repeat("─", max(width, 32)))
 			continue
 		}
 		var b strings.Builder

@@ -52,7 +52,7 @@ curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo sh
 - 当前终端设置或取消代理变量：`connaio enable`、`connaio disable`（bash，安装后重新登录生效）。
 - 以 root 运行，可开启 TUN 模式（接管本机全部流量）；系统代理、开机启动、托盘等桌面功能不提供。
 - 也可从 Releases 下载 `Connaio-<版本>-linux-<架构>.tar.gz` 手动运行：`./connaio --listen 127.0.0.1:9090`。
-- 在终端中直接运行 `connaio` 打开管理菜单：启停服务、查看日志、更新、切换节点与配置等，按编号选择。
+- 在终端中直接运行 `connaio` 打开全屏管理菜单：左边选功能（方向键、回车），右边显示结果；启停服务、查看日志、更新、切换节点与配置、登录 VPN 等都在其中。
 - 命令行控制运行中的 Connaio。安装时执行 sudo 的用户会获得访问令牌（`~/.config/Connaio/web-token`），无需 sudo；其他用户需 sudo 或 `--token`：
 
   ```sh
