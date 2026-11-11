@@ -1,6 +1,7 @@
 package profile
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -933,5 +934,71 @@ func TestMergeNodeKeyAfterSameValue(t *testing.T) {
 	out, _ := yaml.Marshal(mergeNode(base.Content[0], over.Content[0], false))
 	if string(out) != "a: b\nb: 2\n" {
 		t.Fatalf("%q", out)
+	}
+}
+
+// A profile's VPN without its account waits as a REJECT group until a copy with the account, put in
+// the override by the sign-in, replaces it.
+func TestBuildAwaitsLogin(t *testing.T) {
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.AddLocal("sub", []byte(`proxies:
+  - {name: 校园网, type: easyconnect, server: vpn.example.edu.cn, port: 443}
+  - {name: ts, type: tailscale}
+  - {name: keyed, type: tailscale, auth-key: k}
+rules:
+  - IP-CIDR,10.0.0.0/8,校园网
+  - IP-CIDR,100.64.0.0/10,ts
+  - MATCH,DIRECT
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Select(p.ID); err != nil {
+		t.Fatal(err)
+	}
+	built := func() map[string]any {
+		b, err := s.Build(false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg := map[string]any{}
+		if err := yaml.Unmarshal(b, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		return cfg
+	}
+	names := func(cfg map[string]any, key string) (out []string) {
+		list, _ := cfg[key].([]any)
+		for _, x := range list {
+			out = append(out, groupName(x))
+		}
+		return out
+	}
+	cfg := built()
+	if got := names(cfg, "proxies"); !slices.Equal(got, []string{"keyed"}) {
+		t.Fatalf("proxies = %v, want only the one with an auth key", got)
+	}
+	if got := names(cfg, "proxy-groups"); !slices.Equal(got, []string{"校园网", "ts"}) {
+		t.Fatalf("groups = %v, want the waiting ones", got)
+	}
+	if rules, _ := cfg["rules"].([]any); len(rules) != 3 {
+		t.Fatalf("the rules naming them stay: %v", rules)
+	}
+	if v, _ := s.Value(false, []string{"proxies"}); !strings.Contains(fmt.Sprint(v), LoginKey) {
+		t.Fatalf("Value shows the node, marked: %v", v)
+	}
+
+	if err := s.AddProxy(map[string]any{"name": "校园网", "type": "easyconnect", "server": "vpn.example.edu.cn", "username": "u", "password": "p"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	cfg = built()
+	if got := names(cfg, "proxies"); !slices.Equal(got, []string{"校园网", "keyed"}) {
+		t.Fatalf("signed in: proxies = %v", got)
+	}
+	if got := names(cfg, "proxy-groups"); !slices.Equal(got, []string{"ts"}) {
+		t.Fatalf("signed in: groups = %v", got)
 	}
 }

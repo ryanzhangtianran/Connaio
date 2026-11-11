@@ -186,7 +186,8 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
   const [bypass, setBypass] = useState<KV[]>(init?.bypass ?? []);
   const [name, setName] = useState(prevName || defaultName);
   const nameOK = !!name.trim() && !name.includes(","); // the name goes into rule lines
-  const [saved, setSaved] = useState(!!initial?.active);
+  const needsLogin = !!initial?.needsLogin; // the subscription's, without the account: 登录 connects a copy with it
+  const [saved, setSaved] = useState(!!initial?.active && !needsLogin);
   const fromProfile = !!initial?.profile; // the subscription's, as on 策略: 保存 puts a copy in the override, 删除 hides it, no 断开
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -266,7 +267,9 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
   const reconnect = () => run(ProfileService.ReconnectVPN(prevName || name).then(connected));
   // logging in takes the account from wherever else it is signed in: after a recent kick, ask first
   const [askKick, setAskKick] = useState(false);
-  const login = () => { setAskKick(false); (saved ? reconnect : connect)(); };
+  // a subscription's VPN signs in as the command line does: its node as the subscription has it, plus the account
+  const signIn = () => run(ProfileService.LoginVPN(prevName, form.username?.trim() ?? "", form.password ?? "", form["totp-secret"]?.trim() ?? "").then(() => { setSaved(true); connected(); }));
+  const login = () => { setAskKick(false); (saved ? reconnect : needsLogin ? signIn : connect)(); };
   const disconnect = () => run(ProfileService.RemoveVPN(name).then(onDone));
   const remove = () => run(ProfileService.DeleteVPN(prevName || name).then(onDone));
   // probeGateway logs in with the form as it is, without saving: the core reports what the gateway handed out.
@@ -326,18 +329,21 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
       <span className="grow" />
       {saved && !fromProfile && <button className="btn" disabled={busy} onClick={disconnect}>断开</button>}
       <button className="btn" disabled={busy} onClick={onDone}>取消</button>
-      <button className="btn" disabled={busy || !ready || !nameOK} onClick={save}>保存</button>
-      <button className="btn primary" disabled={busy || !ready || !nameOK || !status.running} onClick={tunnel?.kicked || tunnel?.kicks ? () => setAskKick(true) : login}>{saved ? "重连" : "连接"}</button>
+      {!needsLogin && <button className="btn" disabled={busy || !ready || !nameOK} onClick={save}>保存</button>}
+      <button className="btn primary" disabled={busy || !ready || !nameOK || !status.running} onClick={tunnel?.kicked || tunnel?.kicks ? () => setAskKick(true) : login}>{saved ? "重连" : needsLogin ? "登录" : "连接"}</button>
     </>}>
       {facts}
       <div className="form">
-        <input style={{ width: 150 }} placeholder="名称" value={name} onChange={(e) => setName(e.target.value)} />
-        <select style={{ width: 150 }} value={form.type} disabled={saved} onChange={(e) => setForm({ ...empty, type: e.target.value, port: defaultPort[e.target.value] ?? "" })}>
+        <input style={{ width: 150 }} placeholder="名称" disabled={needsLogin} value={name} onChange={(e) => setName(e.target.value)} />
+        <select style={{ width: 150 }} value={form.type} disabled={saved || fromProfile} onChange={(e) => setForm({ ...empty, type: e.target.value, port: defaultPort[e.target.value] ?? "" })}>
           {Object.entries(types).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
-        {!noServer.has(form.type) && text("server", { easyconnect: "网关地址，如 vpn.example.edu.cn", lan: "另一台设备的局域网 IP，如 192.168.1.20" }[form.type] ?? "服务器地址")}
-        {!noServer.has(form.type) && <input style={{ width: 80 }} placeholder={defaultPort[form.type] ?? "端口"} value={form.port ?? ""} onChange={set("port")} />}
+        {!noServer.has(form.type) && text("server", { easyconnect: "网关地址，如 vpn.example.edu.cn", lan: "另一台设备的局域网 IP，如 192.168.1.20" }[form.type] ?? "服务器地址", { disabled: needsLogin })}
+        {!noServer.has(form.type) && <input style={{ width: 80 }} disabled={needsLogin} placeholder={defaultPort[form.type] ?? "端口"} value={form.port ?? ""} onChange={set("port")} />}
       </div>
+      {needsLogin && <div className="muted small" style={{ margin: "4px 0 8px" }}>{form.type === "tailscale"
+        ? "此 VPN 来自订阅。点击「登录」后在浏览器中完成登录，之后保持登录，断开后需重新登录。"
+        : "此 VPN 来自订阅，填写账号后点击「登录」。账号只保存在本机，之后保持登录，断开后需重新登录。"}</div>}
       {form.type === "lan" && <div className="muted small" style={{ margin: "4px 0 8px" }}>
         经另一台已连接 VPN 的 Connaio 访问：对方在「设备」页允许局域网设备连接，此处填它的地址与代理端口。
       </div>}
@@ -362,6 +368,7 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
           <Switch on={form["accept-routes"] === "true"} onChange={(on) => setForm({ ...form, "accept-routes": String(on) })} />
         </div>
       </>}
+      {!needsLogin && <>
       <div className="label section-label">直连网络</div>
       <KVRow kinds={bypassKinds} items={bypass} onChange={setBypass} fill={{ label: "当前网络", get: currentNetwork }} />
       <div className="label section-label">{form.type === "easyconnect" ? "附加路由" : "VPN 路由"}</div>
@@ -369,6 +376,7 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
       {offered && <>
         <div className="vpn-offered-head"><span className="label">{offered.title}</span><span className="muted small">{offered.note}</span></div>
         {offered.rows.length ? <RoutePicker head={offered.head} rows={offered.rows} addrs={addrs} setAddrs={setAddrs} onPick={offered.onPick} /> : <div className="muted small">{offered.empty}</div>}
+      </>}
       </>}
       {probe.length > 0 && <div className={`small vpn-probe ${/失败|错误|refused|rejected/i.test(probe[0]) ? "error" : "muted"}`}>{probe.join("；")}</div>}
       {askKick && <div className="form delay-warn small" style={{ alignItems: "center" }}>

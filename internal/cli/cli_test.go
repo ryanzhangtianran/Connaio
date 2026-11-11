@@ -278,3 +278,34 @@ func TestEnableDisable(t *testing.T) {
 		t.Fatalf("%v %s\n%s", err, b, script)
 	}
 }
+
+// vpn login asks for an EasyConnect account on stdin (not a terminal here: read as lines) and
+// waits for the tunnel; logout disconnects.
+func TestVPNLogin(t *testing.T) {
+	addr, calls := fake(t, map[string]string{
+		"ProfileService.VPNs": `[{"proxy":{"name":"校园网","type":"easyconnect"},"state":"up","needsLogin":true}]`,
+	})
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	io.WriteString(w, "alice\nsecret\n\n")
+	w.Close()
+	stdin := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = stdin })
+	out, err := main(t, addr, "vpn", "login", "校园网")
+	if err != nil || !strings.HasSuffix(out, "校园网 已连接\n") {
+		t.Fatalf("%q %v", out, err)
+	}
+	if _, err := main(t, addr, "vpn", "logout", "校园网"); err != nil {
+		t.Fatal(err)
+	}
+	want := `ProfileService.VPNs[] ProfileService.LoginVPN["校园网","alice","secret",""] ProfileService.VPNs[] ProfileService.RemoveVPN["校园网"]`
+	if strings.Join(*calls, " ") != want {
+		t.Errorf("calls %v", *calls)
+	}
+	if _, err := main(t, addr, "vpn", "login", "nope"); err == nil {
+		t.Error("an unknown VPN signed in")
+	}
+}

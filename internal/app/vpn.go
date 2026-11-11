@@ -38,6 +38,9 @@ type VPN struct {
 	// Profile says the node comes from the profile, not the override: 保存 puts an override copy in
 	// its place, 删除 hides it (DeleteVPN); there is no 断开.
 	Profile bool `json:"profile"`
+	// NeedsLogin says the profile's node is signed in by hand (LoginVPN): it lacks the account, or
+	// the auth key. Until then the rules sending traffic to it are rejected.
+	NeedsLogin bool `json:"needsLogin"`
 }
 
 func (v VPN) name() string { n, _ := v.Proxy["name"].(string); return n }
@@ -78,6 +81,10 @@ func (s *ProfileService) vpns(tailscale time.Duration) ([]VPN, error) {
 		tails, _ = tailscales(s.core, tailscale)
 	}
 	for i := range list {
+		if list[i].NeedsLogin {
+			list[i].State = "login"
+			continue
+		}
 		list[i].State = "up"
 		if list[i].Proxy["type"] == "tailscale" {
 			list[i].State = "connecting"
@@ -154,7 +161,9 @@ func (s *ProfileService) activeVPNs() ([]VPN, error) {
 		if p == nil || !isVPN(p) || slices.ContainsFunc(list, func(v VPN) bool { return v.name() == p["name"] }) {
 			continue
 		}
-		list = append(list, VPN{Proxy: maps.Clone(p), Active: true, Profile: true})
+		v := VPN{Proxy: maps.Clone(p), Active: true, Profile: true, NeedsLogin: p[profile.LoginKey] == true}
+		delete(v.Proxy, profile.LoginKey)
+		list = append(list, v)
 	}
 	return list, nil
 }
@@ -254,6 +263,9 @@ func (s *ProfileService) ReconnectVPN(name string) error {
 	if i < 0 {
 		return errors.New(name + " 未连接")
 	}
+	if active[i].NeedsLogin {
+		return errors.New(name + " 未登录")
+	}
 	if active[i].Proxy["type"] == "easyconnect" {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -264,6 +276,37 @@ func (s *ProfileService) ReconnectVPN(name string) error {
 		return err
 	}
 	return s.SetVPN(v, name) // a profile's VPN is still there: replaced, not taken
+}
+
+// LoginVPN signs in a profile's VPN that waits for it: a copy of its node, with the account for
+// EasyConnect, goes into the override in its place (SetVPN), so it stays signed in across restarts
+// until RemoveVPN takes the copy out. A Tailscale one starts then, and reports its login link.
+func (s *ProfileService) LoginVPN(name, username, password, totp string) error {
+	active, err := s.activeVPNs()
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(active, func(v VPN) bool { return v.name() == name })
+	if i < 0 {
+		return errors.New("没有名为 " + name + " 的 VPN")
+	}
+	if !active[i].NeedsLogin {
+		return errors.New(name + " 无需登录")
+	}
+	p := maps.Clone(active[i].Proxy)
+	if p["type"] == "easyconnect" {
+		if username == "" || password == "" {
+			return errors.New("EasyConnect 登录需要用户名和密码")
+		}
+		p["username"], p["password"] = username, password
+		if p["port"] == nil {
+			p["port"] = 443 // the core wants it set
+		}
+		if totp != "" {
+			p["totp-secret"] = totp
+		}
+	}
+	return s.SetVPN(VPN{Proxy: p}, name)
 }
 
 // RemoveVPN disconnects: the node, rules and group leave the override; the draft stays, taken from

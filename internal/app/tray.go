@@ -377,6 +377,10 @@ func (t *trayMenu) toggleVPN(name string) {
 	if i < 0 {
 		return
 	}
+	if list[i].NeedsLogin { // the account is typed on the VPN page
+		t.show("vpn")
+		return
+	}
 	if list[i].Profile {
 		notify("error", "VPN：%s 来自订阅，无法在此断开", name)
 		return

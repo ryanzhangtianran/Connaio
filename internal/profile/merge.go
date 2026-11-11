@@ -47,11 +47,48 @@ func (s *Store) Build(enhanced bool) ([]byte, error) {
 		}
 	}
 	tunnelDirect(cfg)
+	awaitLogin(cfg)
 	// an FRP or SSH tunnel from before (support removed) is left out, or the core would refuse the config
 	if tunnels, ok := cfg["reverse-tunnels"].([]any); ok {
 		cfg["reverse-tunnels"] = slices.DeleteFunc(slices.Clone(tunnels), func(t any) bool { m, _ := t.(map[string]any); return m["type"] != "wireguard" })
 	}
 	return yaml.Marshal(cfg)
+}
+
+// LoginKey marks a profile's VPN node that is signed in by hand, on the VPN page or with connaio
+// vpn login: an EasyConnect gateway without the account, a Tailscale node without an auth key. The
+// sign-in puts a copy with the account in the override, which replaces it at Merge.
+const LoginKey = "connaio-login"
+
+// markLogin marks the profile's VPN nodes that wait to be signed in (LoginKey).
+func markLogin(profile map[string]any) {
+	proxies, _ := profile["proxies"].([]any)
+	for _, x := range proxies {
+		p, _ := x.(map[string]any)
+		blank := func(k string) bool { s, _ := p[k].(string); return s == "" }
+		if p["type"] == "easyconnect" && (blank("username") || blank("password")) || p["type"] == "tailscale" && blank("auth-key") {
+			p[LoginKey] = true
+		}
+	}
+}
+
+// awaitLogin stands a group in for each node still waiting to be signed in, rejecting what the
+// rules send it: the core would refuse an EasyConnect node without an account, and start a
+// Tailscale one. The rules and groups naming the node stay valid; hidden, it isn't listed to pick.
+func awaitLogin(cfg map[string]any) {
+	proxies, _ := cfg["proxies"].([]any)
+	var kept []any
+	for _, x := range proxies {
+		if p, _ := x.(map[string]any); p[LoginKey] == true {
+			groups, _ := cfg["proxy-groups"].([]any)
+			cfg["proxy-groups"] = append(groups, map[string]any{"name": p["name"], "type": "select", "proxies": []any{"REJECT"}, "hidden": true})
+			continue
+		}
+		kept = append(kept, x)
+	}
+	if len(kept) < len(proxies) {
+		cfg["proxies"] = kept
+	}
 }
 
 // TunnelDirect is the DIRECT of its own that what reverse tunnels bring in goes out through.
@@ -100,6 +137,7 @@ func (s *Store) merged(enhanced bool) (map[string]any, error) {
 			delete(profile, k)
 		}
 	}
+	markLogin(profile)
 	override := map[string]any{}
 	if text, err := s.Override(); err != nil {
 		return nil, err

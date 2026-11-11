@@ -3,6 +3,7 @@
 package cli
 
 import (
+	"bufio"
 	"bytes"
 	"cmp"
 	"encoding/json"
@@ -18,6 +19,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"golang.org/x/term"
 )
 
 // Usage is the command line's help, printed by connaio help.
@@ -40,6 +43,8 @@ const Usage = `用法：connaio [命令] [选项] [参数]
   tunnel start|stop <名称>      启动或停止隧道
   vpns                         VPN 状态
   vpn reconnect <名称>          重新连接 VPN
+  vpn login <名称>              登录订阅中的 VPN（EasyConnect 在此输入账号，Tailscale 给出登录链接）
+  vpn logout <名称>             退出登录（断开 VPN）
   enhanced [on|off]            查看、开启或关闭 TUN 模式
   partial [on|off]             查看、开启或关闭部分 TUN
   partial add|remove <程序>    添加或移除部分 TUN 接管的程序
@@ -242,7 +247,83 @@ func connect(addr, given, dir string) (*client, error) {
 var (
 	modeLabel  = map[string]string{"rule": "规则", "global": "全局", "direct": "直连"}
 	stateLabel = map[string]string{"running": "运行中", "connecting": "连接中", "retrying": "重试中", "stopped": "已停止"}
+	vpnLabel   = map[string]string{"up": "已连接", "connecting": "连接中", "login": "待登录", "down": "未连接"}
 )
+
+// vpnState is what the commands read of a VPN.
+type vpnState struct {
+	Proxy      map[string]any
+	State      string
+	AuthURL    string
+	NeedsLogin bool
+}
+
+func listVPNs(c *client) ([]vpnState, error) {
+	var vpns []vpnState
+	err := c.call(&vpns, "ProfileService.VPNs")
+	return vpns, err
+}
+
+// vpnLogin signs in a profile's VPN: EasyConnect asks for the account here, then waits for the
+// tunnel; Tailscale prints its login link once the core has it.
+func vpnLogin(c *client, name string, out io.Writer) error {
+	vpns, err := listVPNs(c)
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(vpns, func(v vpnState) bool { return v.Proxy["name"] == name })
+	if i < 0 {
+		return errors.New("没有名为 " + name + " 的 VPN")
+	}
+	if !vpns[i].NeedsLogin {
+		return errors.New(name + " 无需登录；重新登录请先 connaio vpn logout " + name)
+	}
+	var user, pass, totp string
+	if vpns[i].Proxy["type"] == "easyconnect" {
+		in := bufio.NewReader(os.Stdin)
+		ask := func(label string, hidden bool) (string, error) {
+			fmt.Fprint(out, label)
+			if fd := int(os.Stdin.Fd()); hidden && term.IsTerminal(fd) {
+				b, err := term.ReadPassword(fd)
+				fmt.Fprintln(out)
+				return string(b), err
+			}
+			line, err := in.ReadString('\n')
+			if err != nil && !errors.Is(err, io.EOF) {
+				return "", err
+			}
+			return strings.TrimSpace(line), nil
+		}
+		if user, err = ask("用户名：", false); err == nil {
+			if pass, err = ask("密码：", true); err == nil {
+				totp, err = ask("TOTP 密钥（没有则直接回车）：", true)
+			}
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if err := c.call(nil, "ProfileService.LoginVPN", name, user, pass, totp); err != nil {
+		return err
+	}
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(time.Second) {
+		if vpns, err = listVPNs(c); err != nil {
+			return err
+		}
+		i := slices.IndexFunc(vpns, func(v vpnState) bool { return v.Proxy["name"] == name })
+		switch {
+		case i < 0:
+		case vpns[i].State == "up":
+			fmt.Fprintln(out, name+" 已连接")
+			return nil
+		case vpns[i].State == "login" && vpns[i].AuthURL != "":
+			fmt.Fprintln(out, "在浏览器中打开以下链接登录 "+name+"：\n"+vpns[i].AuthURL)
+			return nil
+		}
+	}
+	fmt.Fprintln(out, "30 秒内未连上：用 connaio vpns 查看状态；账号有误时先 connaio vpn logout 再登录")
+	return nil
+}
 
 func need(args []string, n int, form string) error {
 	if len(args) < n {
@@ -443,28 +524,30 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 		}
 		return c.call(nil, "ProfileService.SetTunnelDisabled", args[1], args[0] == "stop")
 	case "vpns":
-		var vpns []struct {
-			Proxy  map[string]any
-			State  string
-			Active bool
-		}
-		if err := c.call(&vpns, "ProfileService.VPNs"); err != nil {
+		vpns, err := listVPNs(c)
+		if err != nil {
 			return err
 		}
 		if len(vpns) == 0 {
 			fmt.Fprintln(out, "暂无 VPN")
 		}
 		for _, v := range vpns {
-			tw.row(fmt.Sprint(v.Proxy["name"]), fmt.Sprint(v.Proxy["type"]), cmp.Or(v.State, "—"))
+			tw.row(fmt.Sprint(v.Proxy["name"]), fmt.Sprint(v.Proxy["type"]), cmp.Or(vpnLabel[v.State], v.State, "—"))
 		}
 	case "vpn":
-		if err := need(args, 2, "vpn reconnect <名称>"); err != nil {
+		form := "vpn reconnect|login|logout <名称>"
+		if err := need(args, 2, form); err != nil {
 			return err
 		}
-		if args[0] != "reconnect" {
-			return errors.New("用法：connaio vpn reconnect <名称>")
+		switch args[0] {
+		case "reconnect":
+			return c.call(nil, "ProfileService.ReconnectVPN", args[1])
+		case "logout":
+			return c.call(nil, "ProfileService.RemoveVPN", args[1])
+		case "login":
+			return vpnLogin(c, args[1], out)
 		}
-		return c.call(nil, "ProfileService.ReconnectVPN", args[1])
+		return errors.New("用法：connaio " + form)
 	case "enhanced":
 		if len(args) == 0 {
 			var mode string

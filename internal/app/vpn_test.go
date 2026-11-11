@@ -147,3 +147,49 @@ func TestProfileVPN(t *testing.T) {
 		t.Fatalf("its rules should go with it: %v", rules)
 	}
 }
+
+// A profile's EasyConnect without the account waits to be signed in (the core takes the config
+// with it standing by); LoginVPN puts a copy with the account in, RemoveVPN takes it out again.
+func TestLoginProfileVPN(t *testing.T) {
+	cs, s, _ := startCore(t, "")
+	p, err := s.store.AddLocal("sub", []byte("proxies:\n  - {name: 校园网, type: easyconnect, server: vpn.example.invalid}\n  - {name: ts, type: tailscale}\nrules:\n  - IP-CIDR,10.0.0.0/8,校园网\n  - MATCH,DIRECT\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.edit(func() error { return s.store.Select(p.ID) }); err != nil {
+		t.Fatal("the core should take the waiting nodes:", err)
+	}
+	waiting := func(name string) bool {
+		list, err := s.VPNs()
+		if err != nil {
+			t.Fatal(err)
+		}
+		i := slices.IndexFunc(list, func(v VPN) bool { return v.name() == name })
+		return i >= 0 && list[i].NeedsLogin && list[i].State == "login" && list[i].Proxy[profile.LoginKey] == nil
+	}
+	if !waiting("校园网") || !waiting("ts") {
+		t.Fatal("both should wait to be signed in")
+	}
+	if groups, _ := cs.Groups(); slices.ContainsFunc(groups, func(g Group) bool { return g.Name == "校园网" }) {
+		t.Fatal("the stand-in group is listed to pick")
+	}
+	if err := s.ReconnectVPN("校园网"); err == nil {
+		t.Fatal("reconnect before signing in")
+	}
+	if err := s.LoginVPN("校园网", "alice", "", ""); err == nil {
+		t.Fatal("signed in without a password")
+	}
+	if err := s.LoginVPN("校园网", "alice", "secret", ""); err != nil {
+		t.Fatal(err)
+	}
+	items, _ := s.store.UserItems()
+	if len(items.Proxies) != 1 || items.Proxies[0]["username"] != "alice" || waiting("校园网") {
+		t.Fatalf("signed in: %+v", items.Proxies)
+	}
+	if err := s.LoginVPN("校园网", "alice", "secret", ""); err == nil {
+		t.Fatal("signed in twice")
+	}
+	if err := s.RemoveVPN("校园网"); err != nil || !waiting("校园网") {
+		t.Fatal("signing out should leave it waiting again:", err)
+	}
+}
