@@ -2,6 +2,7 @@ package sysproxy
 
 import (
 	"fmt"
+	"net/netip"
 	"os/exec"
 	"slices"
 	"strconv"
@@ -15,8 +16,11 @@ const schema = "org.gnome.system.proxy"
 // ignoreHosts keeps local and LAN traffic off the proxy.
 var ignoreHosts = []string{"localhost", "127.0.0.0/8", "::1", "*.local", "169.254.0.0/16", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}
 
-// Set points GNOME's proxies at 127.0.0.1:port, extra bypassed besides local and LAN.
-func Set(port int, extra []string) error { return run(setCommands(port, extra)) }
+// Set points GNOME's proxies at 127.0.0.1:port, extra bypassed besides local and LAN, the proxied
+// subnets cut out of the LAN.
+func Set(port int, extra []string, proxied []netip.Prefix) error {
+	return run(setCommands(port, slices.Concat(lan(ignoreHosts, proxied), extra)))
+}
 
 func Clear() error { return run([][]string{{"set", schema, "mode", "'none'"}}) }
 
@@ -26,9 +30,9 @@ func IsSet(port int) bool {
 	return on && addr == "127.0.0.1:"+strconv.Itoa(port)
 }
 
-func setCommands(port int, extra []string) [][]string {
+func setCommands(port int, ignored []string) [][]string {
 	var quoted []string // a GVariant string array; the entries are checked to hold no quote (SystemProxyService.SetBypass)
-	for _, h := range append(slices.Clone(ignoreHosts), extra...) {
+	for _, h := range ignored {
 		quoted = append(quoted, "'"+h+"'")
 	}
 	cmds := [][]string{{"set", schema, "ignore-hosts", "[" + strings.Join(quoted, ", ") + "]"}}

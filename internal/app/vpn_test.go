@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"reflect"
 	"slices"
 	"testing"
@@ -194,5 +195,21 @@ func TestLoginProfileVPN(t *testing.T) {
 	}
 	if err := s.RemoveVPN("校园网"); err != nil || !waiting("校园网") {
 		t.Fatal("signing out should leave it waiting again:", err)
+	}
+}
+
+// The LAN ranges sent to a VPN, directly or through its subnet group, are the system proxy's to
+// keep; a public range, or one sent elsewhere, isn't.
+func TestVPNSubnets(t *testing.T) {
+	store, _ := profile.Open(t.TempDir())
+	if _, err := store.AddLocal("sub", []byte("proxies:\n  - {name: ts, type: tailscale}\n  - {name: B, type: ss, server: 1.2.3.4, port: 1, cipher: none, password: x}\n"+
+		"proxy-groups:\n  - {name: ts-Group, type: subnet, default: ts, rules: {\"SSID:Home\": DIRECT}}\n"+
+		"rules:\n  - IP-CIDR,172.16.10.0/24,ts-Group,no-resolve\n  - IP-CIDR,100.64.0.0/10,ts\n  - IP-CIDR,10.1.0.0/16,ts\n  - IP-CIDR,192.168.0.0/16,B\n  - MATCH,DIRECT\n")); err != nil {
+		t.Fatal(err)
+	}
+	s := &ProfileService{store: store, settings: loadSettings(t.TempDir())}
+	got := fmt.Sprint(s.vpnSubnets())
+	if got != "[10.1.0.0/16 172.16.10.0/24]" {
+		t.Fatalf("got %s", got)
 	}
 }

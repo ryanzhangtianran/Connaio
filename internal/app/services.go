@@ -37,7 +37,7 @@ func newServices(dataDir string) (*services, error) {
 	s := &services{
 		core:     svc,
 		profiles: profiles,
-		sysProxy: &SystemProxyService{core: svc.core, settings: settings, enabled: settings.Get().SystemProxy && !headless}, // known before the menu is built; applied by the guard once the core answers
+		sysProxy: &SystemProxyService{core: svc.core, settings: settings, proxied: profiles.vpnSubnets, enabled: settings.Get().SystemProxy && !headless}, // known before the menu is built; applied by the guard once the core answers
 		enhanced: enhanced,
 		devices:  &DeviceService{core: svc, profiles: profiles},
 		settings: &SettingsService{core: svc, settings: settings},

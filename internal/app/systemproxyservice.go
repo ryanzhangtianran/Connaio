@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/netip"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,10 +28,30 @@ type SystemProxyService struct {
 	core     *core.Core
 	settings *settingsFile
 	onChange func(bool) // menu bar checkbox
+	// proxied are the LAN subnets the rules send to a VPN (ProfileService.vpnSubnets): the system
+	// proxy doesn't bypass them, or a browser would reach them directly, past the rules
+	proxied func() []netip.Prefix
 
 	mu      sync.Mutex
-	enabled bool // the user's choice, persisted
-	port    int  // port currently set, 0 = not set
+	enabled bool           // the user's choice, persisted
+	port    int            // port currently set, 0 = not set
+	applied []netip.Prefix // proxied as last set
+}
+
+// set points the system proxy at port, with the bypass and the VPN subnets as they are now.
+func (s *SystemProxyService) set(port int, proxied []netip.Prefix) error {
+	if err := sysproxy.Set(port, s.settings.Get().Bypass, proxied); err != nil {
+		return err
+	}
+	s.port, s.applied = port, proxied
+	return nil
+}
+
+func (s *SystemProxyService) vpnSubnets() []netip.Prefix {
+	if s.proxied == nil {
+		return nil
+	}
+	return s.proxied()
 }
 
 // Bypass is what the system proxy leaves alone besides local and LAN addresses: hosts, *.domains or
@@ -51,7 +73,7 @@ func (s *SystemProxyService) SetBypass(list []string) error {
 	if s.port == 0 || headless {
 		return nil
 	}
-	return sysproxy.Set(s.port, list)
+	return s.set(s.port, s.vpnSubnets())
 }
 
 func (s *SystemProxyService) Enabled() bool {
@@ -71,10 +93,9 @@ func (s *SystemProxyService) SetEnabled(on bool) error {
 		if err != nil {
 			return err
 		}
-		if err := sysproxy.Set(port, s.settings.Get().Bypass); err != nil {
+		if err := s.set(port, s.vpnSubnets()); err != nil {
 			return err
 		}
-		s.port = port
 	} else { // whether this session set it or an earlier one did (a crash left it on)
 		if err := sysproxy.Clear(); err != nil {
 			return err
@@ -152,8 +173,8 @@ func (s *SystemProxyService) ServiceStartup(ctx context.Context, _ application.S
 }
 
 // guard (re)applies the system proxy when enabled: at startup, after another app changed it,
-// or when a new profile moved mixed-port. read false: the settings are as last checked, so only a
-// moved port (or none checked yet) needs them read.
+// when a new profile moved mixed-port, or when the VPN subnets changed. read false: the settings
+// are as last checked, so only a moved port (or none checked yet) needs them read.
 func (s *SystemProxyService) guard(read bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -164,21 +185,23 @@ func (s *SystemProxyService) guard(read bool) {
 	if err != nil {
 		return // core not up yet
 	}
-	if !read && port == s.port {
+	proxied := s.vpnSubnets()
+	same := slices.Equal(proxied, s.applied)
+	if !read && port == s.port && same {
 		return
 	}
-	if sysproxy.IsSet(port) {
+	if same && sysproxy.IsSet(port) {
 		s.port = port
 		return
 	}
-	if err := sysproxy.Set(port, s.settings.Get().Bypass); err != nil {
+	replaced := port == s.port && same // nothing of ours changed: another app's doing
+	if err := s.set(port, proxied); err != nil {
 		notify("error", "设置系统代理失败：%v", err)
 		return
 	}
-	if s.port == port {
+	if replaced {
 		notify("warning", "系统代理被其他程序修改，已恢复为 127.0.0.1:%d", port)
 	}
-	s.port = port
 	if s.onChange != nil {
 		s.onChange(true)
 	}

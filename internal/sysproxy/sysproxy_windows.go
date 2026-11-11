@@ -2,6 +2,7 @@ package sysproxy
 
 import (
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 
@@ -21,7 +22,9 @@ const (
 )
 
 // Set points WinINET's proxy at 127.0.0.1:port, extra bypassed besides local and LAN.
-func Set(port int, extra []string) error {
+// shortcut: proxied is not cut out, WinINET's bypass taking wildcards, not ranges; split 172.16.* and
+// the like into the octets left when Windows ships again.
+func Set(port int, extra []string, _ []netip.Prefix) error {
 	return write(func(k registry.Key) error {
 		if err := k.SetDWordValue("ProxyEnable", 1); err != nil {
 			return err

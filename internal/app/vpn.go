@@ -6,6 +6,7 @@ import (
 	"errors"
 	"maps"
 	"net/http"
+	"net/netip"
 	"slices"
 	"strings"
 	"time"
@@ -366,6 +367,48 @@ func (s *ProfileService) clearVPN(name string) error {
 		}
 	}
 	return s.store.RemoveProxy(name)
+}
+
+// vpnSubnets are the LAN ranges the rules send to a VPN, or to a group standing in for one (its
+// subnet group, the default or a member being the VPN): the system proxy must not bypass them as
+// LAN. Sorted, so a caller can tell whether they changed.
+func (s *ProfileService) vpnSubnets() []netip.Prefix {
+	active, err := s.activeVPNs()
+	if err != nil || len(active) == 0 {
+		return nil
+	}
+	targets := map[string]bool{}
+	for _, v := range active {
+		targets[v.name()] = true
+	}
+	groups, _ := s.store.Value(false, []string{"proxy-groups"})
+	list, _ := groups.([]any)
+	for _, x := range list {
+		g, _ := x.(map[string]any)
+		members, _ := g["proxies"].([]any)
+		if d, _ := g["default"].(string); targets[d] || slices.ContainsFunc(members, func(m any) bool { n, _ := m.(string); return targets[n] }) {
+			if n, _ := g["name"].(string); n != "" {
+				targets[n] = true
+			}
+		}
+	}
+	rules, _ := s.store.Value(false, []string{"rules"})
+	lines, _ := rules.([]any)
+	var out []netip.Prefix
+	for _, x := range lines {
+		r, _ := x.(string)
+		f := strings.Split(r, ",")
+		if len(f) < 3 || !strings.EqualFold(strings.TrimSpace(f[0]), "IP-CIDR") || !targets[profile.RuleTarget(r)] {
+			continue
+		}
+		if p, err := netip.ParsePrefix(strings.TrimSpace(f[1])); err == nil && p.Addr().IsPrivate() && !slices.Contains(out, p.Masked()) {
+			out = append(out, p.Masked())
+		}
+	}
+	slices.SortFunc(out, func(a, b netip.Prefix) int {
+		return cmp.Or(a.Addr().Compare(b.Addr()), cmp.Compare(a.Bits(), b.Bits()))
+	})
+	return out
 }
 
 // Network is what the core sees of the current network, for subnet group conditions.

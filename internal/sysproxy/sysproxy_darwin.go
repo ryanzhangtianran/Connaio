@@ -2,6 +2,7 @@ package sysproxy
 
 import (
 	"fmt"
+	"net/netip"
 	"os/exec"
 	"slices"
 	"strconv"
@@ -11,13 +12,14 @@ import (
 // bypass keeps local and LAN traffic off the proxy.
 var bypass = []string{"localhost", "127.0.0.1", "::1", "*.local", "169.254.0.0/16", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"}
 
-// Set points every network service's proxies at 127.0.0.1:port, extra bypassed besides local and LAN.
-func Set(port int, extra []string) error {
+// Set points every network service's proxies at 127.0.0.1:port, extra bypassed besides local and
+// LAN, the proxied subnets cut out of the LAN.
+func Set(port int, extra []string, proxied []netip.Prefix) error {
 	services, err := services()
 	if err != nil {
 		return err
 	}
-	return run(setCommands(services, port, extra))
+	return run(setCommands(services, port, slices.Concat(lan(bypass, proxied), extra)))
 }
 
 // Clear switches the proxies off.
@@ -81,7 +83,7 @@ func services() ([]string, error) {
 	return list, nil
 }
 
-func setCommands(services []string, port int, extra []string) [][]string {
+func setCommands(services []string, port int, bypassed []string) [][]string {
 	p := strconv.Itoa(port)
 	var cmds [][]string
 	for _, s := range services {
@@ -89,7 +91,7 @@ func setCommands(services []string, port int, extra []string) [][]string {
 			[]string{"-setwebproxy", s, "127.0.0.1", p},
 			[]string{"-setsecurewebproxy", s, "127.0.0.1", p},
 			[]string{"-setsocksfirewallproxy", s, "127.0.0.1", p},
-			slices.Concat([]string{"-setproxybypassdomains", s}, bypass, extra),
+			slices.Concat([]string{"-setproxybypassdomains", s}, bypassed),
 		)
 	}
 	return cmds
