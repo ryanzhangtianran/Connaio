@@ -56,7 +56,7 @@ func fg(c lipgloss.Color) lipgloss.Style { return lipgloss.NewStyle().Foreground
 // formTheme is the forms' look from the palette: the whole form framed, no side bar on the fields.
 func formTheme() *huh.Theme {
 	t := huh.ThemeBase()
-	t.Form.Base = frame
+	t.Form.Base = lipgloss.NewStyle() // inside the content pane, framed already
 	f := &t.Focused
 	f.Base, f.Card = lipgloss.NewStyle(), lipgloss.NewStyle()
 	f.Title = fg(cTitle).Bold(true)
@@ -149,10 +149,15 @@ func (m model) bodyHeight() int {
 	return max(m.h-lipgloss.Height(m.header())-2, 3) // header, then body, hint line and key line
 }
 
+// paneWidth and paneHeight are what the content pane's frame holds: its border and padding off,
+// then the title and the blank line under it.
+func (m model) paneWidth() int  { return max(m.contentWidth()-4, 20) }
+func (m model) paneHeight() int { return max(m.bodyHeight()-4, 1) }
+
 func (m *model) layout() {
-	m.vp.Width, m.vp.Height = m.contentWidth(), m.bodyHeight()-1 // one line for the pane title
+	m.vp.Width, m.vp.Height = m.paneWidth(), m.paneHeight()
 	if m.form != nil {
-		m.form = m.form.WithWidth(max(m.contentWidth()-4, 30))
+		m.form = m.form.WithWidth(m.paneWidth())
 	}
 }
 
@@ -661,12 +666,16 @@ func (m model) menuView() string {
 	return frame.Width(w - 2).Height(rows).Render(strings.Join(lines, "\n"))
 }
 
+// contentView frames the content as the menu is, the two the same height: the title on the first
+// menu entry's line, the content from the line after the blank under it.
 func (m model) contentView() string {
-	title := fg(cTitle).Bold(true).Render(m.title)
+	body := m.vp.View()
 	if m.form != nil {
-		return title + "\n" + m.form.View()
+		body = m.form.View()
 	}
-	return title + "\n" + lipgloss.NewStyle().MaxWidth(m.contentWidth()).Render(m.vp.View())
+	body = lipgloss.NewStyle().MaxWidth(m.paneWidth()).MaxHeight(m.paneHeight()).Render(body)
+	return frame.Width(m.contentWidth() - 2).Height(m.bodyHeight() - 2).
+		Render(fg(cTitle).Bold(true).Render(m.title) + "\n\n" + body)
 }
 
 // summary is the header: the service's state and the core's, its mode and profile.
