@@ -69,7 +69,7 @@ type trayMenu struct {
 	partialItem  *application.MenuItem
 	qualityItem  *application.MenuItem
 	procItems    []*application.MenuItem
-	rowsShown    int // process rows visible; 0 after a rebuild, when any count may show
+	rowsShown    int                              // process rows visible; 0 after a rebuild, when any count may show
 	details      map[*application.MenuItem]string // right of the label: grey text, or a dot (see dot)
 	icons        map[*application.MenuItem]string // file whose Finder icon the item shows
 	groupItems   map[string]*application.MenuItem
@@ -241,7 +241,8 @@ func (t *trayMenu) toggleEnhanced(full bool) {
 
 // loop refreshes the groups and profiles every 5s (the process rows and speed come from the data
 // path), and the network quality every minute and as the menu opens. Where the menu's opening is
-// known (macOS), nothing shows them while it is closed: then it waits for it to open, doing nothing.
+// known (macOS), it measures nothing while the menu is closed, but still refreshes, so a rebuild it
+// may not do while the menu is open is done before it opens.
 func (t *trayMenu) loop() {
 	watching := false
 	for i := 0; ; i += 5 {
@@ -252,11 +253,15 @@ func (t *trayMenu) loop() {
 		if !watching { // once the native menu exists
 			watching = onTrayOpen(t.menu, t.opening, func() {
 				t.open.Store(false)
-				go t.locked(t.showRows) // the row count frozen while open fits the rows again
+				go t.tick() // a rebuild held while open, and the row count frozen then fits the rows again
 			})
 		}
 		if watching && trayTracksOpen && !t.open.Load() {
-			<-t.opened
+			// a rebuild waits while the menu is open (refresh), so one due is done while it's closed
+			select {
+			case <-t.opened:
+			case <-time.After(5 * time.Second):
+			}
 			continue
 		}
 		time.Sleep(5 * time.Second)
@@ -419,57 +424,67 @@ func (t *trayMenu) tick() {
 	vpns := t.vpnStates()
 	apps := t.partialApps()
 	rebuilt := false
-	t.locked(func() {
-		if layout := menuLayout(groups, list, vpns, apps); layout != t.layout {
+	t.locked(func() { rebuilt = t.refresh(groups, list, vpns, apps) })
+	if rebuilt {
+		menuRebuilt(t.tray, t.menu) // outside the lock, as it waits on the main thread
+	}
+}
+
+// refresh shows what tick read, rebuilding the menu first if its layout changed while it's closed;
+// true if it did. Called with the lock held.
+func (t *trayMenu) refresh(groups []Group, list Profiles, vpns map[string]string, apps []partialApp) (rebuilt bool) {
+	if layout := menuLayout(groups, list, vpns, apps); layout != t.layout {
+		// AppKit keeps an open menu's old rows and height through a rebuild: stale rows on top, the
+		// end cut off. It waits for the menu to close (onTrayOpen's closed); the rows there update now
+		if !t.open.Load() {
 			t.layout = layout
 			t.build(groups, list, vpns, apps)
 			rebuilt = true
 		}
-		for _, g := range groups {
-			t.details[t.groupItems[g.Name]] = g.Now
-			for name, item := range t.memberItems[g.Name] {
-				check(item, name == g.Now)
-			}
-		}
-		for id, item := range t.profileItems {
-			t.details[item] = ""
-			if id == list.Current {
-				t.details[item] = dot("good", "使用中")
-			}
-		}
-		t.details[t.profileMenu] = ""
-		for _, p := range list.Profiles {
-			if p.ID == list.Current {
-				t.details[t.profileMenu] = p.Name
-			}
-		}
-		picked := 0
-		for _, a := range apps {
-			t.setOn(t.appItems[strings.ToLower(a.exec)], a.on)
-			if a.on {
-				picked++
-			}
-		}
-		t.details[t.appsMenu] = "未选择"
-		if picked > 0 {
-			t.details[t.appsMenu] = fmt.Sprintf("%d 个应用", picked)
-		}
-		var up []string
-		for name, item := range t.vpnItems {
-			t.details[item] = vpns[name]
-			if vpns[name] == vpnPills["up"] {
-				up = append(up, name)
-			}
-		}
-		t.details[t.vpnItem] = "未连接" // a count, as 增强's: the names are in the submenu
-		if len(up) > 0 {
-			t.details[t.vpnItem] = fmt.Sprintf("%d 个已连接", len(up))
-		}
-		t.showRows()
-	})
-	if rebuilt {
-		menuRebuilt(t.tray, t.menu) // outside the lock, as it waits on the main thread
 	}
+	for _, g := range groups {
+		t.details[t.groupItems[g.Name]] = g.Now
+		for name, item := range t.memberItems[g.Name] {
+			check(item, name == g.Now)
+		}
+	}
+	for id, item := range t.profileItems {
+		t.details[item] = ""
+		if id == list.Current {
+			t.details[item] = dot("good", "使用中")
+		}
+	}
+	t.details[t.profileMenu] = ""
+	for _, p := range list.Profiles {
+		if p.ID == list.Current {
+			t.details[t.profileMenu] = p.Name
+		}
+	}
+	picked := 0
+	for _, a := range apps {
+		t.setOn(t.appItems[strings.ToLower(a.exec)], a.on)
+		if a.on {
+			picked++
+		}
+	}
+	t.details[t.appsMenu] = "未选择"
+	if picked > 0 {
+		t.details[t.appsMenu] = fmt.Sprintf("%d 个应用", picked)
+	}
+	var up []string
+	for name, item := range t.vpnItems {
+		t.details[item] = vpns[name]
+		if vpns[name] == vpnPills["up"] {
+			up = append(up, name)
+		}
+	}
+	t.details[t.vpnItem] = "未连接" // a count, as 增强's: the names are in the submenu
+	if len(up) > 0 {
+		t.details[t.vpnItem] = fmt.Sprintf("%d 个已连接", len(up))
+	}
+	delete(t.details, nil) // a group or app the held rebuild hasn't added yet: decorate can't take nil
+	t.showRows()
+	return rebuilt
 }
 
 // partialApp is a row of the 增强 submenu: a running app, or one partial enhancement has picked.
