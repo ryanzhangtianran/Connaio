@@ -27,7 +27,7 @@ else
 fi
 # on: the install runs on a screen of its own (the alternate screen, as vim's), redrawn after each
 # step and when the window is resized; the summary is printed on the terminal once it is left
-on= cur= q= rp= cp=
+on= cur= q= rp= cp= resized=
 # say prints a progress line: a coloured icon and a two-character verb, so the messages line up
 say() {
   if [ -n "$on" ]; then
@@ -132,7 +132,7 @@ box() {
   rm -f "$tmp/box"
 }
 # draw redraws the screen: the steps done, the one under way, and a question with its explanation;
-# the last line is left for a download's progress bar
+# the download's progress is on its step's line
 draw() {
   [ -n "$on" ] || return 0
   size
@@ -143,8 +143,15 @@ draw() {
     [ -z "$q" ] || printf '%s\n' "$q"
   } | tail -n $((rows - 5)) >"$tmp/box"
   k=$(wc -l <"$tmp/box")
-  printf '%s[H%s[2J' "$esc" "$esc"
+  # drawn over the last screen, not after clearing it, which flickers at every step of a download;
+  # cleared first only when the window changed (resized): the old box may stick out of the new
+  if [ -n "$resized" ]; then
+    printf '%s[2J' "$esc"
+    resized=
+  fi
+  printf '%s[H' "$esc"
   box "Connaio 安装" $((rows - 5))
+  printf '%s[J' "$esc" # whatever is left under the box
   # the cursor at the question's end, for the answer
   if [ -n "$q" ]; then
     printf '%s[%d;%dH%s[?25h' "$esc" $((3 + k)) $((3 + $(width "$q"))) "$esc"
@@ -158,7 +165,7 @@ enter() {
   on=1
   : >"$tmp/steps"
   printf '%s[?1049h' "$esc"
-  trap draw WINCH 2>/dev/null || :
+  trap 'resized=1; draw' WINCH 2>/dev/null || :
   draw
 }
 leave() {
@@ -220,10 +227,14 @@ if [ -z "$tarball" ]; then
     # on the screen's last line, apart from the step; read from what curl prints, every half second
     curl -fL --progress-bar -o "$tmp/connaio.tar.gz" "$url" 2>"$tmp/progress" &
     cp=$!
+    shown=
     while kill -0 "$cp" 2>/dev/null; do
       pct=$(tr '\r' '\n' <"$tmp/progress" | grep -o '[0-9]*\.[0-9]%' | tail -n 1)
       pct=${pct%%.*}
-      doing 下载 "Connaio ${tag#v}（linux-$arch）  $(meter "${pct:-0}")"
+      if [ "${pct:-0}" != "$shown" ]; then # drawn when it moved
+        shown=${pct:-0}
+        doing 下载 "Connaio ${tag#v}（linux-$arch）  $(meter "$shown")"
+      fi
       sleep 0.5
     done
     wait "$cp" || { cp= && fail "下载失败：$(tr '\r' '\n' <"$tmp/progress" | grep -v '#' | grep . | tail -n 1)"; }
