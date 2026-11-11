@@ -152,7 +152,10 @@ func TestProfileVPN(t *testing.T) {
 // with it standing by); LoginVPN puts a copy with the account in, RemoveVPN takes it out again.
 func TestLoginProfileVPN(t *testing.T) {
 	cs, s, _ := startCore(t, "")
-	p, err := s.store.AddLocal("sub", []byte("proxies:\n  - {name: 校园网, type: easyconnect, server: vpn.example.invalid}\n  - {name: ts, type: tailscale}\nrules:\n  - IP-CIDR,10.0.0.0/8,校园网\n  - MATCH,DIRECT\n"))
+	p, err := s.store.AddLocal("sub", []byte("proxies:\n  - {name: 校园网, type: easyconnect, server: vpn.example.invalid}\n  - {name: ts, type: tailscale}\n"+
+		// a subnet group defaulting to it, as a subscription has one: the core loads it whatever its order
+		"proxy-groups:\n  - {name: ts-Group, type: subnet, default: ts, rules: {\"SSID:Home\": DIRECT}}\n"+
+		"rules:\n  - IP-CIDR,10.0.0.0/8,校园网\n  - IP-CIDR,172.16.10.0/24,ts-Group\n  - MATCH,DIRECT\n"))
 	if err != nil {
 		t.Fatal(err)
 	}

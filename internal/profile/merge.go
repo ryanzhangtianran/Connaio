@@ -72,22 +72,16 @@ func markLogin(profile map[string]any) {
 	}
 }
 
-// awaitLogin stands a group in for each node still waiting to be signed in, rejecting what the
-// rules send it: the core would refuse an EasyConnect node without an account, and start a
-// Tailscale one. The rules and groups naming the node stay valid; hidden, it isn't listed to pick.
+// awaitLogin stands a reject node in for each node still waiting to be signed in: the core would
+// refuse an EasyConnect node without an account, and start a Tailscale one. The rules and groups
+// naming it stay valid, what they send it rejected. A node, not a group: the core orders groups by
+// their proxies alone, so a subnet group whose default named a stand-in group could load first.
 func awaitLogin(cfg map[string]any) {
 	proxies, _ := cfg["proxies"].([]any)
-	var kept []any
-	for _, x := range proxies {
+	for i, x := range proxies {
 		if p, _ := x.(map[string]any); p[LoginKey] == true {
-			groups, _ := cfg["proxy-groups"].([]any)
-			cfg["proxy-groups"] = append(groups, map[string]any{"name": p["name"], "type": "select", "proxies": []any{"REJECT"}, "hidden": true})
-			continue
+			proxies[i] = map[string]any{"name": p["name"], "type": "reject"}
 		}
-		kept = append(kept, x)
-	}
-	if len(kept) < len(proxies) {
-		cfg["proxies"] = kept
 	}
 }
 

@@ -319,7 +319,6 @@ func (s *CoreService) Groups() ([]Group, error) {
 			All     []string          `json:"all"`
 			Default string            `json:"default"`
 			Rules   map[string]string `json:"rules"`
-			Hidden  bool              `json:"hidden"` // not one to pick, e.g. a VPN waiting to be signed in (profile.LoginKey)
 			History []struct {
 				Delay int `json:"delay"`
 			} `json:"history"`
@@ -330,7 +329,7 @@ func (s *CoreService) Groups() ([]Group, error) {
 	}
 	toGroup := func(name string) (Group, bool) {
 		p, ok := resp.Proxies[name]
-		if !ok || len(p.All) == 0 || p.Hidden {
+		if !ok || len(p.All) == 0 {
 			return Group{}, false
 		}
 		g := Group{Name: name, Type: p.Type, Now: p.Now, Default: p.Default, Rules: p.Rules}

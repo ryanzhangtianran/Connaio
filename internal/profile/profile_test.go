@@ -970,19 +970,16 @@ rules:
 		}
 		return cfg
 	}
-	names := func(cfg map[string]any, key string) (out []string) {
-		list, _ := cfg[key].([]any)
+	types := func(cfg map[string]any) (out []string) {
+		list, _ := cfg["proxies"].([]any)
 		for _, x := range list {
-			out = append(out, groupName(x))
+			out = append(out, groupName(x)+":"+x.(map[string]any)["type"].(string))
 		}
 		return out
 	}
 	cfg := built()
-	if got := names(cfg, "proxies"); !slices.Equal(got, []string{"keyed"}) {
-		t.Fatalf("proxies = %v, want only the one with an auth key", got)
-	}
-	if got := names(cfg, "proxy-groups"); !slices.Equal(got, []string{"校园网", "ts"}) {
-		t.Fatalf("groups = %v, want the waiting ones", got)
+	if got := types(cfg); !slices.Equal(got, []string{"校园网:reject", "ts:reject", "keyed:tailscale"}) {
+		t.Fatalf("proxies = %v, want the waiting ones as reject nodes", got)
 	}
 	if rules, _ := cfg["rules"].([]any); len(rules) != 3 {
 		t.Fatalf("the rules naming them stay: %v", rules)
@@ -995,10 +992,7 @@ rules:
 		t.Fatal(err)
 	}
 	cfg = built()
-	if got := names(cfg, "proxies"); !slices.Equal(got, []string{"校园网", "keyed"}) {
+	if got := types(cfg); !slices.Equal(got, []string{"校园网:easyconnect", "ts:reject", "keyed:tailscale"}) {
 		t.Fatalf("signed in: proxies = %v", got)
-	}
-	if got := names(cfg, "proxy-groups"); !slices.Equal(got, []string{"ts"}) {
-		t.Fatalf("signed in: groups = %v", got)
 	}
 }
