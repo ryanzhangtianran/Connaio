@@ -26,27 +26,16 @@ const installURL = "https://connaio-dl.ryanzhangtianran.top/install.sh"
 // entries are the menu's lines: id, label, what it does. In the order the work goes: the state,
 // the routing, the profiles, the VPNs and tunnels, TUN, then the service.
 var entries = [][3]string{
-	{"status", "运行状态", "内核、出站模式、配置与隧道"},
+	{"status", "状态", "内核、出站模式、配置与隧道"},
 	{"mode", "出站模式", "规则、全局或直连"},
-	{"select", "切换节点", "策略组当前使用的节点"},
-	{"test", "测试延迟", "测试一个策略组的节点"},
-	{"profiles", "配置列表", "订阅与本地配置"},
-	{"use", "使用配置", "切换到另一个配置"},
-	{"update", "更新订阅", "重新下载一个订阅"},
-	{"add", "添加订阅", "订阅地址与名称"},
-	{"vpns", "VPN", "各 VPN 的状态"},
-	{"login", "登录 VPN", "订阅中待登录的 VPN"},
-	{"logout", "断开 VPN", "退出登录，订阅中的回到待登录"},
+	{"nodes", "节点", "切换节点、测试延迟"},
+	{"profiles", "配置", "使用、更新或添加订阅"},
+	{"vpn", "VPN", "登录或断开 VPN"},
+	{"tun", "TUN", "接管全部或选中程序的流量"},
 	{"tunnels", "反向隧道", "启动或停止隧道"},
-	{"enhanced", "TUN 模式", "接管全部流量"},
-	{"partial", "部分 TUN", "只接管选中的程序"},
-	{"connections", "当前连接", "经 Connaio 的连接"},
-	{"start", "启动服务", "在终端中运行"},
-	{"stop", "停止服务", "在终端中运行"},
-	{"restart", "重启服务", "在终端中运行"},
-	{"logs", "查看日志", "服务最近 50 行日志"},
-	{"self-update", "更新 Connaio", "重新运行安装脚本"},
-	{"help", "全部命令", "命令行的用法"},
+	{"connections", "连接", "经 Connaio 的连接"},
+	{"service", "服务", "启动、停止、日志与更新 Connaio"},
+	{"help", "帮助", "命令行的全部命令"},
 	{"quit", "退出", ""},
 }
 
@@ -131,10 +120,10 @@ type (
 )
 
 func newModel() model {
-	return model{head: fg(cAccent).Bold(true).Render("Connaio"), vp: viewport.New(0, 0), title: "运行状态", busy: true}
+	return model{head: fg(cAccent).Bold(true).Render("Connaio"), vp: viewport.New(0, 0), title: "状态", busy: true}
 }
 
-func (m model) Init() tea.Cmd { return tea.Batch(refreshHead, capture("运行状态", "status")) }
+func (m model) Init() tea.Cmd { return tea.Batch(refreshHead, capture("状态", "status")) }
 
 func refreshHead() tea.Msg { return headMsg(summary()) }
 
@@ -339,8 +328,8 @@ func runTerm(title string, fn func() error) tea.Cmd {
 	return tea.Exec(termRun(fn), func(err error) tea.Msg { return doneMsg{title, err} })
 }
 
-// choose runs a menu entry: reports render in the content pane, choices open a form there, and
-// what runs the service gets the plain terminal for a moment.
+// choose runs a menu entry: reports render in the content pane, choices open a form there under
+// the state they change, and what runs the service gets the plain terminal for a moment.
 func (m *model) choose(id string) tea.Cmd {
 	label := id
 	for _, e := range entries {
@@ -349,75 +338,97 @@ func (m *model) choose(id string) tea.Cmd {
 		}
 	}
 	switch id {
-	case "select", "test", "use", "update", "login", "logout", "tunnels", "enhanced", "partial":
-		m.busy, m.title = true, label // its choices are read off the loop
-		m.vp.SetContent(dim.Render("读取中…"))
-	}
-	switch id {
 	case "quit":
 		return tea.Quit
-	case "status", "profiles", "vpns", "connections":
-		m.busy = true
-		return capture(label, id)
 	case "help":
 		return show(label, strings.TrimRight(Usage, "\n"))
 	case "mode":
 		mode := "rule"
 		return m.openForm(label, func() tea.Cmd { return capture(label, "mode", mode) },
 			huh.NewSelect[string]().Title("出站模式").Options(huh.NewOption("规则", "rule"), huh.NewOption("全局", "global"), huh.NewOption("直连", "direct")).Value(&mode))
-	case "select", "test":
+	case "service":
+		action := "restart"
+		return m.openForm(label, func() tea.Cmd {
+			switch action {
+			case "logs":
+				return runTerm("查看日志", logs)
+			case "self-update":
+				// -E under sudo: a proxy in the environment reaches install.sh's downloads too
+				return tea.Exec(termRun(func() error { return system("sh", "-c", "curl -fsSL "+installURL+" | sh") }), func(err error) tea.Msg {
+					if err != nil {
+						return doneMsg{"更新 Connaio", err}
+					}
+					return updatedMsg{}
+				})
+			}
+			return runTerm(map[string]string{"start": "启动服务", "stop": "停止服务", "restart": "重启服务"}[action], func() error { return service(action) })
+		}, huh.NewSelect[string]().Title("服务").Description("在终端中运行，完成后按回车返回").Options(
+			huh.NewOption("重启服务", "restart"), huh.NewOption("启动服务", "start"), huh.NewOption("停止服务", "stop"),
+			huh.NewOption("查看日志", "logs"), huh.NewOption("更新 Connaio", "self-update")).Value(&action))
+	}
+	// the rest read the core: off the loop
+	m.busy, m.title = true, label
+	m.vp.SetContent(dim.Render("读取中…"))
+	switch id {
+	case "status", "connections":
+		return capture(label, id)
+	case "nodes":
+		return bg(func() tea.Cmd { return nodesForm(label) })
+	case "profiles":
 		return bg(func() tea.Cmd {
-			return pickGroup(label, func(g group) tea.Cmd {
-				if id == "test" {
-					return capture(label, "test", g.Name)
+			action := "use"
+			return ask(label, func() tea.Cmd {
+				if action == "add" {
+					return addForm(label)
 				}
-				node := g.Now
-				var opts []huh.Option[string]
-				for _, p := range g.All {
-					opts = append(opts, huh.NewOption(p.Name+"  "+dim.Render(delay(p.Delay)), p.Name))
-				}
-				return ask(label, func() tea.Cmd { return capture(label, "select", g.Name, node) },
-					huh.NewSelect[string]().Title(g.Name).Description("当前 "+cmp.Or(g.Now, "—")).Options(opts...).Value(&node))
-			})
+				return pickProfile(label, action)
+			}, huh.NewSelect[string]().Title("配置").Description(report("profiles")+"\n").
+				Options(huh.NewOption("使用配置", "use"), huh.NewOption("更新订阅", "update"), huh.NewOption("添加订阅", "add")).Value(&action))
 		})
-	case "use", "update":
-		return bg(func() tea.Cmd { return pickProfile(label, id) })
-	case "add":
-		link, name := "", ""
-		return m.openForm(label, func() tea.Cmd { return capture(label, "profile", "add", link, name) },
-			huh.NewInput().Title("订阅地址").Placeholder("https://…").Value(&link).Validate(func(s string) error {
-				if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
-					return errors.New("以 http:// 或 https:// 开头")
-				}
-				return nil
-			}),
-			huh.NewInput().Title("名称").Placeholder("留空用域名").Value(&name))
-	case "login", "logout":
-		return bg(func() tea.Cmd { return vpnForm(id, label) })
+	case "vpn":
+		return bg(func() tea.Cmd {
+			action := "login"
+			return ask(label, func() tea.Cmd { return vpnForm(action, label) },
+				huh.NewSelect[string]().Title("VPN").Description(report("vpns")+"\n").
+					Options(huh.NewOption("登录 VPN", "login"), huh.NewOption("断开 VPN", "logout")).Value(&action))
+		})
+	case "tun":
+		return bg(func() tea.Cmd { return tunForm(label) })
 	case "tunnels":
 		return bg(func() tea.Cmd { return pickTunnel(label) })
-	case "enhanced":
-		return bg(func() tea.Cmd {
-			on := "on"
-			return ask(label, func() tea.Cmd { return capture(label, "enhanced", on) },
-				huh.NewSelect[string]().Title("TUN 模式").Description(now("enhanced")).Options(huh.NewOption("开启", "on"), huh.NewOption("关闭", "off")).Value(&on))
-		})
-	case "partial":
-		return bg(func() tea.Cmd { return partialForm(label) })
-	case "start", "stop", "restart":
-		return runTerm(label, func() error { return service(id) })
-	case "logs":
-		return runTerm(label, logs)
-	case "self-update":
-		// -E under sudo: a proxy in the environment reaches install.sh's downloads too
-		return tea.Exec(termRun(func() error { return system("sh", "-c", "curl -fsSL "+installURL+" | sh") }), func(err error) tea.Msg {
-			if err != nil {
-				return doneMsg{label, err}
-			}
-			return updatedMsg{}
-		})
 	}
 	return nil
+}
+
+// nodesForm asks for a strategy group, then for one of its nodes, or to test them all.
+func nodesForm(label string) tea.Cmd {
+	return pickGroup(label, func(g group) tea.Cmd {
+		const test = "\x00test" // no node's name
+		node := g.Now
+		opts := []huh.Option[string]{huh.NewOption(fg(cAccent).Render("测试延迟"), test)}
+		for _, p := range g.All {
+			opts = append(opts, huh.NewOption(p.Name+"  "+dim.Render(delay(p.Delay)), p.Name))
+		}
+		return ask(label, func() tea.Cmd {
+			if node == test {
+				return capture(label, "test", g.Name)
+			}
+			return capture(label, "select", g.Name, node)
+		}, huh.NewSelect[string]().Title(g.Name).Description("当前 "+cmp.Or(g.Now, "—")).Options(opts...).Value(&node))
+	})
+}
+
+// addForm asks for a subscription's link and name, then adds it.
+func addForm(label string) tea.Cmd {
+	link, name := "", ""
+	return ask(label, func() tea.Cmd { return capture(label, "profile", "add", link, name) },
+		huh.NewInput().Title("订阅地址").Placeholder("https://…").Value(&link).Validate(func(s string) error {
+			if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
+				return errors.New("以 http:// 或 https:// 开头")
+			}
+			return nil
+		}),
+		huh.NewInput().Title("名称").Placeholder("留空用域名").Value(&name))
 }
 
 // pickTunnel asks for a reverse tunnel, then starts it, or stops it when running.
@@ -447,9 +458,9 @@ func pickTunnel(label string) tea.Cmd {
 	}, huh.NewSelect[int]().Title("要启动或停止的隧道").Options(opts...).Value(&i))
 }
 
-// partialForm switches partial TUN, or adds or removes one of its programs.
-func partialForm(label string) tea.Cmd {
-	action := "on"
+// tunForm switches TUN, all traffic or the programs picked (partial), or adds or removes a program.
+func tunForm(label string) tea.Cmd {
+	action := "partial on"
 	return ask(label, func() tea.Cmd {
 		switch action {
 		case "add":
@@ -459,18 +470,21 @@ func partialForm(label string) tea.Cmd {
 		case "remove":
 			return removeProgram(label)
 		}
-		return capture(label, "partial", action)
-	}, huh.NewSelect[string]().Title("部分 TUN").Description(now("partial")).
-		Options(huh.NewOption("开启", "on"), huh.NewOption("关闭", "off"), huh.NewOption("添加程序", "add"), huh.NewOption("移除程序", "remove")).Value(&action))
+		return capture(label, strings.Fields(action)...)
+	}, huh.NewSelect[string]().Title("TUN").Description("TUN 模式  "+report("enhanced")+"\n"+report("partial")+"\n").Options(
+		huh.NewOption("接管全部流量", "enhanced on"), huh.NewOption("关闭全部接管", "enhanced off"),
+		huh.NewOption("只接管选中的程序", "partial on"), huh.NewOption("关闭部分接管", "partial off"),
+		huh.NewOption("添加程序", "add"), huh.NewOption("移除程序", "remove")).Value(&action))
 }
 
-// now is what a command prints, on one line, for a form's description: the setting as it is.
-func now(args ...string) string {
+// report is what a command prints, for a form's description: the state its choices change, above
+// them with a blank line between.
+func report(args ...string) string {
 	var b bytes.Buffer
 	if err := Main(args, &b); err != nil {
-		return err.Error()
+		return errLine(err)
 	}
-	return "当前：" + strings.Join(strings.Fields(b.String()), " ")
+	return unruled(b.String())
 }
 
 // client0 is the menu's client: a call that takes long (the core busy) fails in 10s, not 3 minutes.

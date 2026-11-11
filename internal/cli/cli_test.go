@@ -248,7 +248,7 @@ func TestMenu(t *testing.T) {
 	var m tea.Model = newModel()
 	m = feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = drive(t, m, m.Init())
-	if v := m.View(); !strings.Contains(v, "运行状态") || !strings.Contains(v, "运行中（1.19.32）") || !strings.Contains(v, "出站 规则") {
+	if v := m.View(); !strings.Contains(v, "状态") || !strings.Contains(v, "运行中（1.19.32）") || !strings.Contains(v, "出站 规则") {
 		t.Fatalf("first screen:\n%s", v)
 	}
 	key := func(k tea.KeyType) { m = feed(t, m, tea.KeyMsg{Type: k}) }
@@ -258,20 +258,24 @@ func TestMenu(t *testing.T) {
 		}
 		key(tea.KeyEnter)
 	}
-	at("select")
+	at("nodes")
 	key(tea.KeyEnter) // the group: Proxy, the only one
-	key(tea.KeyDown)  // node B
+	key(tea.KeyDown)  // from A, the node in use, to B
 	key(tea.KeyEnter)
 	at("mode")
 	key(tea.KeyDown) // 全局
 	key(tea.KeyEnter)
+	at("nodes")
+	key(tea.KeyEnter) // Proxy
+	key(tea.KeyUp)    // from A to 测试延迟, above the nodes
+	key(tea.KeyEnter)
 	var got []string
 	for _, c := range *calls {
-		if strings.HasPrefix(c, "CoreService.Select") || strings.HasPrefix(c, "CoreService.SetMode") {
+		if strings.HasPrefix(c, "CoreService.Select") || strings.HasPrefix(c, "CoreService.SetMode") || strings.HasPrefix(c, "CoreService.TestGroup") {
 			got = append(got, c)
 		}
 	}
-	want := []string{`CoreService.Select["Proxy","B"]`, `CoreService.SetMode["global"]`}
+	want := []string{`CoreService.Select["Proxy","B"]`, `CoreService.SetMode["global"]`, `CoreService.TestGroup["Proxy"]`}
 	if strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Errorf("calls %v\nwant  %v", got, want)
 	}
@@ -290,7 +294,7 @@ func TestMenuNotHeldUp(t *testing.T) {
 	var m tea.Model = newModel()
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m, _ = m.Update(contentMsg{"运行状态", ""})
-	for m.(model).cursor != slices.IndexFunc(entries, func(e [3]string) bool { return e[0] == "select" }) {
+	for m.(model).cursor != slices.IndexFunc(entries, func(e [3]string) bool { return e[0] == "nodes" }) {
 		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	}
 	start := time.Now()
