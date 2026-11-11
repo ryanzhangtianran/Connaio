@@ -3,22 +3,17 @@ import { Browser, Clipboard } from "@wailsio/runtime";
 // is false while this module loads on Windows, where WebView2 hands the environment over only once
 // the page has loaded, and Windows got macOS's layout. words are what that OS calls its parts, one
 // row per phrase and a column per platform, so a new platform fills a column rather than every page.
-// web: the page runs in a browser, served by Connaio (internal/app/web.go sets the cookie),
-// not in the app's window: no window, tray, file dialogs or desktop to drive, its platform "web".
-export const web = document.cookie.split("; ").includes("connaio_web=1");
 const ua = navigator.userAgent;
-export const platform = web ? "web" : ua.includes("Windows") ? "windows" : ua.includes("Linux") ? "linux" : "macos";
+export const platform = ua.includes("Windows") ? "windows" : ua.includes("Linux") ? "linux" : "macos";
 export const words = {
-  showInFiles: { macos: "在 Finder 中显示", linux: "在文件管理器中显示", windows: "在资源管理器中显示", web: "" }[platform],
-  pickApp: { macos: "从 Finder 添加", linux: "选择应用", windows: "选择应用", web: "" }[platform],
-  tray: { macos: "菜单栏", linux: "托盘", windows: "通知区域", web: "托盘" }[platform],
-  // with no system proxy beside it, TUN is no enhancement of anything: called what it is
-  enhanced: { macos: "增强模式", linux: "增强模式", windows: "增强模式", web: "TUN 模式" }[platform],
-  partial: { macos: "部分增强", linux: "部分增强", windows: "部分增强", web: "部分 TUN" }[platform],
+  showInFiles: { macos: "在 Finder 中显示", linux: "在文件管理器中显示", windows: "在资源管理器中显示" }[platform],
+  pickApp: { macos: "从 Finder 添加", linux: "选择应用", windows: "选择应用" }[platform],
+  tray: { macos: "菜单栏", linux: "托盘", windows: "通知区域" }[platform],
+  enhanced: "增强模式",
+  partial: "部分增强",
 };
-// openURL and copyText act where the page is seen: on the web, in this browser, not on the server
-export const openURL = (url: string) => (web ? void window.open(url, "_blank", "noopener") : void Browser.OpenURL(url));
-export const copyText = (text: string) => void (web ? navigator.clipboard?.writeText(text) : Clipboard.SetText(text))?.catch(() => {}); // Wails': navigator.clipboard is missing in some webviews
+export const openURL = (url: string) => void Browser.OpenURL(url);
+export const copyText = (text: string) => void Clipboard.SetText(text).catch(() => {}); // Wails': navigator.clipboard is missing in some webviews
 
 // validPort accepts 1..65535 as typed.
 // plain marks a field for a username, host or the like: typed as is, not capitalised, corrected or underlined

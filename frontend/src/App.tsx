@@ -15,7 +15,7 @@ import { AboutPage, Dns, General } from "./Settings";
 import Profiles from "./Profiles";
 import ErrorBoundary from "./ErrorBoundary";
 import { Icon } from "./icons";
-import { platform, web, words } from "./format";
+import { platform, words } from "./format";
 import { on, usePoll, useClickAway } from "./hooks";
 import { start as startStore } from "./store";
 
@@ -87,7 +87,7 @@ export default function App() {
 
   useEffect(() => {
     CoreService.Status().then(setStatus);
-    if (!web) SystemProxyService.Enabled().then(setSysProxy);
+    SystemProxyService.Enabled().then(setSysProxy);
     const mode = () => { EnhancedService.Mode().then(setEnhanced); EnhancedService.DaemonInstalled().then(setRooted); };
     mode();
     const offs = [
@@ -106,7 +106,7 @@ export default function App() {
   usePoll(() => CoreService.Status().then(setStatus), 1000, !status.running && !status.error);
   usePoll(() => CoreService.Activity().then(setActivity), 1000, status.running && current === "activity");
 
-  // ⌘F or Ctrl+F (the web UI runs on any OS) goes to the page's search box, when it has one
+  // ⌘F or Ctrl+F goes to the page's search box, when it has one
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() !== "f" || !(e.metaKey || e.ctrlKey)) return;
@@ -125,7 +125,7 @@ export default function App() {
     { key: "vpn", title: "VPN", page: <Vpn status={status} /> },
     { key: "devices", title: "设备", page: <Devices status={status} /> },
     { key: "rules", title: "规则", page: <Rules status={status} /> },
-    { key: "processes", title: web ? "TUN" : "增强", page: <Processes status={status} mode={enhanced} rooted={rooted} /> },
+    { key: "processes", title: "增强", page: <Processes status={status} mode={enhanced} rooted={rooted} /> },
     { key: "profiles", title: "配置", page: <div className="grouped profiles-page"><Profiles /></div> },
     { key: "dns", title: "DNS", page: <div className="grouped"><Dns /></div> },
     { key: "dashboard", title: "连接", page: <Dashboard status={status} /> },
@@ -146,7 +146,7 @@ export default function App() {
         <div className="topbar" onDoubleClick={(e) => platform === "linux" && (e.target === e.currentTarget || (e.target as Element).classList.contains("page-title")) && Window.ToggleMaximise()}>
           <h1 className="page-title">{pages.find((p) => p.key === current)?.title}</h1>
           <EventsButton />
-          {!web && <button
+          <button
             className={`pill ${sysProxy ? "active" : ""}`}
             aria-pressed={sysProxy}
             disabled={!status.running}
@@ -154,12 +154,12 @@ export default function App() {
             onClick={() => SystemProxyService.SetEnabled(!sysProxy)}
           >
             <span className={`dot ${sysProxy ? "on" : ""}`} />系统代理
-          </button>}
+          </button>
           <button
             className={`pill ${enhanced ? "active" : ""}`}
             aria-pressed={!!enhanced}
             disabled={!status.running || enhancedBusy || !rooted}
-            title={!rooted ? (web ? "需以 root 运行 Connaio" : "需先在「通用」中授予 root 权限") : enhanced === "process-tun" ? `TUN 只接管选中的应用；点击关闭${words.partial}` : "TUN 接管全部流量"}
+            title={!rooted ? "需先在「通用」中授予 root 权限" : enhanced === "process-tun" ? `TUN 只接管选中的应用；点击关闭${words.partial}` : "TUN 接管全部流量"}
             onClick={() => {
               // it turns off what it shows: partial enhancement when that runs, else enhanced mode
               setEnhancedBusy(true);

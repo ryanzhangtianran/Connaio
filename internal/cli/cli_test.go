@@ -71,10 +71,10 @@ func TestStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 	// values start at one display column (the widest label, 隧道 OLA-4090, is 13 wide, then 2 spaces)
-	// the rules as wide as the table: the label column, 2 spaces, the address
-	rule := strings.Repeat("-", 13+2+len("http://"+addr)) + "\n"
+	// the rules as wide as the table: the label column, 2 spaces, the widest value (运行中（1.19.32）, 17 wide)
+	rule := strings.Repeat("-", 13+2+17) + "\n"
 	want := rule + "内核           运行中（1.19.32）\n出站模式       规则\nTUN 模式       开启（全部流量）\n配置           订阅\n" + rule +
-		"隧道 OLA-4090  运行中\n" + rule + "网页界面       http://" + addr + "\n" + rule
+		"隧道 OLA-4090  运行中\n" + rule
 	if out != want {
 		t.Errorf("status:\n%s\nwant:\n%s", out, want)
 	}
@@ -116,7 +116,7 @@ func TestToken(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "web-token"), []byte("tok\n"), 0o600)
 	out.Reset()
-	if err := Main([]string{"url", "--addr", addr, "--data-dir", dir}, &out); err != nil || out.String() != "http://"+addr+"/?token=tok\n" {
+	if err := Main([]string{"mode", "--addr", addr, "--data-dir", dir}, &out); err != nil {
 		t.Errorf("token from the data directory: %q %v", out.String(), err)
 	}
 }

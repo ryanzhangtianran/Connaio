@@ -15,55 +15,34 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// webCookie holds the access token in the browser, once given; webFlag tells the page it runs in a
-// browser, not the app's window (format.ts web), so it leaves the desktop's parts out.
-const (
-	webCookie = "connaio_token"
-	webFlag   = "connaio_web"
-)
+// webCookie carries the access token from the command line.
+const webCookie = "connaio_token"
 
 // frontHeader carries the front's secret to the Wails server, which answers nothing without it
 // (innerOnly): any local user can reach its loopback port, the front alone knows the secret.
 const frontHeader = "X-Connaio-Front"
 
-// webHandler is Connaio's front: every request, WebSockets included, needs the access token,
-// from the cookie a first visit with ?token= (the address printed at start) or the login form sets,
-// and goes on to the Wails server at upstream with secret, never the cookie (were another process
-// to hold upstream's port, it would get no token).
+// webHandler is the front the command line calls: POST /wails/runtime, the access token in its
+// cookie, goes on to the Wails server at upstream with secret, never the cookie (were another
+// process to hold upstream's port, it would get no token). Nothing else is served: no web UI.
 func webHandler(upstream, token, secret string) http.Handler {
-	proxy := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: upstream}) // the Host header passes through: Wails' WebSocket origin check sees the browser's
+	proxy := httputil.NewSingleHostReverseProxy(&url.URL{Scheme: "http", Host: upstream})
 	director := proxy.Director
 	proxy.Director = func(r *http.Request) {
 		director(r)
 		r.Header.Del("Cookie")
 		r.Header.Set(frontHeader, secret)
 	}
-	valid := func(t string) bool { return t != "" && subtle.ConstantTimeCompare([]byte(t), []byte(token)) == 1 }
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		given := r.URL.Query().Get("token")
-		if r.Method == http.MethodPost && r.URL.Path == "/login" {
-			given = r.PostFormValue("token")
-		}
-		if given != "" {
-			if !valid(given) {
-				loginPage(w, "访问令牌不正确")
-				return
-			}
-			for _, c := range []*http.Cookie{
-				{Name: webCookie, Value: token, HttpOnly: true},
-				{Name: webFlag, Value: "1"},
-			} {
-				c.Path, c.MaxAge, c.SameSite, c.Secure = "/", 400*24*3600, http.SameSiteStrictMode, r.TLS != nil
-				http.SetCookie(w, c)
-			}
-			http.Redirect(w, r, "/", http.StatusSeeOther) // the token out of the address bar
+		if c, err := r.Cookie(webCookie); err != nil || subtle.ConstantTimeCompare([]byte(c.Value), []byte(token)) != 1 {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if c, err := r.Cookie(webCookie); err == nil && valid(c.Value) {
-			proxy.ServeHTTP(w, r)
+		if r.Method != http.MethodPost || r.URL.Path != "/wails/runtime" {
+			http.NotFound(w, r)
 			return
 		}
-		loginPage(w, "")
+		proxy.ServeHTTP(w, r)
 	})
 }
 
@@ -82,21 +61,7 @@ func innerOnly(secret string) application.Middleware {
 	}
 }
 
-// loginPage asks for the access token, with problem when the last one given was wrong.
-func loginPage(w http.ResponseWriter, problem string) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusUnauthorized)
-	note := "访问令牌见 Connaio 启动时的输出，或数据目录中的 web-token 文件。"
-	if problem != "" {
-		note = problem
-	}
-	_, _ = w.Write([]byte(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Connaio</title>
-<style>body{font:14px -apple-system,system-ui,sans-serif;display:grid;place-items:center;height:90vh;color:#1d1d1f}form{display:grid;gap:10px;width:300px}
-input,button{height:32px;padding:0 10px;border:1px solid #ccc;border-radius:8px;font:inherit}button{background:#0a84ff;color:#fff;border:0}p{color:#86868b;margin:0}</style>
-<form method="post" action="/login"><b>Connaio</b><input name="token" type="password" placeholder="访问令牌" autofocus><button>进入</button><p>` + note + `</p></form>`))
-}
-
-// webToken is the access token: the given one, else the one kept in dir/web-token, made on first use.
+// webToken is the command line's access token: the given one, else the one kept in dir/web-token, made on first use.
 func webToken(dir, given string) (string, error) {
 	if given != "" {
 		return given, nil

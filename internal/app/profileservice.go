@@ -325,8 +325,7 @@ func (s *ProfileService) ImportOverride() error {
 	return s.MergeOverride(string(b))
 }
 
-// MergeOverride merges YAML text into the override and applies it, as ImportOverride a file's:
-// the web UI's import, the browser reading the file.
+// MergeOverride merges YAML text into the override and applies it: ImportOverride's file.
 func (s *ProfileService) MergeOverride(text string) error {
 	return s.edit(func() error { return s.store.ImportOverride(text) })
 }

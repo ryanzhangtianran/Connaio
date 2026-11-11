@@ -1,5 +1,5 @@
 // Package cli is the headless build's command line: commands that drive a running instance through
-// its web front, calling the services the web UI calls (POST /wails/runtime, by method name).
+// its port (--listen), calling the services by method name (POST /wails/runtime).
 package cli
 
 import (
@@ -51,7 +51,6 @@ const Usage = `用法：connaio [命令] [选项] [参数]
   connections                  当前连接
   close-all                    断开全部连接
   restart                      重启内核
-  url                          网页界面地址（含令牌）
   run <命令> [参数]             经代理运行命令，无需 export
   enable                       当前终端设置代理变量（bash；未经安装脚本时用 eval "$(connaio enable)"）
   disable                      当前终端取消代理变量
@@ -384,8 +383,6 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 		if len(tunnels) > 0 {
 			tw.rule()
 		}
-		tw.row("网页界面", "http://"+addr)
-		tw.rule()
 	case "mode":
 		if len(args) == 0 {
 			var mode string
@@ -616,8 +613,6 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 			return err
 		}
 		fmt.Fprint(out, exportLines(os.Environ(), port))
-	case "url":
-		fmt.Fprintf(out, "http://%s/?token=%s\n", addr, url.QueryEscape(c.token))
 	default:
 		return fmt.Errorf("没有 %s 这个命令\n\n%s", name, Usage)
 	}

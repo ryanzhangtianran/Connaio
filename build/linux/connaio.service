@@ -1,12 +1,11 @@
-# Connaio with no window, its UI in a browser (the headless build). install.sh puts it in
+# Connaio with no window, driven by its command line (the headless build). install.sh puts it in
 # /opt/connaio and this file in /etc/systemd/system/; then
 #   systemctl enable --now connaio
-#   journalctl -u connaio     # the web UI's address (the token: /var/lib/connaio-web/web-token)
-# Run as root, TUN mode can be turned on. The listen address is /etc/default/connaio's CONNAIO_LISTEN,
-# and CONNAIO_DOMAIN there serves HTTPS on :443 for it: kept there (not here) so an update, which
-# replaces this file, keeps them.
+#   journalctl -u connaio     # its log (the command line's token: /var/lib/connaio-web/web-token)
+# Run as root, TUN mode can be turned on. The listen address is /etc/default/connaio's CONNAIO_LISTEN:
+# kept there (not here) so an update, which replaces this file, keeps it.
 [Unit]
-Description=Connaio (web UI)
+Description=Connaio
 After=network-online.target
 Wants=network-online.target
 

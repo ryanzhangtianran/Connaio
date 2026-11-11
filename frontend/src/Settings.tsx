@@ -3,7 +3,7 @@ import { CoreService, EnhancedService, ProfileService, SettingsService, SystemPr
 import type { About, DNSLeak, LeakServer, Update, UpdateProgress } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { on } from "./hooks";
 import Dialog from "./Dialog";
-import { copyText, errText, platform, plain, sizeText, words, validPort, web } from "./format";
+import { copyText, errText, platform, plain, sizeText, words, validPort } from "./format";
 
 
 // Row is one setting: title and description, the control at the right; a list row lists its items below.
@@ -80,7 +80,7 @@ function Appearance() {
     try { localStorage.setItem(k, v); } catch { /* unavailable: the page keeps the system's look */ }
     applyTheme();
     redraw((n) => n + 1);
-    if (k === "theme" && !web) SettingsService.SetTheme(v);
+    if (k === "theme") SettingsService.SetTheme(v);
   };
   const theme = get("theme") || "system";
   const now = get("accent") || get("accent.light") || accents[0]; // accent.light: the light mode's, when each mode had its own
@@ -110,7 +110,7 @@ function ProxySettings({ port }: { port: number }) {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
   useEffect(() => {
-    if (!web) SystemProxyService.Bypass().then((b) => setBypass(b ?? []));
+    SystemProxyService.Bypass().then((b) => setBypass(b ?? []));
     SettingsService.TestURL().then((u) => { setTestURL(u); setURLText(u); });
   }, []);
   const saveURL = () => {
@@ -125,9 +125,9 @@ function ProxySettings({ port }: { port: number }) {
   return (
     <div className="card settings-card">
       <div className="section-title">代理</div>
-      {!web && <Row title="不经代理" desc={bypass.length ? `${bypass.slice(0, 3).join("、")}${bypass.length > 3 ? ` 等 ${bypass.length} 项` : ""}` : "本机与局域网地址默认直连"}>
+      <Row title="不经代理" desc={bypass.length ? `${bypass.slice(0, 3).join("、")}${bypass.length > 3 ? ` 等 ${bypass.length} 项` : ""}` : "本机与局域网地址默认直连"}>
         <button className="btn ctl" onClick={() => setEditingBypass(true)}>编辑</button>
-      </Row>}
+      </Row>
       {editingBypass && (
         <Dialog title="不经代理" sub="这些地址直连，不经系统代理；本机与局域网默认直连" className="narrow" onClose={() => setEditingBypass(false)}
           foot={<button className="btn primary" onClick={() => setEditingBypass(false)}>完成</button>}>
@@ -166,12 +166,6 @@ export function General() {
   useEffect(() => { load(); return on("enhanced", load); }, [load]);
   useEffect(() => setPortText(String(port)), [port]);
 
-  // web: the service restarts on the new version, and the page reloads once it answers with it
-  const reloadWhenUpdated = (old: string) => {
-    const poll = () => SettingsService.About().then((a) => (a.version !== old ? location.reload() : setTimeout(poll, 1000)), () => setTimeout(poll, 1000));
-    setTimeout(poll, 1000);
-  };
-
   const run = (p: Promise<unknown>, key = "") => {
     setBusy(key);
     p.finally(() => { setBusy(""); load(); });
@@ -194,16 +188,16 @@ export function General() {
         <Row title="重启内核" desc="重新载入当前配置">
           <button className="btn ctl" disabled={!!busy} onClick={() => run(CoreService.Restart(), "restart")}>{busy === "restart" ? "重启中…" : "重启"}</button>
         </Row>
-        {web ? <Row title="root 权限" desc={daemon ? "以 root 运行，可开启 TUN 模式" : "以 root 运行后可开启 TUN 模式"}>{null}</Row> : <Row title="root 权限" desc={daemon ? "已授予，内核以 root 运行" : "授予后才能开启增强模式"}>
+        <Row title="root 权限" desc={daemon ? "已授予，内核以 root 运行" : "授予后才能开启增强模式"}>
           {daemon
             ? <button className="btn ctl" disabled={!!busy} onClick={() => run(EnhancedService.Uninstall(), "root")}>{busy === "root" ? "移除中…" : "移除"}</button>
             : <button className="btn ctl" disabled={!!busy} onClick={() => run(EnhancedService.Grant(), "root")}>{busy === "root" ? "授予中…" : "授予"}</button>}
-        </Row>}
+        </Row>
       </div>
 
       <ProxySettings port={port} />
 
-      {!web && <div className="card settings-card">
+      <div className="card settings-card">
         <div className="section-title">应用</div>
         <Row title="开机时启动">
           <Switch on={login} onChange={(v) => { setLogin(v); run(SettingsService.SetLaunchAtLogin(v)); }} />
@@ -213,7 +207,7 @@ export function General() {
             <Switch on={traySpeed} onChange={(v) => { setTraySpeed(v); run(SettingsService.SetTraySpeed(v)); }} />
           </Row>
         )}
-      </div>}
+      </div>
 
       <Appearance />
 
@@ -221,7 +215,7 @@ export function General() {
         <div className="section-title">更新</div>
         <Row title={`当前版本 ${version}`} desc={update ? (update.newer ? `发现新版本 ${update.latest}，从 GitHub Releases 下载安装后自动重启` : "已是最新版本") : undefined}>
           {update?.newer
-            ? <button className="btn ctl" disabled={!!busy} onClick={() => { setProgress(null); run(SettingsService.InstallUpdate().then(() => web && new Promise(() => reloadWhenUpdated(version))), "update"); }}>{busy === "update" ? updateLabel(progress) : "更新"}</button>
+            ? <button className="btn ctl" disabled={!!busy} onClick={() => { setProgress(null); run(SettingsService.InstallUpdate(), "update"); }}>{busy === "update" ? updateLabel(progress) : "更新"}</button>
             : <button className="btn ctl" disabled={!!busy} onClick={() => run(SettingsService.CheckUpdate().then(setUpdate), "check")}>{busy === "check" ? "检查中…" : "检查更新"}</button>}
         </Row>
         {busy === "update" && (
@@ -431,7 +425,7 @@ export function AboutPage() {
       <Row title="Connaio">{about.version}</Row>
       <Row title="内核">{about.coreVersion || "—"}</Row>
       <Row title="内核运行方式">{about.attached ? "root" : "当前用户"}</Row>
-      <Row title="数据目录" desc={web ? "保存在运行 Connaio 的服务器上" : undefined}>{!web && <button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button>}</Row>
+      <Row title="数据目录"><button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button></Row>
     </div>
   );
 }

@@ -55,7 +55,6 @@ var items = []item{
 	{"TUN 模式", (*menu).enhanced},
 	{"部分 TUN", (*menu).partial},
 	{"当前连接", func(m *menu) error { return m.cmd("connections") }},
-	{"网页界面地址", func(m *menu) error { return m.cmd("url") }},
 }
 
 type menu struct {

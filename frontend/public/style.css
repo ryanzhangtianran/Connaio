@@ -597,12 +597,6 @@ tr.muted td.rule-actions { text-decoration: none; }
 .linux { --bg: #eef0f4; --panel: #ffffff; }
 .dark.linux { --bg: #1c1d21; --panel: #26272c; }
 .linux .sidebar { padding-top: 10px; -webkit-backdrop-filter: none; backdrop-filter: none; }
-/* the web UI (connaio-server) looks as the Mac app: its window's gradient, opaque, a browser tab
-   having no desktop blur behind it, and the sidebar from the top, with no window buttons to leave room for */
-.web { --bg: linear-gradient(160deg, #e7ecf2 0%, #dfe5ed 45%, #e8e5ef 100%); }
-.dark.web { --bg: linear-gradient(160deg, #1d2026 0%, #202329 50%, #23212a 100%); }
-.web body { background: var(--bg); }
-.web .sidebar { padding-top: 10px; }
 /* Noto Sans, Linux's usual fallback, has only regular and bold, so every 500 and 600 above came out
    bold; Ubuntu Sans has the whole weight range, Noto Sans CJK the Chinese */
 .linux { --sans: "Ubuntu Sans", "Noto Sans CJK SC", system-ui, sans-serif; --rounded: var(--sans); }
@@ -640,12 +634,6 @@ tr.muted td.rule-actions { text-decoration: none; }
     "lan lan lan health health health svc svc svc mem mem mem"
     "list list list list list list list list list side side side"; /* the lists three quarters, the groups the rest: every edge lines up with a card above */
 }
-/* the web UI has no system proxy: enhanced mode takes its place too */
-.activity.web { grid-template-areas:
-    "hero hero hero hero hero hero up up up down down down"
-    "mode mode mode mode mode mode tun tun tun tun tun tun"
-    "lan lan lan health health health svc svc svc mem mem mem"
-    "list list list list list list list list list side side side"; }
 .activity > .card { display: flex; flex-direction: column; min-height: 0; }
 .activity .head { min-height: 22px; }
 .activity .head-actions { gap: 8px; min-width: 0; }
@@ -788,17 +776,17 @@ tr.muted td.rule-actions { text-decoration: none; }
 .link-chip { overflow: hidden; }
 /* Linux, Windows and the web UI: the switch drawn, WebKit's native one (<input switch>, see Switch)
    being macOS's alone; WebView2 and other browsers would show a plain checkbox */
-:is(.linux, .windows, .web) input[switch] {
+:is(.linux, .windows) input[switch] {
   appearance: none; -webkit-appearance: none; position: relative; flex: none; box-sizing: border-box; width: 36px; height: 20px; margin: 0;
   padding: 0; border: 0; /* not the inputs' (above): their border shrank the box the knob sits in, putting it over the edge */ border-radius: 10px; background: var(--active); transition: background .2s; cursor: pointer;
 }
-:is(.linux, .windows, .web) input[switch]::before {
+:is(.linux, .windows) input[switch]::before {
   content: ""; position: absolute; top: 1px; left: 1px; width: 18px; height: 18px; border-radius: 50%; /* all but filling the track: a 2px seam rounded unevenly at Windows' 125% and 150% */
   background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .2s;
 }
-:is(.linux, .windows, .web) input[switch]:checked { background: var(--accent); }
-:is(.linux, .windows, .web) input[switch]:checked::before { transform: translateX(16px); }
-:is(.linux, .windows, .web) input[switch]:disabled { opacity: .5; cursor: default; }
+:is(.linux, .windows) input[switch]:checked { background: var(--accent); }
+:is(.linux, .windows) input[switch]:checked::before { transform: translateX(16px); }
+:is(.linux, .windows) input[switch]:disabled { opacity: .5; cursor: default; }
 /* the groups beside the lists, a quarter wide: one tile a row */
 /* scrolls as the ranking does, whole tiles (useWholeRows); no padding under them, where the next tile would show */
 .activity .group-tiles { grid-template-columns: minmax(0, 1fr); padding-bottom: 0; margin-bottom: 0; }

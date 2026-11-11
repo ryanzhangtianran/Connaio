@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { CoreService, DeviceService, EnhancedService, SettingsService, SystemProxyService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Activity as ActivityData, Conn, DiagSection, Group, IPInfo, LanInfo, Latency, Memory, RepairItem, Service, Status, Usage } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { delayClass, nodesOf } from "./Proxies";
-import { copyText, errText, platform, size, sizeText, speed, web, words } from "./format";
+import { copyText, errText, platform, size, sizeText, speed, words } from "./format";
 import Dialog from "./Dialog";
 import { DiagLog } from "./ProxyDiagnose";
 import { on, usePoll, useCachedURL, useClickAway, useConfirm, useWholeRows } from "./hooks";
@@ -563,7 +563,7 @@ function ListCard({ activity, go }: { activity: ActivityData | null; go: (page: 
             <Seg options={[[0, "应用"], [1, "域名"], [2, "策略"]]} value={by} onChange={setBy} />
             <Seg options={[[false, "全部"], [true, "仅代理"]]} value={proxyOnly} onChange={setProxyOnly} />
           </> : <>
-            {!web && <IconButton icon="window" title="在悬浮窗中显示" onClick={() => SettingsService.OpenMonitor()} />}
+            <IconButton icon="window" title="在悬浮窗中显示" onClick={() => SettingsService.OpenMonitor()} />
             <Picker value={shown} options={procs} onChange={choose} />
           </>}
           <button className="chip link-chip" onClick={() => go("dashboard")} title="连接">{activity?.connections ?? 0} 个连接<Icon name="more" className="chip-icon" /></button>
@@ -711,15 +711,15 @@ export default function Activity({ status, activity, sysProxy, enhanced, rooted,
     return status.error ? null : <div className="card"><div className="muted">内核启动中…</div></div>; // stopped: App's banner says why
   }
 
-  const tunSub = !rooted ? (web ? "需以 root 运行 Connaio" : "需先在「通用」中授予 root 权限") : enhanced === "tun" ? "TUN 接管全部流量" : enhanced === "process-tun" ? `${words.partial}运行中` : "已关闭";
+  const tunSub = !rooted ? "需先在「通用」中授予 root 权限" : enhanced === "tun" ? "TUN 接管全部流量" : enhanced === "process-tun" ? `${words.partial}运行中` : "已关闭";
   return (
-    <div className={`activity ${web ? "web" : ""}`}>
+    <div className="activity">
       <StatusCard activity={activity} mode={mode} setMode={setMode} latency={latency} />
       <SpeedCard dir="up" values={history.map((t) => t.up)} />
       <SpeedCard dir="down" values={history.map((t) => t.down)} />
       <ModeCard mode={mode} setMode={setMode} />
-      {!web && <ToggleCard area="sys" icon="shuffle" title="系统代理" sub={proxyOn ? `端口 ${lan?.port ?? "—"}` : "已关闭"} on={proxyOn}
-        onChange={(v) => setProxyOn(v, SystemProxyService.SetEnabled(v))} />}
+      <ToggleCard area="sys" icon="shuffle" title="系统代理" sub={proxyOn ? `端口 ${lan?.port ?? "—"}` : "已关闭"} on={proxyOn}
+        onChange={(v) => setProxyOn(v, SystemProxyService.SetEnabled(v))} />
       <ToggleCard area="tun" icon="processes" title={words.enhanced} sub={tunSub} on={tunOn} part={enhanced === "process-tun"} disabled={!rooted}
         onChange={(v) => setTunOn(v, EnhancedService.SetFull(v))} more={() => go("processes")} />
       <LanCard lan={lan} reload={loadLan} go={go} />

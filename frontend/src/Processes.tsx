@@ -3,7 +3,7 @@ import { EnhancedService, SettingsService } from "../bindings/github.com/ryanzha
 import type { ProcessChoice, Status } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { ListSetting, Switch, useSetting } from "./Settings";
 import { useFlip, usePoll } from "./hooks";
-import { cidr, plain, web, words } from "./format";
+import { cidr, plain, words } from "./format";
 
 const sources: Record<string, string> = { app: "正在运行", network: "有网络连接" };
 
@@ -65,7 +65,7 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
   const shown = rows.filter((r) => !q || matches(r) || kids(r.exec).some(matches));
   const showTools = !q || "命令行工具".includes(q) || toolNames.some((t) => t.includes(q));
   const off = !status.running || !!busy || !rooted;
-  const partialState = busy === "partial" ? "切换中…" : !rooted ? "需先在「通用」中授予 root 权限" : !partial ? "选中的应用及其子进程经 TUN 分流，其余照常" : mode === "tun" ? `${words.enhanced}已接管全部流量，关闭后恢复${words.partial}` : picked.length === 0 ? "尚未选择应用，暂不接管" : `已${web ? "接管" : "增强"} ${picked.length} 个应用`;
+  const partialState = busy === "partial" ? "切换中…" : !rooted ? "需先在「通用」中授予 root 权限" : !partial ? "选中的应用及其子进程经 TUN 分流，其余照常" : mode === "tun" ? `${words.enhanced}已接管全部流量，关闭后恢复${words.partial}` : picked.length === 0 ? "尚未选择应用，暂不接管" : `已增强 ${picked.length} 个应用`;
 
   return (
     <>
@@ -95,7 +95,7 @@ export default function Processes({ status, mode, rooted }: { status: Status; mo
           <div className="plist-tools">
             <input data-search className="dash-search" placeholder="搜索" value={query} onChange={(e) => setQuery(e.target.value)} />
             <span className="grow" />
-            {!web && <button className="btn" onClick={pick}>{words.pickApp}</button>}
+            <button className="btn" onClick={pick}>{words.pickApp}</button>
             <button className="btn" onClick={load}>刷新</button>
           </div>
           {showTools && <details className="plist-group">

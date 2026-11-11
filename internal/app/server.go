@@ -15,15 +15,13 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/crypto/acme/autocert"
-
 	"github.com/ryanzhangtianran/Connaio/internal/cli"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// Run is Connaio's: the app with no window, tray or desktop, its UI served to a browser at
+// Run is Connaio's: the app with no window, tray or desktop, driven by the command line through
 // --listen behind the access token (web.go), the core always this process's own child.
-func Run(assets fs.FS, _ []byte) error {
+func Run(fs.FS, []byte) error {
 	// any first word is a command to the running instance, an unknown one an error: never a second
 	// instance started on the default data directory by a typo
 	if len(os.Args) > 1 && !strings.HasPrefix(os.Args[1], "-") {
@@ -37,10 +35,9 @@ func Run(assets fs.FS, _ []byte) error {
 	if fi, err := os.Stdin.Stat(); err == nil && len(os.Args) == 1 && fi.Mode()&os.ModeCharDevice != 0 {
 		return cli.Menu(os.Stdin, os.Stdout)
 	}
-	listen := flag.String("listen", "127.0.0.1:9090", "address of the web UI; 0.0.0.0:9090 to reach it from other machines")
+	listen := flag.String("listen", "127.0.0.1:9090", "address the command line calls; 0.0.0.0:9090 to reach it from other machines")
 	dataDir := flag.String("data-dir", "", "data directory: profiles, override, settings (default: Connaio in the user's config directory)")
-	given := flag.String("token", "", "access token of the web UI (default: made once, kept in the data directory as web-token)")
-	domain := flag.String("domain", os.Getenv("CONNAIO_DOMAIN"), "serve the web UI over HTTPS on :443 too, for this domain, its certificate from Let's Encrypt")
+	given := flag.String("token", "", "access token of the command line (default: made once, kept in the data directory as web-token)")
 	flag.Parse()
 	if *dataDir == "" { // asked only now: a systemd service has no $HOME, and gives --data-dir
 		configDir, err := os.UserConfigDir()
@@ -76,30 +73,15 @@ func Run(assets fs.FS, _ []byte) error {
 		Description:  "Rule-based proxy with reverse tunnels",
 		MarshalError: marshalError,
 		Services:     sv.list(),
-		Assets:       application.AssetOptions{Handler: application.AssetFileServerFS(assets), Middleware: innerOnly(secret)},
+		Assets:       application.AssetOptions{Handler: http.NotFoundHandler(), Middleware: innerOnly(secret)}, // the services alone, at /wails/runtime
 		Server:       application.ServerOptions{Host: "127.0.0.1", Port: port},
 	})
 	handler := webHandler(fmt.Sprintf("127.0.0.1:%d", port), token, secret)
-	// on the internet with --listen 0.0.0.0: a client stalling its headers is dropped, as on :443
+	// on the internet with --listen 0.0.0.0: a client stalling its headers is dropped
 	go func() {
 		log.Fatal((&http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}).Serve(front))
 	}()
-	if *domain != "" {
-		// the certificate got and renewed on the TLS handshake (TLS-ALPN-01: no port 80), kept in the data directory
-		// shortcut: :443 fixed, a flag for it when someone needs another port
-		m := &autocert.Manager{Prompt: autocert.AcceptTOS, HostPolicy: autocert.HostWhitelist(*domain), Cache: autocert.DirCache(filepath.Join(*dataDir, "acme"))}
-		// a port taken (another web server) costs HTTPS only: the UI on --listen stays, to say so
-		if tls, err := net.Listen("tcp", ":443"); err != nil {
-			notify("error", "HTTPS 未启动，443 端口无法使用：%v", err)
-		} else {
-			// on the internet: a client stalling its handshake or headers is dropped (this bounds the
-			// TLS handshake too); no write timeout, the UI's WebSocket stays open
-			srv := &http.Server{Handler: handler, TLSConfig: m.TLSConfig(), ReadHeaderTimeout: 10 * time.Second}
-			go func() { log.Fatal(srv.ServeTLS(tls, "", "")) }()
-			log.Printf("Connaio web UI on https://%s", *domain)
-		}
-	}
 	// the token itself never in the log: the journal is readable by more than root
-	log.Printf("Connaio web UI on http://%s — sign in with the access token in %s", *listen, filepath.Join(*dataDir, "web-token"))
+	log.Printf("Connaio listening for the command line on %s, its access token in %s", *listen, filepath.Join(*dataDir, "web-token"))
 	return app.Run()
 }

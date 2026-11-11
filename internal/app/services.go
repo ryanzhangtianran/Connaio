@@ -9,7 +9,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// services are the app's Go side, the same behind the window (app.go) and the web UI (server.go).
+// services are the app's Go side, the same behind the window (app.go) and the headless build's command line (server.go).
 type services struct {
 	core     *CoreService
 	profiles *ProfileService

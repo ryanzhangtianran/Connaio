@@ -1,15 +1,14 @@
 #!/bin/sh
-# Installs Connaio's headless build on Linux (amd64, arm64), its UI in a browser: the latest release
-# into /opt/connaio, run as the systemd service connaio on 127.0.0.1:9090 (without systemd, as in a
-# container, by /etc/init.d/connaio), and prints the address to sign in with. Again, it updates it, keeping the data in /var/lib/connaio-web.
+# Installs Connaio's headless build on Linux (amd64, arm64), driven by its command line: the latest
+# release into /opt/connaio, run as the systemd service connaio on 127.0.0.1:9090 (without systemd, as
+# in a container, by /etc/init.d/connaio). Again, it updates it, keeping the data in /var/lib/connaio-web.
 #   curl -fsSL https://connaio-dl.ryanzhangtianran.top/install.sh | sudo sh
 # From the site: its latest names the version (v1.2.3), <tag>/ holds that version's tarballs.
 # Without sudo, it installs for this user alone: into ~/.local/share, run by systemctl --user (or in the
-# background where there is none); no TUN mode, no HTTPS on :443, both root's.
+# background where there is none); no TUN mode, which is root's.
 # CONNAIO_TARBALL=<path> installs that tarball instead of downloading one.
-# CONNAIO_LISTEN=0.0.0.0:9090 serves the UI on every address, CONNAIO_DOMAIN=example.com over HTTPS
-# on :443 too, a certificate from Let's Encrypt (both kept in /etc/default/connaio, which a reinstall
-# without them keeps; CONNAIO_DOMAIN= with nothing turns HTTPS off).
+# CONNAIO_LISTEN=0.0.0.0:9090 takes the command line's calls on every address (kept in
+# /etc/default/connaio, which a reinstall without it keeps).
 set -eu
 site=https://connaio-dl.ryanzhangtianran.top
 if [ "$(id -u)" = 0 ]; then
@@ -193,11 +192,6 @@ ask() {
   q=
   [ -z "$on" ] || printf '%s[?25l' "$esc"
 }
-# domain_ok says $1 is a domain name only: the init script sources the file it goes into, and a
-# scheme or path never matches the certificate
-domain_ok() { case "$1" in *[!A-Za-z0-9.-]*) return 1 ;; esac; }
-# checked before anything changes
-domain_ok "${CONNAIO_DOMAIN:-}" || fail "域名格式无效：${CONNAIO_DOMAIN}，只填写域名，如 connaio.example.com"
 case "$(uname -m)" in
 x86_64 | amd64) arch=amd64 ;;
 aarch64 | arm64) arch=arm64 ;;
@@ -257,38 +251,18 @@ else
   grep -qF "$shfn" "$HOME/.bashrc" 2>/dev/null || printf '\n# Connaio: connaio enable|disable\n%s\n' "$shfn" >>"$HOME/.bashrc"
 fi
 
-# the listen address and the HTTPS domain: the ones given, else the ones kept; this machine only
+# the listen address: the one given, else the one kept; this machine only
 kept() { sed -n "s/^$1=//p" "$conf" 2>/dev/null | tr -d "\"'"; }
 listen=${CONNAIO_LISTEN:-$(kept CONNAIO_LISTEN)}
 listen=${listen:-127.0.0.1:9090}
-domain=${CONNAIO_DOMAIN-$(kept CONNAIO_DOMAIN)}
-[ -n "$root" ] || domain= # :443 is root's
-# never asked (no CONNAIO_DOMAIN line kept, even an empty one), on a terminal, none given: asked
-# whether to serve HTTPS (curl | sh reads the script on stdin: answers come from /dev/tty)
-if [ -n "$root" ] && ! grep -q '^CONNAIO_DOMAIN=' "$conf" 2>/dev/null && [ -z "${CONNAIO_DOMAIN+set}" ] && (: </dev/tty) 2>/dev/null; then
-  # lines of 40 columns at most: a box folds no CJK
-  explain "HTTPS 访问" "如需通过公网访问网页界面，" "请输入已解析到本机的域名，" \
-    "将自动申请 HTTPS 证书（需放行 443 端口）。" "没有域名时，可填写 <公网 IP>.sslip.io。" "留空则仅允许本机访问。"
-  while :; do
-    ask "域名（留空跳过）："
-    domain=$answer
-    domain_ok "$domain" && break
-    say "$R" ✗ 无效 "只填写域名，如 connaio.example.com"
-  done
-  rm -f "$tmp/ask"
-  [ -z "$domain" ] || say "$G" ✓ 域名 "$domain"
-fi
 mkdir -p "${conf%/*}"
 cat >"$conf" <<EOF
-# Connaio 的网页界面设置，修改后重启服务生效。
-# 监听地址：0.0.0.0:9090 表示允许从其他电脑访问
+# Connaio 的服务设置，修改后重启服务生效。
+# 监听地址：命令行经此控制 Connaio；0.0.0.0:9090 表示允许从其他电脑访问
 CONNAIO_LISTEN=$listen
-# HTTPS 域名：设置后在 443 端口提供 HTTPS，证书自动从 Let's Encrypt 申请；需先将域名解析到本机
-CONNAIO_DOMAIN=$domain
 EOF
 port=${listen##*:} host=${listen%:*}
 case "$host" in "" | 0.0.0.0 | "[::]") public=1 ;; *) public= ;; esac
-case "$host" in "" | 0.0.0.0 | "[::]" | 127.0.0.1 | localhost | "[::1]") host=127.0.0.1 ;; esac
 
 doing 启动 "服务"
 if [ -n "$root" ] && [ -n "$systemd" ]; then
@@ -298,7 +272,7 @@ elif [ -n "$systemd" ]; then
   mkdir -p "$HOME/.config/systemd/user"
   cat >"$HOME/.config/systemd/user/connaio.service" <<EOF
 [Unit]
-Description=Connaio (web UI, this user's)
+Description=Connaio (this user's)
 
 [Service]
 Environment=CONNAIO_LISTEN=127.0.0.1:9090
@@ -345,7 +319,7 @@ fi
 
 # the first install, run on a terminal: a subscription asked for, so it starts with a profile in use
 # (curl | sh reads the script on stdin: answers come from /dev/tty, and CI has none)
-# (the token is written before the UI answers: asked until it does, else a reinstall would ask too)
+# (the token is written before the service answers: asked until it does, else a reinstall would ask too)
 i=0
 until profiles=$("$dir/connaio" profiles --data-dir "$data" 2>/dev/null); do
   profiles=unknown
@@ -355,7 +329,7 @@ until profiles=$("$dir/connaio" profiles --data-dir "$data" 2>/dev/null); do
 done
 say "$G" ✓ 启动 "服务"
 if [ -z "$profiles" ] && (: </dev/tty) 2>/dev/null; then
-  explain "导入配置" "当前没有任何配置。" "可输入订阅地址，或稍后在网页界面中添加。"
+  explain "导入配置" "当前没有任何配置。" "可输入订阅地址，或稍后用 connaio profile add 添加。"
   while :; do
     ask "订阅地址（留空跳过）："
     url=$answer
@@ -400,23 +374,11 @@ elif [ -n "$systemd" ]; then
 else
   kv 运行方式 "后台运行（/etc/init.d/connaio）"
 fi
-token=$(cat "$data/web-token")
-if [ -n "$domain" ]; then
-  kv 访问地址 "https://$domain/?token=$token"
-elif [ -n "$public" ]; then
-  kv 访问地址 "http://<服务器 IP>:$port/?token=$token"
-else
-  kv 访问地址 "http://$host:$port/?token=$token"
-fi
+kv 监听地址 "$listen"
 kv 设置文件 "$(printf %s "$conf" | sed "s|^$HOME/|~/|")"
-if [ -n "$domain" ]; then
-  warn "首次访问时自动申请证书，需放行 443 端口"
-  [ -z "$public" ] || warn "$port 端口仍以明文 HTTP 对外开放"
-elif [ -n "$public" ]; then
-  warn "连接未加密，建议设置域名以启用 HTTPS"
-fi
+[ -z "$public" ] || warn "$port 端口对其他电脑开放，连接未加密"
 if [ -z "$root" ]; then
-  warn "无 root，不支持 TUN 模式与 HTTPS 域名"
+  warn "无 root，不支持 TUN 模式"
   if [ -n "$systemd" ]; then
     warn "退出登录后继续运行：loginctl enable-linger $(id -un)（需管理员）"
   else
@@ -444,7 +406,6 @@ if [ -n "$root" ]; then
   row "$cli enhanced on|off" "开启或关闭 TUN 模式"
   row "$cli partial add <程序>" "让该程序经部分 TUN 联网"
 fi
-row "$cli url" "显示网页界面地址"
 row "$cli run <命令>" "经代理运行该命令"
 row "connaio enable|disable" "设置或取消终端代理变量"
 row "$cli help" "查看全部命令"

@@ -3,7 +3,7 @@ import { Clipboard } from "@wailsio/runtime";
 import { CoreService, ProfileService, SettingsService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Offer, OverrideParts, Profiles as ProfilesData, Resource } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import type { Profile } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/profile";
-import { ago, errText, plain, sizeText, web, words } from "./format";
+import { ago, errText, plain, sizeText, words } from "./format";
 import { on, useConfirm } from "./hooks";
 import Dialog from "./Dialog";
 import { Seg } from "./Settings";
@@ -42,19 +42,6 @@ const partNote: Record<keyof OverrideParts, string> = {
   clash: "各 Clash 客户端通用",
   connaio: "仅 Connaio 支持，其中的规则排在前面",
 };
-
-// FilePick is the web UI's 导入: the browser reads the chosen YAML file and hands its text, and
-// its name without the extension, to onText. The app's own dialog would pick a file on the machine
-// it runs on, which for the web UI is the server.
-function FilePick({ disabled, title, onText }: { disabled?: boolean; title?: string; onText: (name: string, text: string) => void }) {
-  return (
-    <label className={`btn ${disabled ? "disabled" : ""}`} title={title}>
-      导入
-      <input type="file" accept=".yaml,.yml" hidden disabled={disabled}
-        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) f.text().then((t) => onText(f.name.replace(/\.ya?ml$/i, ""), t)); }} />
-    </label>
-  );
-}
 
 export default function Profiles() {
   const [data, setData] = useState<ProfilesData>({ current: "", profiles: [] });
@@ -105,7 +92,7 @@ export default function Profiles() {
   // ＋ opens the add box, its link from the clipboard when that holds one
   const startAdding = () => {
     setAdding(true);
-    (web ? navigator.clipboard?.readText() ?? Promise.resolve("") : Clipboard.Text())
+    Clipboard.Text()
       .then((t) => { const s = t.trim(); if (/^https?:\/\/\S+$/.test(s)) setLink((l) => l || s); }).catch(() => {});
   };
   // a field goes straight into the saved override, so it waits until the editor holds no unsaved edits
@@ -162,9 +149,7 @@ export default function Profiles() {
           <button className="btn" disabled={!list.some((p) => p.url) || !!busy} onClick={() => run("updateAll", () => ProfileService.UpdateAll())}>{busy === "updateAll" ? "更新中…" : "全部更新"}</button>
           <button className="btn" disabled={!selected || !!busy} onClick={() => selected && ProfileService.Content(selected.id).then((text) => setEditing({ id: selected.id, name: selected.name, text, saved: text }))}>编辑</button>
           <button className="btn" disabled={!selected || !!busy} onClick={() => selected && setSetting(selected)}>设置</button>
-          {web
-            ? <FilePick disabled={!!busy} onText={(name, text) => run("import", () => ProfileService.AddLocal(name, text))} />
-            : <button className="btn" disabled={!!busy} onClick={() => run("import", () => ProfileService.ImportFile())}>导入</button>}
+          <button className="btn" disabled={!!busy} onClick={() => run("import", () => ProfileService.ImportFile())}>导入</button>
           <span className="grow" />
           <button className="btn" disabled={!selected || selected.id === data.current || !!busy} onClick={() => selected && use(selected.id)}>{busy === "use" ? "切换中…" : "使用"}</button>
         </div>
@@ -185,9 +170,7 @@ export default function Profiles() {
         </div>
         <textarea className="code override" rows={10} spellCheck={false} value={parts[part]} onChange={(e) => setParts({ ...parts, [part]: e.target.value })} />
         <div className="plist-tools">
-          {web
-            ? <FilePick disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件：同名项以导入为准，列表追加"} onText={(_, text) => run("import", () => ProfileService.MergeOverride(text).then(loadParts))} />
-            : <button className="btn" disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件：同名项以导入为准，列表追加"} onClick={() => run("import", () => ProfileService.ImportOverride().then(loadParts))}>导入</button>}
+          <button className="btn" disabled={dirty || !!busy} title={dirty ? "先保存或还原编辑框里的改动" : "合并 YAML 文件：同名项以导入为准，列表追加"} onClick={() => run("import", () => ProfileService.ImportOverride().then(loadParts))}>导入</button>
           <button className={`btn ${armed === "clear" ? "armed" : ""}`} disabled={!parts[part] || !!busy} onClick={() => confirm("clear", () => setParts({ ...parts, [part]: "" }))}>{armed === "clear" ? "确认清除" : "清除"}</button>
           <span className="grow" />
           <button className="btn" disabled={!dirty || !!busy} onClick={() => setParts(savedParts)}>还原</button>
@@ -231,14 +214,14 @@ export default function Profiles() {
       <div className="group-title">配置存储</div>
       <div className="plist">
         <div className="plist-row static">
-          <div className="plist-main"><div className="plist-name">数据目录</div><div className="muted small">{web ? "保存在运行 Connaio 的服务器上" : "配置、覆写与流量统计保存在本机"}</div></div>
-          {!web && <button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button>}
+          <div className="plist-main"><div className="plist-name">数据目录</div><div className="muted small">配置、覆写与流量统计保存在本机</div></div>
+          <button className="btn" onClick={() => SettingsService.OpenDataDir()}>{words.showInFiles}</button>
         </div>
-        {!web && <div className="plist-row static">
+        <div className="plist-row static">
           <div className="plist-main"><div className="plist-name">备份与恢复</div><div className="muted small">含 VPN 密码，请妥善保管；恢复后自动重启</div></div>
           <button className="btn" disabled={!!busy} onClick={() => run("backup", () => SettingsService.ExportBackup())}>导出</button>
           <button className={`btn ${armed === "restore" ? "armed" : ""}`} disabled={!!busy} onClick={() => confirm("restore", () => run("backup", () => SettingsService.ImportBackup()))}>{armed === "restore" ? "确认覆盖当前配置" : "恢复"}</button>
-        </div>}
+        </div>
         {failed("backup")}
       </div>
     </>
