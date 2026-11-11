@@ -27,7 +27,7 @@ else
 fi
 # on: the install runs on a screen of its own (the alternate screen, as vim's), redrawn after each
 # step and when the window is resized; the summary is printed on the terminal once it is left
-on= cur= q= rp=
+on= cur= q= rp= cp=
 # say prints a progress line: a coloured icon and a two-character verb, so the messages line up
 say() {
   if [ -n "$on" ]; then
@@ -64,10 +64,10 @@ fail() {
   exit 1
 }
 [ "$(uname -s)" = Linux ] || fail "仅支持 Linux"
-# width is how many columns $1 takes on a terminal: colour codes none, the icons one, and every other
+# width is how many columns $1 takes on a terminal: colour codes none, the icons and the meter one, every other
 # non-ASCII character here is CJK, 3 bytes and 2 columns
 width() {
-  set -- "$(printf %s "$1" | sed "s/✓/x/g;s/✗/x/g;s/›/x/g${esc:+;s/$esc\\[[0-9;]*m//g}")"
+  set -- "$(printf %s "$1" | sed "s/✓/x/g;s/✗/x/g;s/›/x/g;s/━/x/g;s/─/x/g${esc:+;s/$esc\\[[0-9;]*m//g}")"
   b=$(printf %s "$1" | wc -c) n=$(printf %s "$1" | LC_ALL=C tr -d '\000-\177' | wc -c)
   echo $((b - n + n / 3 * 2))
 }
@@ -75,6 +75,11 @@ width() {
 size() {
   set -- $(stty size 2>/dev/null </dev/tty)
   rows=${1:-24} cols=${2:-80}
+}
+# meter is a bar 20 wide, filled to $1 percent, then the percent
+meter() {
+  f=$(($1 / 5))
+  printf '%s%s%s%s%s %3d%%' "$A" "$(printf "%${f}s" "" | sed 's/ /━/g')" "$D" "$(printf "%$((20 - f))s" "" | sed 's/ /─/g')" "$N" "$1"
 }
 # sp prints $1 spaces
 sp() { [ "$1" -le 0 ] || printf "%$1s" ""; }
@@ -200,7 +205,7 @@ esac
 
 tmp=$(mktemp -d)
 # a question's read in the background ended too: left, it would take the next line typed in the shell
-trap '[ -z "$rp" ] || kill "$rp" 2>/dev/null; leave; rm -rf "$tmp"' EXIT
+trap '[ -z "$rp" ] || kill "$rp" 2>/dev/null; [ -z "$cp" ] || kill "$cp" 2>/dev/null; leave; rm -rf "$tmp"' EXIT
 trap 'exit 130' INT TERM HUP
 enter
 tarball=${CONNAIO_TARBALL:-}
@@ -209,9 +214,23 @@ if [ -z "$tarball" ]; then
   tag=$(curl -fsSL "$site/latest" | tr -d '[:space:]')
   case "$tag" in v*) ;; *) fail "无法获取最新版本" ;; esac
   doing 下载 "Connaio ${tag#v}（linux-$arch）"
-  # the progress bar on the screen's last line, under the box
-  [ -z "$on" ] || printf '%s[%d;1H' "$esc" "$rows"
-  curl -fL --progress-bar -o "$tmp/connaio.tar.gz" "$site/$tag/Connaio-${tag#v}-linux-$arch.tar.gz" || fail "下载失败"
+  url="$site/$tag/Connaio-${tag#v}-linux-$arch.tar.gz"
+  if [ -n "$on" ]; then
+    # the progress in the box, on the step's line: curl's own bar can't be drawn in it, and would sit
+    # on the screen's last line, apart from the step; read from what curl prints, every half second
+    curl -fL --progress-bar -o "$tmp/connaio.tar.gz" "$url" 2>"$tmp/progress" &
+    cp=$!
+    while kill -0 "$cp" 2>/dev/null; do
+      pct=$(tr '\r' '\n' <"$tmp/progress" | grep -o '[0-9]*\.[0-9]%' | tail -n 1)
+      pct=${pct%%.*}
+      doing 下载 "Connaio ${tag#v}（linux-$arch）  $(meter "${pct:-0}")"
+      sleep 0.5
+    done
+    wait "$cp" || { cp= && fail "下载失败：$(tr '\r' '\n' <"$tmp/progress" | grep -v '#' | grep . | tail -n 1)"; }
+    cp=
+  else
+    curl -fL --progress-bar -o "$tmp/connaio.tar.gz" "$url" || fail "下载失败"
+  fi
   say "$G" ✓ 下载 "Connaio ${tag#v}（linux-$arch）"
   tarball=$tmp/connaio.tar.gz
 fi
@@ -392,58 +411,8 @@ fi
 if [ -n "$root" ] && [ -e /usr/bin/connaio ]; then
   warn "本机的 connaio 是桌面版，请改用 $dir/connaio"
 fi
-box "Connaio 安装完成"
-
-row "$cli" "打开管理菜单"
-row "$cli status" "查看运行状态"
-row "$cli profile add <订阅地址> [名称]" "添加订阅"
-row "$cli profiles" "查看配置列表"
-row "$cli profile use|update <名称>" "切换或更新配置"
-row "$cli mode rule|global|direct" "切换出站模式"
-row "$cli groups" "查看策略组及当前节点"
-row "$cli select <策略组> <节点>" "切换节点"
-if [ -n "$root" ]; then
-  row "$cli enhanced on|off" "开启或关闭 TUN 模式"
-  row "$cli partial add <程序>" "让该程序经部分 TUN 联网"
-fi
-row "$cli run <命令>" "经代理运行该命令"
-row "connaio enable|disable" "设置或取消终端代理变量"
+bl ""
+# the menu has the rest (the service, its log, an update), help every command, the README the uninstall
+row "$cli" "打开管理菜单：节点、配置、VPN、服务、日志与更新"
 row "$cli help" "查看全部命令"
-box "常用命令"
-
-row "再次运行安装命令" "更新 Connaio"
-if [ -z "$root" ]; then
-  if [ -n "$systemd" ]; then
-    row "systemctl --user start|stop|restart connaio" "启动、停止或重启服务"
-    row "journalctl --user-unit connaio -f" "查看日志"
-  else
-    row "tail -f ~/.local/share/connaio-web/connaio.log" "查看日志"
-  fi
-  bl ""
-  bl "$B卸载$N"
-  [ -z "$systemd" ] || bl "  systemctl --user disable --now connaio"
-  bl "  rm -rf ~/.local/share/connaio ~/.local/bin/connaio"
-  bl "  rm -f ~/.config/systemd/user/connaio.service"
-  c=$(printf %s "${conf%/*}" | sed "s|^$HOME/|~/|")
-  bl "  rm -f $c/connaio.env $c/web-token"
-  bl "  $D并删除 ~/.bashrc 中 Connaio 的两行$N"
-elif [ -n "$systemd" ]; then
-  row "systemctl start|stop|restart connaio" "启动、停止或重启服务"
-  row "systemctl status connaio" "查看服务状态"
-  row "journalctl -u connaio -f" "查看日志"
-  bl ""
-  bl "$B卸载$N"
-  bl "  systemctl disable --now connaio"
-  bl "  rm -rf $dir $conf /etc/profile.d/connaio.sh"
-  bl "  rm -f /etc/systemd/system/connaio.service"
-else
-  row "/etc/init.d/connaio start|stop|restart" "启动、停止或重启服务"
-  row "/etc/init.d/connaio status" "查看服务状态"
-  row "tail -f /var/log/connaio.log" "查看日志"
-  bl ""
-  bl "$B卸载$N"
-  bl "  /etc/init.d/connaio stop"
-  bl "  rm -rf $dir $conf /etc/profile.d/connaio.sh"
-  bl "  rm -f /etc/init.d/connaio"
-fi
-box "服务管理"
+box "Connaio 安装完成"
