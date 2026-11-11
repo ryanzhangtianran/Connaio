@@ -294,11 +294,12 @@ function VpnEditor({ status, initial, live, tunnel, onDone, onConnected }: { sta
   // the subnets the tailnet's nodes advertise; reaching one needs accept-routes, ticked with it
   const tailnetRows: RouteRow[] = nonNull(live?.routes).map((r) => ({ key: r.prefix, routes: [{ t: "IP-CIDR", v: r.prefix }],
     cells: [r.prefix, <span className={r.online ? "" : "muted"}>{r.node}{r.online ? "" : "（离线）"}</span>] }));
+  const ipv4 = nonNull(live?.ips).filter((ip) => !ip.includes(":")); // the tailnet's IPv6 address left out
   // the VPN's state, under the title: whether it is up, its address, and for Tailscale a way to log in
   const facts = saved && form.type === "tailscale" && live ? (
     <div className="vpn-facts">
       <Fact label="状态"><span className={stateClass[live.state]}>{stateLabel[live.state]}</span></Fact>
-      {live.ips?.length ? <Fact label="Tailnet 地址"><span className="selectable">{live.ips.join("、")}</span></Fact> : null}
+      {ipv4.length ? <Fact label="Tailnet 地址"><span className="selectable">{ipv4.join("、")}</span></Fact> : null}
       {live.state === "login" && (live.authURL
         ? <button className="btn small-btn primary" onClick={() => openURL(live.authURL!)}>登录</button>
         : <span className="muted small">正在获取登录链接…</span>)}
