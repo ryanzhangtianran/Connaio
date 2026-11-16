@@ -81,7 +81,7 @@ func (s *ProfileService) Offered() *Offer {
 }
 
 func (s *ProfileService) build() ([]byte, error) {
-	enhanced := s.settings.Get().Enhanced && s.core.Daemon()
+	enhanced := s.settings.Get().Enhanced && (headless || s.core.Daemon()) // as EnhancedService.Enabled: headless, the core is its own child, root as Connaio is
 	return s.store.Build(enhanced)
 }
 
@@ -564,7 +564,7 @@ func (s *ProfileService) SetText(path, text string) error {
 // Value reads a dotted setting from the effective config (defaults, profile and override merged).
 // capture.* reads as if enhanced, so the chosen scope shows while enhanced mode is off too.
 func (s *ProfileService) Value(path string) (any, error) {
-	enhanced := s.settings.Get().Enhanced && s.core.Daemon() || strings.HasPrefix(path, "capture.")
+	enhanced := s.settings.Get().Enhanced && (headless || s.core.Daemon()) || strings.HasPrefix(path, "capture.")
 	return s.store.Value(enhanced, strings.Split(path, "."))
 }
 
