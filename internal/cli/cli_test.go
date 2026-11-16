@@ -458,3 +458,33 @@ func TestProfileEditRemove(t *testing.T) {
 		t.Errorf("calls %v\nwant  %v", got, want)
 	}
 }
+
+// tun-users: a UID or a name added once, removed by either; emptied, the list goes as [], every user
+func TestTunUsers(t *testing.T) {
+	addr, calls := fake(t, map[string]string{"ProfileService.Value": `[0]`})
+	if out, err := main(t, addr, "tun-users"); err != nil || out != "root(0)\n" {
+		t.Errorf("tun-users: %q %v", out, err)
+	}
+	for _, args := range [][]string{{"tun-users", "add", "1000"}, {"tun-users", "add", "root"}, {"tun-users", "remove", "root"}} {
+		if _, err := main(t, addr, args...); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+	}
+	var sets []string
+	for _, c := range *calls {
+		if strings.Contains(c, "Set") {
+			sets = append(sets, c)
+		}
+	}
+	want := []string{`ProfileService.Set["tun.include-uid",[0,1000]]`, `ProfileService.Set["tun.include-uid",[]]`}
+	if strings.Join(sets, " ") != strings.Join(want, " ") {
+		t.Errorf("sets %v\nwant %v", sets, want)
+	}
+	if _, err := main(t, addr, "tun-users", "add", "no-such-user-x"); err == nil {
+		t.Error("an unknown user accepted")
+	}
+	addr, _ = fake(t, map[string]string{"ProfileService.Value": `{}`})
+	if out, err := main(t, addr, "tun-users"); err != nil || out != "全部用户\n" {
+		t.Errorf("unset: %q %v", out, err)
+	}
+}

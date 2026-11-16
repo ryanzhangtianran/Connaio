@@ -478,7 +478,8 @@ func pickTunnel(label string) tea.Cmd {
 	}, huh.NewSelect[int]().Title("要启动或停止的隧道").Options(opts...).Value(&i))
 }
 
-// tunForm switches TUN, all traffic or the programs picked (partial), or adds or removes a program.
+// tunForm switches TUN, all traffic or the programs picked (partial), or adds or removes a program
+// or a user whose traffic TUN takes.
 func tunForm(label string) tea.Cmd {
 	action := "partial on"
 	return ask(label, func() tea.Cmd {
@@ -489,12 +490,18 @@ func tunForm(label string) tea.Cmd {
 				huh.NewInput().Title("程序名").Placeholder("如 python、git、uv").Value(&name))
 		case "remove":
 			return removeProgram(label)
+		case "add-user", "remove-user":
+			name := ""
+			verb, _, _ := strings.Cut(action, "-")
+			return ask(label, func() tea.Cmd { return capture(label, "tun-users", verb, name) },
+				huh.NewInput().Title("用户名或 UID").Value(&name))
 		}
 		return capture(label, strings.Fields(action)...)
-	}, huh.NewSelect[string]().Description("TUN 模式  "+report("enhanced")+"\n"+report("partial")+"\n").Options(
+	}, huh.NewSelect[string]().Description("TUN 模式  "+report("enhanced")+"\n"+report("partial")+"\n走 TUN 的用户  "+report("tun-users")+"\n").Options(
 		huh.NewOption("接管全部流量", "enhanced on"), huh.NewOption("关闭全部接管", "enhanced off"),
 		huh.NewOption("只接管选中的程序", "partial on"), huh.NewOption("关闭部分接管", "partial off"),
-		huh.NewOption("添加程序", "add"), huh.NewOption("移除程序", "remove")).Value(&action))
+		huh.NewOption("添加程序", "add"), huh.NewOption("移除程序", "remove"),
+		huh.NewOption("添加走 TUN 的用户（仅 Linux）", "add-user"), huh.NewOption("移除走 TUN 的用户", "remove-user")).Value(&action))
 }
 
 // report is what a command prints, for a form's description: the state its choices change, above

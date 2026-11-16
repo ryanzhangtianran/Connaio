@@ -15,8 +15,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/user"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,6 +52,7 @@ var Usage = usage(`用法：connaio [命令] [选项] [参数]
 	{"enhanced [on|off]", "查看、开启或关闭 TUN 模式"},
 	{"partial [on|off]", "查看、开启或关闭部分 TUN"},
 	{"partial add|remove <程序>", "添加或移除部分 TUN 接管的程序"},
+	{"tun-users [add|remove <用户>]", "查看、添加或移除走 TUN 的用户（用户名或 UID，仅 Linux；不设则全部用户）"},
 	{"connections", "当前连接"},
 	{"close-all", "断开全部连接"},
 	{"restart", "重启内核"},
@@ -195,18 +198,61 @@ const processesKey = "capture.processes"
 // programs is that list. Never set, it comes back as {} (an unset value, as Wails sends it), not a
 // list: read as none, as the TUN page does.
 func (c *client) programs() ([]string, error) {
-	var v any
-	if err := c.call(&v, "ProfileService.Value", processesKey); err != nil {
-		return nil, err
-	}
-	list, _ := v.([]any)
+	list, err := c.list(processesKey)
 	var out []string
 	for _, p := range list {
 		if s, ok := p.(string); ok {
 			out = append(out, s)
 		}
 	}
-	return out, nil
+	return out, err
+}
+
+// list is the setting at key as a list; unset reads as none.
+func (c *client) list(key string) ([]any, error) {
+	var v any
+	if err := c.call(&v, "ProfileService.Value", key); err != nil {
+		return nil, err
+	}
+	list, _ := v.([]any)
+	return list, nil
+}
+
+// uidsKey is the TUN's include-uid: only these users' traffic goes through it (Linux auto-route).
+const uidsKey = "tun.include-uid"
+
+// tunUIDs is that list; empty, TUN takes every user.
+func (c *client) tunUIDs() ([]uint32, error) {
+	list, err := c.list(uidsKey)
+	var out []uint32
+	for _, x := range list {
+		if f, ok := x.(float64); ok {
+			out = append(out, uint32(f))
+		}
+	}
+	return out, err
+}
+
+// lookupUID is a user given by name or UID, as this machine knows it: the CLI runs beside the core.
+func lookupUID(s string) (uint32, error) {
+	if n, err := strconv.ParseUint(s, 10, 32); err == nil {
+		return uint32(n), nil
+	}
+	u, err := user.Lookup(s)
+	if err != nil {
+		return 0, fmt.Errorf("没有 %s 这个用户", s)
+	}
+	n, err := strconv.ParseUint(u.Uid, 10, 32)
+	return uint32(n), err
+}
+
+// uidLabel is a UID with its user's name when there is one: alice(1000).
+func uidLabel(uid uint32) string {
+	id := strconv.FormatUint(uint64(uid), 10)
+	if u, err := user.LookupId(id); err == nil {
+		return u.Username + "(" + id + ")"
+	}
+	return id
 }
 
 // listenFile is where install.sh keeps the service's listen address, read by its unit and init script.
@@ -650,6 +696,36 @@ func run(c *client, name string, args []string, all bool, addr string, out io.Wr
 			return c.call(nil, "ProfileService.Set", processesKey, apps)
 		}
 		return errors.New("用法：connaio partial [on|off]，或 partial add|remove <程序>")
+	case "tun-users":
+		uids, err := c.tunUIDs()
+		if err != nil {
+			return err
+		}
+		if len(args) == 0 {
+			var names []string
+			for _, u := range uids {
+				names = append(names, uidLabel(u))
+			}
+			fmt.Fprintln(out, cmp.Or(strings.Join(names, "、"), "全部用户"))
+			return nil
+		}
+		if len(args) != 2 || args[0] != "add" && args[0] != "remove" {
+			return errors.New("用法：connaio tun-users [add|remove <用户>]")
+		}
+		uid, err := lookupUID(args[1])
+		if err != nil {
+			return err
+		}
+		i := slices.Index(uids, uid)
+		switch {
+		case args[0] == "add" && i < 0:
+			uids = append(uids, uid)
+		case args[0] == "remove" && i >= 0:
+			uids = slices.Delete(uids, i, i+1)
+		default:
+			return nil // already as asked
+		}
+		return c.call(nil, "ProfileService.Set", uidsKey, uids) // never nil here: an emptied list goes as [], every user again
 	case "connections":
 		var conns []struct {
 			Process, App, Source, Host, Port, Rule, Chain string
