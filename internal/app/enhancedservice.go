@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/ryanzhangtianran/Connaio/internal/core"
@@ -17,6 +18,7 @@ func init() {
 
 // EnhancedService switches enhanced mode (TUN). It needs the root daemon, which Grant installs first.
 type EnhancedService struct {
+	mu       sync.Mutex // serializes mode changes and daemon transitions
 	core     *core.Core
 	profiles *ProfileService
 	settings *settingsFile
@@ -49,10 +51,18 @@ func (s *EnhancedService) Full() bool { return s.Mode() == "tun" }
 func (s *EnhancedService) Partial() bool { return s.settings.Get().Partial }
 
 // SetFull turns enhanced mode on or off; off falls back to partial enhancement when that is chosen.
-func (s *EnhancedService) SetFull(on bool) error { return s.set(on, s.Partial()) }
+func (s *EnhancedService) SetFull(on bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.set(on, s.Partial())
+}
 
 // SetPartial chooses partial enhancement or not, leaving enhanced mode as it is.
-func (s *EnhancedService) SetPartial(on bool) error { return s.set(s.Full(), on) }
+func (s *EnhancedService) SetPartial(on bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.set(s.Full(), on)
+}
 
 // set records the two choices and runs what they come to: enhanced mode if on, else partial
 // enhancement if chosen, else no TUN. The config is applied only when that changes, since applying
@@ -65,44 +75,18 @@ func (s *EnhancedService) set(full, partial bool) error {
 	case partial:
 		mode = "process-tun"
 	}
-	was := s.Partial()
-	if err := s.settings.Update(func(st *Settings) { st.Partial = partial }); err != nil {
-		return err
+	if mode == "" && s.settings.Get().Enhanced {
+		// Clear the choice even if the daemon is currently unavailable.
+		return s.setEnabled(false, "", &partial)
 	}
-	undo := func(err error) error {
-		_ = s.settings.Update(func(st *Settings) { st.Partial = was })
-		return err
+	if mode == s.Mode() {
+		if err := s.settings.Update(func(st *Settings) { st.Partial = partial }); err != nil {
+			return err
+		}
+		s.changed(s.Enabled())
+		return nil
 	}
-	switch {
-	case mode == "" && s.settings.Get().Enhanced: // chosen though not running, too: it mustn't come back with the daemon
-		if err := s.SetEnabled(false); err != nil {
-			return undo(err)
-		}
-	case mode == s.Mode():
-		s.changed(s.Enabled()) // only the choice underneath changed: the views show it
-	default:
-		// capture.mode goes into the override without applying; SetEnabled applies once and
-		// rolls both back if the core refuses
-		// under the profiles' lock, as their edits are: one running alongside would write over this
-		// (SetEnabled takes the lock itself, to apply)
-		setMode := func(v any) error {
-			s.profiles.mu.Lock()
-			defer s.profiles.mu.Unlock()
-			return s.profiles.store.SetPath([]string{"capture", "mode"}, v)
-		}
-		old, _ := s.profiles.Value("capture.mode")
-		if err := setMode(mode); err != nil {
-			return undo(err)
-		}
-		if err := s.SetEnabled(true); err != nil {
-			if old != nil {
-				_ = setMode(old)
-			}
-			return undo(err)
-		}
-		emit("setting", "capture.mode")
-	}
-	return nil
+	return s.setEnabled(true, mode, &partial)
 }
 
 // DaemonInstalled reports whether the core may run as root: the daemon installed, or headless,
@@ -120,6 +104,8 @@ var errHeadlessRoot = errors.New("以 root 运行 Connaio 即可使用 TUN 模�
 // Grant installs the root daemon (one administrator prompt) and moves the GUI's core onto it;
 // enhanced mode can be turned on only after this.
 func (s *EnhancedService) Grant() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if headless {
 		return errHeadlessRoot
 	}
@@ -141,6 +127,13 @@ func (s *EnhancedService) Grant() error {
 }
 
 func (s *EnhancedService) SetEnabled(on bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.setEnabled(on, "", nil)
+}
+
+// setEnabled prepares the daemon before the profile service applies the change.
+func (s *EnhancedService) setEnabled(on bool, mode string, partial *bool) error {
 	if on && headless && os.Geteuid() != 0 {
 		return errHeadlessRoot
 	}
@@ -152,14 +145,13 @@ func (s *EnhancedService) SetEnabled(on bool) error {
 			return err
 		}
 	}
-	if err := s.settings.Update(func(st *Settings) { st.Enhanced = on }); err != nil {
-		return err
-	}
-	if err := s.profiles.apply(); err != nil {
-		_ = s.settings.Update(func(st *Settings) { st.Enhanced = !on })
+	if err := s.profiles.applyEnhancement(on, mode, partial); err != nil {
 		return err
 	}
 	s.changed(on)
+	if mode != "" {
+		emit("setting", "capture.mode")
+	}
 	return nil
 }
 
@@ -200,13 +192,15 @@ func (s *EnhancedService) useDaemon() error {
 
 // Uninstall turns enhanced mode off, removes the daemon and goes back to a child core.
 func (s *EnhancedService) Uninstall() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if headless {
 		return errHeadlessRoot
 	}
 	restarting.Add(1) // the stream breaks as the daemon goes; the config is applied below
 	defer restarting.Add(-1)
 	if s.settings.Get().Enhanced { // chosen, running or not: it mustn't come back with the next grant
-		if err := s.SetEnabled(false); err != nil {
+		if err := s.setEnabled(false, "", nil); err != nil {
 			return err
 		}
 	}

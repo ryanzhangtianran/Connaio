@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { CoreService, DeviceService, EnhancedService, SettingsService, SystemProxyService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import type { Activity as ActivityData, Conn, DiagSection, Group, IPInfo, LanInfo, Latency, Memory, RepairItem, Service, Status, Usage } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
+import type { Activity as ActivityData, DiagSection, Group, IPInfo, LanInfo, Latency, Memory, RepairItem, Service, Status, Usage } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
 import { delayClass, nodesOf } from "./Proxies";
-import { copyText, errText, platform, size, sizeText, speed, words } from "./format";
+import { copyText, errText, size, sizeText, speed, words } from "./format";
 import Dialog from "./Dialog";
+import { ClientIcon, Routes, useWatch } from "./ConnectionViews";
+import { exitIP, flag, fullPlace, place, invalidateExitIP } from "./ExitIP";
+import { Picker } from "./Picker";
 import { DiagLog } from "./ProxyDiagnose";
-import { on, usePoll, useCachedURL, useClickAway, useConfirm, useWholeRows } from "./hooks";
+import { on, usePoll, useCachedURL, useConfirm, useWholeRows } from "./hooks";
 import { Brand, Icon, hasBrand } from "./icons";
 import { Seg, Switch } from "./Settings";
 import { session, useHistory } from "./store";
@@ -87,41 +90,6 @@ function SpeedCard({ dir, values }: { dir: "up" | "down"; values: number[] }) {
   );
 }
 
-// Picker is a compact dropdown for a card's head. Not a <select>: on Linux its popup is GTK's own
-// menu, out of keeping with the page; the menu is fixed to the window so the card doesn't clip it.
-export function Picker({ value, options, onChange, label, className = "" }: { value: string; options: string[]; onChange: (v: string) => void; label?: string; className?: string }) {
-  const [at, setAt] = useState<DOMRect | null>(null);
-  useClickAway(!!at, () => setAt(null));
-  return (
-    <>
-      {/* the click stops here: opening attaches the click-away listener, which it would reach next */}
-      <button className={`picker ${className}`} onClick={(e) => { e.stopPropagation(); setAt(at ? null : e.currentTarget.getBoundingClientRect()); }}>
-        <span>{label ?? (value || "—")}</span>
-        <svg viewBox="0 0 10 6" width="10" height="6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.5" /></svg>
-      </button>
-      {at && (
-        // it opens toward the side with room: from a picker in the left half (the floating monitor's) to the right
-        <div className="menu picker-menu" style={{
-          top: at.bottom + 4, minWidth: at.width, maxHeight: Math.min(280, window.innerHeight - at.bottom - 12),
-          ...(at.left < window.innerWidth / 2 ? { left: at.left } : { right: window.innerWidth - at.right }),
-        }}>
-          {options.map((o) => <button key={o} className={o === value ? "current" : ""} onClick={() => onChange(o)}>{o}</button>)}
-        </div>
-      )}
-    </>
-  );
-}
-
-const place = (i: IPInfo) => [i.city || i.region || i.country, i.code].filter(Boolean).join(", ");
-// flag is a country's flag emoji from its ISO code.
-const flag = (code: string) => (code.length === 2 ? String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1a5 + c.charCodeAt(0))) : "");
-const fullPlace = (i: IPInfo) => [...new Set([i.city, i.region, i.country].filter(Boolean))].join(", ");
-
-// exitIPs caches each policy's exit lookup for the session, a failed one dropped so it is asked again.
-// ponytail: no expiry; a node whose address changes shows the old one until the app restarts.
-const exitIPs: Record<string, Promise<IPInfo>> = {};
-const exitIP = (policy: string) => (exitIPs[policy] ??= ToolService.ExitIP(policy).catch((e) => { delete exitIPs[policy]; throw e; }));
-
 const modes: Record<string, string> = { rule: "规则判定", global: "全局代理", direct: "直接连接" };
 const RULES = "按规则"; // the status card's exit as traffic takes it, not through one chosen policy
 
@@ -181,7 +149,7 @@ function StatusCard({ activity, mode, setMode, latency }: { activity: ActivityDa
   const [busy, setBusy] = useState(false);
   useEffect(() => { CoreService.Groups().then((g) => setNames(["DIRECT", ...nodesOf(g ?? []).map((n) => n.name)])); }, []);
   const check = (fresh: boolean) => {
-    if (fresh) delete exitIPs[policy];
+    if (fresh) invalidateExitIP(policy);
     setBusy(true); setError(""); setInfo(null);
     (policy === RULES ? CoreService.ExternalInfo() : exitIP(policy)).then(setInfo).catch((e) => setError(errText(e, "查询失败"))).finally(() => setBusy(false));
   };
@@ -417,54 +385,6 @@ function TrafficSum({ activity, range, setRange }: { activity: ActivityData | nu
   );
 }
 
-// ExitCell is the exit address of one route, looked up once per session.
-export function ExitCell({ policy }: { policy: string }) {
-  const [text, setText] = useState("查询出口…");
-  const [full, setFull] = useState("");
-  useEffect(() => {
-    if (policy === "REJECT") { setText("拒绝"); return; }
-    exitIP(policy).then((i) => { setText(`${flag(i.code)} ${i.ip} · ${place(i)}`); setFull(`${i.ip} · ${fullPlace(i)} · ${i.isp}`); }).catch(() => setText("出口查询失败"));
-  }, [policy]);
-  return <span className="selectable" title={full}>{text}</span>;
-}
-
-let watched = ""; // the application the monitor shows, kept across page switches
-
-// useWatch follows one application's live connections, polled every ms: the applications with any
-// (as the applications card names them), the one shown (until one is chosen, the one with the most
-// connections, then kept) and its connections by route.
-export function useWatch(ms: number) {
-  const [conns, setConns] = useState<Conn[]>([]);
-  const [proc, setProc] = useState(watched);
-  usePoll(() => CoreService.Connections().then((c) => setConns(c ?? [])), ms);
-  const choose = (p: string) => { watched = p; setProc(p); };
-  const counts = new Map<string, number>();
-  for (const c of conns) counts.set(c.app, (counts.get(c.app) ?? 0) + 1);
-  const busiest = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
-  const shown = proc || busiest;
-  useEffect(() => { if (!proc && busiest) choose(busiest); }, [proc, busiest]);
-  const procs = [...new Set([...counts.keys(), ...(shown ? [shown] : [])])].sort((a, b) => a.localeCompare(b));
-  const routes = new Map<string, Conn[]>();
-  for (const c of conns) if (c.app === shown) routes.set(c.chain || "DIRECT", [...(routes.get(c.chain || "DIRECT") ?? []), c]);
-  return { conns, procs, shown, choose, routes };
-}
-
-// Routes lists each route the shown application takes (the rule's policy down to the node), the
-// address that route comes out at, and the hosts on it.
-export function Routes({ shown, routes }: { shown: string; routes: Map<string, Conn[]> }) {
-  if (routes.size === 0) return <div className="muted small">{shown ? `${shown} 当前没有连接` : "当前没有连接"}</div>;
-  return (
-    <>
-      {[...routes].map(([chain, cs]) => (
-        <div key={chain} className="watch-route" title={[...new Set(cs.map((c) => c.host))].join("\n")}>
-          <div className="watch-head"><span className="watch-chain">{chain === "DIRECT" ? "直连" : chain}</span><span className="muted small">{cs.length} 个连接</span></div>
-          <div className="watch-exit"><ExitCell policy={chain.split(" → ").pop()!} /></div>
-        </div>
-      ))}
-    </>
-  );
-}
-
 // niceScale rounds a peak up to 1, 2 or 5 × 10ⁿ bytes, so the gridlines land on round values.
 function niceScale(v: number) {
   const p = 10 ** Math.floor(Math.log10(Math.max(v, 1)));
@@ -493,23 +413,6 @@ function BarChart({ values, now, labels, tip }: { values: number[]; now: number;
 
 const hourLabels: [number, string][] = [[0, "0 时"], [6, "6 时"], [12, "12 时"], [18, "18 时"]];
 const dayLabels: [number, string][] = [0, 7, 14, 21, 28].map((i) => [i, `${i + 1}日`]);
-
-// ClientIcon is a client's Finder icon (an app's, or an executable's generic one), a reverse
-// tunnel's tile (clientOf's "tunnel": the tunnels page's servers on blue, as the cards' switches), or
-// a device glyph.
-export function ClientIcon({ path }: { path?: string }) {
-  const tunnel = path === "tunnel";
-  const src = useCachedURL(tunnel ? undefined : path || (platform === "linux" ? "device" : undefined), SettingsService.AppIcon); // Linux has a theme icon for devices
-  if (tunnel) return <span className="client-icon tunnel"><Icon name="tunnels" className="" /></span>;
-  if (src) return <img className="client-icon" src={src} alt="" />;
-  return (
-    <span className="client-icon device">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d={path ? "M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8 9l3 3-3 3M13 15h3" : "M4 6h12a1 1 0 0 1 1 1v8H3V7a1 1 0 0 1 1-1zM1.5 18h17M19 9h3v10h-3z"} />
-      </svg>
-    </span>
-  );
-}
 
 // RankPane is the traffic totals and today's by hour beside the top applications (a command counted towards the
 // one it was started from), hosts or policies.

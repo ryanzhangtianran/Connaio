@@ -17,7 +17,7 @@
 
 ## Download
 
-请到发布页面下载对应的安装包：[Release page](https://github.com/ryanzhangtianran/Connaio/releases)
+请到发布页面下载对应的安装包：[Release page](https://github.com/ryanzhangtianran/Connaio/releases)。各系列的主要变更见[版本历史](CHANGELOG.md)。
 
 支持 macOS 15+（Apple 芯片）、Windows 10 1809+ / 11（x64）和 Ubuntu 22.04+（x64）。使用方法见 [使用说明](./usage.md)。
 

@@ -154,19 +154,14 @@ func emit(name string, data any) {
 // CoreService owns the connaio-core child process and exposes its API to the frontend.
 type CoreService struct {
 	core      *core.Core
-	settings  *settingsFile                               // the 服务状态 card's sites
-	ledger    *ledger                                     // today's and this month's traffic
-	onReady   func() error                                // pushes the GUI's config once a core answers
-	onTraffic func(Traffic)                               // menu bar speed
-	onMode    func(string)                                // menu bar mode radio
-	onConns   func(conns []Conn, deltas map[string]int64) // menu bar process rows, from the ledger's count
+	monitor   connectionMonitor
+	settings  *settingsFile // the 服务状态 card's sites
+	onReady   func() error  // pushes the GUI's config once a core answers
+	onTraffic func(Traffic) // menu bar speed
+	onMode    func(string)  // menu bar mode radio
 
 	mu     sync.Mutex
 	status Status
-
-	connMu sync.Mutex // the last connection snapshot, see connections
-	conns  []Conn
-	connAt time.Time
 
 	netMu   sync.Mutex // networkName's cache
 	netName string
@@ -188,7 +183,7 @@ func (s *CoreService) ServiceStartup(ctx context.Context, _ application.ServiceO
 		// the streams retry on their own, so they run whatever the first start does: a core that
 		// comes up later (a restart, the crash recovery in streamTraffic) is picked up by them
 		go s.streamLogs(ctx)
-		go s.countTraffic(ctx)
+		go s.monitor.sample(ctx, s.fetchConnections)
 		go s.streamMemory(ctx)
 		var err error
 		if !headless && daemon.Installed() { // headless: a desktop's daemon, if any, is not this one's
@@ -263,7 +258,7 @@ func (s *CoreService) portWarning() string {
 var bindPort = regexp.MustCompile(`:(\d+): bind`)
 
 func (s *CoreService) ServiceShutdown() error {
-	if err := s.ledger.save(); err != nil {
+	if err := s.monitor.ledger.save(); err != nil {
 		log.Printf("save traffic: %v", err)
 	}
 	if s.core.Daemon() {

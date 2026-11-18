@@ -290,6 +290,47 @@ func TestMenu(t *testing.T) {
 	}
 }
 
+func TestMenuRefreshesConnections(t *testing.T) {
+	addr, _ := fake(t, map[string]string{
+		"CoreService.Connections": `[{"host":"first.example","port":"443"}]`,
+	})
+	t.Setenv("CONNAIO_ADDR", addr)
+	t.Setenv("CONNAIO_TOKEN", "tok")
+	m := newModel()
+	m.busy = false
+	m.cursor = slices.IndexFunc(entries, func(e [3]string) bool { return e[0] == "connections" })
+	var screen tea.Model = m
+	screen, _ = screen.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	screen, load := screen.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	first := load()
+	screen, tick := screen.Update(first)
+	if tick == nil || !strings.Contains(screen.View(), "first.example:443") {
+		t.Fatalf("initial connection list or refresh timer missing:\n%s", screen.View())
+	}
+
+	addr, _ = fake(t, map[string]string{
+		"CoreService.Connections": `[{"host":"second.example","port":"443"}]`,
+	})
+	t.Setenv("CONNAIO_ADDR", addr)
+	screen, load = screen.Update(tick())
+	if load == nil {
+		t.Fatal("refresh timer did not request connections")
+	}
+	screen, tick = screen.Update(load())
+	if tick == nil || !strings.Contains(screen.View(), "second.example:443") {
+		t.Fatalf("connection list did not refresh without a key press:\n%s", screen.View())
+	}
+
+	screen, _ = screen.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if _, cmd := screen.Update(connectionsTickMsg(first.(connectionsMsg).session)); cmd != nil {
+		t.Fatal("refresh continued after returning to the menu")
+	}
+	screen, _ = screen.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if next, cmd := screen.Update(first); cmd != nil || strings.Contains(next.View(), "first.example") {
+		t.Fatal("a stale response replaced the new connection view")
+	}
+}
+
 // TestMenuNotHeldUp: with the core not answering, opening an entry returns at once, its choices
 // read off the loop; the window keeps taking keys.
 func TestMenuNotHeldUp(t *testing.T) {

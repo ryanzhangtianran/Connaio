@@ -39,7 +39,10 @@ var entries = [][3]string{
 	{"quit", "退出", ""},
 }
 
-const wideMin = 90 // below this the menu and the content take turns on screen
+const (
+	wideMin                    = 90 // below this the menu and the content take turns on screen
+	connectionsRefreshInterval = time.Second
+)
 
 // the palette: catppuccin frappé, as homie's
 var (
@@ -101,13 +104,21 @@ type model struct {
 	head    string
 	busy    bool
 	updated bool // 更新 Connaio succeeded: the menu quits and starts again as the new version
+
+	watchingConnections bool
+	connectionsSession  uint64 // identifies the current visit so late results cannot replace another pane
 }
 
 type (
-	contentMsg struct{ title, body string }
-	headMsg    string // the header, read off the loop: it asks the service and the core
-	updatedMsg struct{}
-	doneMsg    struct {
+	contentMsg         struct{ title, body string }
+	headMsg            string // the header, read off the loop: it asks the service and the core
+	updatedMsg         struct{}
+	connectionsTickMsg uint64
+	connectionsMsg     struct {
+		session uint64
+		body    string
+	}
+	doneMsg struct {
 		title string
 		err   error
 	}
@@ -126,6 +137,20 @@ func newModel() model {
 func (m model) Init() tea.Cmd { return tea.Batch(refreshHead, capture("状态", "status")) }
 
 func refreshHead() tea.Msg { return headMsg(summary()) }
+
+func readConnections(session uint64) tea.Cmd {
+	return func() tea.Msg {
+		var out bytes.Buffer
+		c, err := client0()
+		if err == nil {
+			err = run(c, "connections", nil, false, "", &out)
+		}
+		if err != nil {
+			return connectionsMsg{session, errLine(err)}
+		}
+		return connectionsMsg{session, unruled(out.String())}
+	}
+}
 
 func (m model) wide() bool { return m.w >= wideMin }
 
@@ -175,6 +200,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.vp.SetContent(msg.body)
 		m.vp.GotoTop()
 		return m, refreshHead // whatever just ran may have changed the mode, the profile or the service
+	case connectionsTickMsg:
+		if m.watchingConnections && uint64(msg) == m.connectionsSession {
+			return m, readConnections(m.connectionsSession)
+		}
+		return m, nil
+	case connectionsMsg:
+		if !m.watchingConnections || msg.session != m.connectionsSession {
+			return m, nil
+		}
+		m.vp.SetContent(msg.body)
+		m.vp.SetYOffset(m.vp.YOffset)
+		// Wait until the current request finishes before scheduling another one.
+		return m, tea.Tick(connectionsRefreshInterval, func(time.Time) tea.Msg {
+			return connectionsTickMsg(msg.session)
+		})
 	case doneMsg:
 		body := fg(cOK).Render("✓ " + msg.title + "完成")
 		if msg.err != nil {
@@ -206,7 +246,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		case "esc", "left", "h":
-			m.content = false
+			// In the wide layout the connections pane stays visible.
+			if !m.wide() || !m.watchingConnections {
+				m.content, m.watchingConnections = false, false
+			}
 			return m, nil
 		case "enter", "right", "l":
 			if m.busy {
@@ -346,6 +389,10 @@ func runTerm(title string, fn func() error) tea.Cmd {
 // choose runs a menu entry: reports render in the content pane, choices open a form there under
 // the state they change, and what runs the service gets the plain terminal for a moment.
 func (m *model) choose(id string) tea.Cmd {
+	if id == "connections" && m.watchingConnections {
+		return nil
+	}
+	m.watchingConnections = false
 	label := id
 	for _, e := range entries {
 		if e[0] == id {
@@ -353,6 +400,13 @@ func (m *model) choose(id string) tea.Cmd {
 		}
 	}
 	switch id {
+	case "connections":
+		m.watchingConnections = true
+		m.connectionsSession++
+		m.title = label
+		m.vp.SetContent(dim.Render("读取中…"))
+		m.vp.GotoTop()
+		return readConnections(m.connectionsSession)
 	case "quit":
 		return tea.Quit
 	case "help":
@@ -385,7 +439,7 @@ func (m *model) choose(id string) tea.Cmd {
 	m.busy, m.title = true, label
 	m.vp.SetContent(dim.Render("读取中…"))
 	switch id {
-	case "status", "connections":
+	case "status":
 		return capture(label, id)
 	case "nodes":
 		return bg(func() tea.Cmd { return nodesForm(label) })

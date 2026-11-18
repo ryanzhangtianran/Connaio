@@ -95,9 +95,9 @@ func (s *CoreService) Activity() (Activity, error) {
 		}
 	}
 	a.Processes, a.Devices, a.Hosts = len(processes), len(devices), len(hosts)
-	a.Today, a.Month = s.ledger.totals(time.Now())
-	a.Hours, a.ByProcess, a.ByHost, a.ByPolicy = s.ledger.today(time.Now())
-	a.Days, a.MonthByProcess, a.MonthByHost, a.MonthByPolicy = s.ledger.month(time.Now())
+	a.Today, a.Month = s.monitor.ledger.totals(time.Now())
+	a.Hours, a.ByProcess, a.ByHost, a.ByPolicy = s.monitor.ledger.today(time.Now())
+	a.Days, a.MonthByProcess, a.MonthByHost, a.MonthByPolicy = s.monitor.ledger.month(time.Now())
 	return a, nil
 }
 
@@ -609,7 +609,7 @@ const keepDays = 13 * 31
 // already seen, so nothing before the clear comes back.
 // ClearTraffic clears the traffic statistics: today's, this month's and every day kept.
 func (s *CoreService) ClearTraffic() error {
-	l := s.ledger
+	l := s.monitor.ledger
 	l.mu.Lock()
 	l.days, l.dirty = map[string]*Day{}, true
 	l.mu.Unlock()
@@ -664,28 +664,4 @@ func trimUsage(m map[string]Split, n int) map[string]Split {
 		m[u.Name] = u.Split
 	}
 	return m
-}
-
-// countTraffic feeds the ledger every second (and the menu bar's process rows), saving it every minute.
-func (s *CoreService) countTraffic(ctx context.Context) {
-	t := time.NewTicker(time.Second)
-	defer t.Stop()
-	for i := 1; ; i++ {
-		select {
-		case <-ctx.Done():
-			return
-		case now := <-t.C:
-			if conns, err := s.refreshConnections(); err == nil {
-				deltas := s.ledger.add(conns, now)
-				if s.onConns != nil {
-					s.onConns(conns, deltas)
-				}
-			}
-			if i%60 == 0 {
-				if err := s.ledger.save(); err != nil {
-					log.Printf("save traffic: %v", err)
-				}
-			}
-		}
-	}
 }

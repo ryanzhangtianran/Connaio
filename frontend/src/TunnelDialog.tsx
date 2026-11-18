@@ -2,7 +2,7 @@ import { errText, plain, validPort } from "./format";
 import { useEffect, useState } from "react";
 import PasswordInput from "./PasswordInput";
 import { CoreService, ProfileService, ToolService } from "../bindings/github.com/ryanzhangtianran/Connaio/internal/app";
-import { localRule, useMixedPort } from "./Tunnels";
+import { localRule, useMixedPort } from "./TunnelRoutes";
 import { useDirty } from "./hooks";
 import { Switch } from "./Settings";
 import Dialog from "./Dialog";

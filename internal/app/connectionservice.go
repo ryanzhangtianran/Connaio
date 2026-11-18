@@ -107,43 +107,8 @@ func systemPath(path string) bool {
 // TUN takes everything.
 func (s *CoreService) Connections() ([]Conn, error) { return s.connections(false) }
 
-// connections lists live connections, those outside partial enhancement's scope too when all is set.
-// The ledger fetches the list every second; everyone else (the activity, connections, devices and
-// processes pages) gets that snapshot while it is fresh, so the core serialises it once a second,
-// not four times.
 func (s *CoreService) connections(all bool) ([]Conn, error) {
-	s.connMu.Lock()
-	conns, at := s.conns, s.connAt
-	s.connMu.Unlock()
-	if conns == nil || time.Since(at) > 1500*time.Millisecond {
-		var err error
-		if conns, err = s.refreshConnections(); err != nil {
-			return nil, err
-		}
-	}
-	if all {
-		return conns, nil
-	}
-	out := make([]Conn, 0, len(conns))
-	for _, c := range conns {
-		if c.Rule != "CaptureFilter" { // constant.CaptureFilter's name in the core
-			out = append(out, c)
-		}
-	}
-	return out, nil
-}
-
-// refreshConnections fetches the snapshot from the core and keeps it for connections. Callers
-// treat the slice as read-only.
-func (s *CoreService) refreshConnections() ([]Conn, error) {
-	conns, err := s.fetchConnections()
-	if err != nil {
-		return nil, err
-	}
-	s.connMu.Lock()
-	s.conns, s.connAt = conns, time.Now()
-	s.connMu.Unlock()
-	return conns, nil
+	return s.monitor.connections(all, s.fetchConnections)
 }
 
 func (s *CoreService) fetchConnections() ([]Conn, error) {
@@ -250,15 +215,8 @@ func linkTunnels(conns []Conn) []Conn {
 
 // CloseAll closes every live connection.
 func (s *CoreService) CloseAll() error {
-	defer s.forgetConnections()
+	defer s.monitor.invalidate()
 	return s.core.Do(context.Background(), http.MethodDelete, "/connections", nil, nil)
-}
-
-// forgetConnections drops the cached snapshot, so a list after a close shows the close.
-func (s *CoreService) forgetConnections() {
-	s.connMu.Lock()
-	s.connAt = time.Time{}
-	s.connMu.Unlock()
 }
 
 // Reload re-applies the current config (profile and override) to the core.
@@ -297,7 +255,7 @@ func (s *CoreService) Restart() error {
 }
 
 func (s *CoreService) CloseConnection(id string) error {
-	defer s.forgetConnections()
+	defer s.monitor.invalidate()
 	return s.core.Do(context.Background(), http.MethodDelete, "/connections/"+url.PathEscape(id), nil, nil)
 }
 

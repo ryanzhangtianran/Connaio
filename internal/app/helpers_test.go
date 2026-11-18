@@ -32,7 +32,7 @@ func startCore(t *testing.T, override string) (*CoreService, *ProfileService, in
 	if err := store.SetOverride(fmt.Sprintf("mixed-port: %d\n%s", port, override)); err != nil {
 		t.Fatal(err)
 	}
-	cs := &CoreService{core: core.New(dir), ledger: openLedger(filepath.Join(t.TempDir(), "traffic.json")), onReady: func() error { return nil }}
+	cs := &CoreService{core: core.New(dir), monitor: connectionMonitor{ledger: openLedger(filepath.Join(t.TempDir(), "traffic.json"))}, onReady: func() error { return nil }}
 	ps := &ProfileService{store: store, core: cs.core, settings: loadSettings(t.TempDir())}
 	if err := ps.WriteConfig(); err != nil {
 		t.Fatal(err)

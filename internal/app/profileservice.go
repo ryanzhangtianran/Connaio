@@ -111,14 +111,62 @@ func (s *ProfileService) applyLocked() error {
 	if err := os.WriteFile(next, b, 0o600); err != nil {
 		return err
 	}
+	defer os.Remove(next)
 	if err := s.core.Validate(context.Background(), next); err != nil {
-		os.Remove(next)
 		return err
 	}
-	if err := os.Rename(next, s.core.ConfigPath()); err != nil {
+	path := s.core.ConfigPath()
+	previous, readErr := os.ReadFile(path)
+	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
+		return readErr
+	}
+	if err := os.Rename(next, path); err != nil {
 		return err
 	}
-	return s.core.Reload(context.Background(), b)
+	if err := s.core.Reload(context.Background(), b); err != nil {
+		if errors.Is(readErr, os.ErrNotExist) {
+			return errors.Join(err, os.Remove(path))
+		}
+		return errors.Join(err, profile.WriteAtomic(path, previous, 0o600))
+	}
+	return nil
+}
+
+// applyEnhancement commits TUN settings and the optional capture override under the
+// same lock used for profile and rule edits. A failed apply restores both inputs.
+func (s *ProfileService) applyEnhancement(on bool, mode string, partial *bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	restoreOverride := func() error { return nil }
+	if mode != "" {
+		old, err := s.store.Override()
+		if err != nil {
+			return err
+		}
+		if err := s.store.SetPath([]string{"capture", "mode"}, mode); err != nil {
+			return err
+		}
+		restoreOverride = func() error { return s.store.SetOverride(old) }
+	}
+	previous := s.settings.Get()
+	restoreSettings := func() error {
+		return s.settings.Update(func(st *Settings) {
+			st.Enhanced, st.Partial = previous.Enhanced, previous.Partial
+		})
+	}
+	if err := s.settings.Update(func(st *Settings) {
+		st.Enhanced = on
+		if partial != nil {
+			st.Partial = *partial
+		}
+	}); err != nil {
+		return errors.Join(err, restoreOverride(), restoreSettings())
+	}
+	if err := s.applyLocked(); err != nil {
+		return errors.Join(err, restoreOverride(), restoreSettings())
+	}
+	return nil
 }
 
 func (s *ProfileService) changed() {

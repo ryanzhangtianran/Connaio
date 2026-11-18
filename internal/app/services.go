@@ -27,7 +27,7 @@ func newServices(dataDir string) (*services, error) {
 		return nil, err
 	}
 	settings := loadSettings(dataDir)
-	svc := &CoreService{core: core.New(dataDir), ledger: openLedger(filepath.Join(dataDir, "traffic.json")), settings: settings}
+	svc := &CoreService{core: core.New(dataDir), monitor: connectionMonitor{ledger: openLedger(filepath.Join(dataDir, "traffic.json"))}, settings: settings}
 	profiles := &ProfileService{store: store, core: svc.core, settings: settings}
 	enhanced := &EnhancedService{core: svc.core, profiles: profiles, settings: settings}
 	svc.onReady = func() error {

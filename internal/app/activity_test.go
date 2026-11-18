@@ -224,7 +224,7 @@ func TestLedgerClear(t *testing.T) {
 	if today, _ := l.totals(now); today.Direct != 200 {
 		t.Fatalf("before: %+v", today)
 	}
-	if err := (&CoreService{ledger: l}).ClearTraffic(); err != nil {
+	if err := (&CoreService{monitor: connectionMonitor{ledger: l}}).ClearTraffic(); err != nil {
 		t.Fatal(err)
 	}
 	l.add([]Conn{{ID: "1", Download: 350, Chain: "DIRECT"}}, now)

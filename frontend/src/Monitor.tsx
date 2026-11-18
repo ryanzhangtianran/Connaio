@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Window } from "@wailsio/runtime";
-import { ClientIcon, Picker, Routes, useWatch } from "./Activity";
+import { ClientIcon, Routes, useWatch } from "./ConnectionViews";
+import { Picker } from "./Picker";
 import { speed } from "./format";
 
 const FOLDED = 52, OPEN = 248; // the window's height either way (app.go builds it folded)

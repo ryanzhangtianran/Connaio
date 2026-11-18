@@ -107,7 +107,7 @@ func newTrayMenu(t *trayMenu) {
 	// administrator prompt can hold: it drops an update off here and goes on. It skips the hop when
 	// nothing seen would change: the process rows while the menu is closed (they fill in within a
 	// second of it opening), the menu bar while its speed reads the same or isn't shown.
-	t.svc.onConns = func(conns []Conn, deltas map[string]int64) {
+	t.svc.monitor.onSample = func(conns []Conn, deltas map[string]int64) {
 		if trayTracksOpen && !t.open.Load() {
 			return
 		}
