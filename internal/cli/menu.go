@@ -154,7 +154,7 @@ func readConnections(session uint64) tea.Cmd {
 
 func (m model) wide() bool { return m.w >= wideMin }
 
-// menuWidth fits the longest label, its selector and the frame.
+// menuWidth fits the longest label, the bar past it and the frame.
 func menuWidth() int {
 	w := 0
 	for _, e := range entries {
@@ -762,14 +762,15 @@ func (m model) menuView() string {
 	first := max(0, min(m.cursor-rows/2, len(entries)-rows)) // the cursor kept in view on short windows
 	var lines []string
 	for i := first; i < len(entries) && i < first+rows; i++ {
-		label, style := "  "+entries[i][1], fg(cText)
-		if i == m.cursor {
-			label, style = "› "+entries[i][1], fg(cAccent).Bold(true)
+		label, style, note := entries[i][1], fg(cText), dim
+		if i == m.cursor { // a bar across the pane, no marker
+			style = lipgloss.NewStyle().Foreground(lipgloss.Color("#232634")).Background(cAccent).Bold(true)
+			note = style.UnsetBold()
 		}
 		if !m.wide() && entries[i][2] != "" { // a full-width menu has room for what each does
-			label += strings.Repeat(" ", max(16-lipgloss.Width(label), 1)) + dim.Render(entries[i][2])
+			label = style.Render(label+strings.Repeat(" ", max(14-lipgloss.Width(label), 1))) + note.Render(entries[i][2])
 		}
-		lines = append(lines, style.Render(label))
+		lines = append(lines, style.Width(w-4).Render(label))
 	}
 	return frame.Width(w - 2).Height(rows).Render(strings.Join(lines, "\n"))
 }
