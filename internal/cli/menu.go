@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -23,33 +24,46 @@ import (
 // installURL is install.sh on the download site: run again, it updates Connaio.
 const installURL = "https://connaio-dl.ryanzhangtianran.top/install.sh"
 
-// entries are the menu's lines: id, label, what it does. In the order the work goes: the state,
-// the routing, the profiles, the VPNs and tunnels, TUN, then the service.
-var entries = [][3]string{
-	{"status", "状态", "内核、出站模式、配置与隧道"},
-	{"mode", "出站模式", "规则、全局或直连"},
-	{"nodes", "节点", "切换节点、测试延迟"},
-	{"profiles", "配置", "使用、更新或添加订阅"},
-	{"vpn", "VPN", "登录或断开 VPN"},
-	{"tun", "TUN", "接管全部或选中程序的流量"},
-	{"tunnels", "反向隧道", "启动或停止隧道"},
-	{"connections", "连接", "经 Connaio 的连接"},
-	{"service", "服务", "启动、停止、日志与更新 Connaio"},
-	{"help", "帮助", "命令行的全部命令"},
-	{"quit", "退出", ""},
+// entry is a line of the menu: the key that opens it and its Nerd Font icon.
+type entry struct{ id, label, note, key, icon string }
+
+// entries in the order the work goes: the state, the routing, the profiles, the VPNs and tunnels,
+// TUN, then the service.
+var entries = []entry{
+	{"status", "状态", "内核、出站模式、配置与隧道", "s", "\uf0e4"},
+	{"mode", "出站模式", "规则、全局或直连", "m", "\uf074"},
+	{"nodes", "节点", "切换节点、测试延迟", "n", "\uf0ac"},
+	{"profiles", "配置", "使用、更新或添加订阅", "p", "\uf15c"},
+	{"vpn", "VPN", "登录或断开 VPN", "v", "\uf132"},
+	{"tun", "TUN", "接管全部或选中程序的流量", "t", "\uf0ec"},
+	{"tunnels", "反向隧道", "启动或停止隧道", "r", "\uf079"},
+	{"connections", "连接", "经 Connaio 的连接", "c", "\uf1e6"},
+	{"service", "服务", "启动、停止、日志与更新 Connaio", "d", "\uf013"},
+	{"help", "帮助", "命令行的全部命令", "?", "\uf059"},
+	{"quit", "退出", "", "q", "\uf011"},
 }
 
-const (
-	wideMin                    = 90 // below this the menu and the content take turns on screen
-	connectionsRefreshInterval = time.Second
-)
+const connectionsRefreshInterval = time.Second
+
+// plainIcons is CONNAIO_ICONS=plain, for a terminal without a Nerd Font: no icons, no rounded edges
+// on the status line.
+var plainIcons = os.Getenv("CONNAIO_ICONS") == "plain"
+
+// glyph is a Nerd Font glyph, or nothing under plainIcons.
+func glyph(s string) string {
+	if plainIcons {
+		return ""
+	}
+	return s
+}
 
 // the palette: catppuccin frappé, as homie's
 var (
 	cMuted, cBorder, cAccent, cTitle = lipgloss.Color("#a5adce"), lipgloss.Color("#737994"), lipgloss.Color("#85c1dc"), lipgloss.Color("#ca9ee6")
 	cOK, cWarn, cErr, cText          = lipgloss.Color("#a6d189"), lipgloss.Color("#e5c890"), lipgloss.Color("#e78284"), lipgloss.Color("#c6d0f5")
+	cBase, cSurface                  = lipgloss.Color("#232634"), lipgloss.Color("#414559")
+	modeColor                        = map[string]lipgloss.Color{"rule": cAccent, "global": cTitle, "direct": cOK}
 
-	frame = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cBorder).Padding(0, 1)
 	dim   = lipgloss.NewStyle().Foreground(cMuted)
 	theme = formTheme()
 )
@@ -68,7 +82,7 @@ func formTheme() *huh.Theme {
 	f.Option, f.UnselectedOption = fg(cText), fg(cText)
 	f.SelectedOption = fg(cAccent).Bold(true)
 	f.ErrorIndicator, f.ErrorMessage = fg(cErr).SetString(" *"), fg(cErr)
-	f.FocusedButton = lipgloss.NewStyle().Padding(0, 2).MarginRight(1).Foreground(lipgloss.Color("#232634")).Background(cAccent)
+	f.FocusedButton = lipgloss.NewStyle().Padding(0, 2).MarginRight(1).Foreground(cBase).Background(cAccent)
 	f.BlurredButton = lipgloss.NewStyle().Padding(0, 2).MarginRight(1).Foreground(cText).Background(cBorder)
 	f.Next = f.FocusedButton
 	f.TextInput.Cursor, f.TextInput.Prompt = fg(cAccent), fg(cAccent)
@@ -83,7 +97,7 @@ func formTheme() *huh.Theme {
 }
 
 // Menu is connaio run bare in a terminal: a full-screen menu, as homie's, the result of each entry
-// beside it; what runs the service (systemctl, sudo) gets the plain terminal while it runs.
+// beside it, a status line under both; what runs the service (systemctl, sudo) gets the plain terminal while it runs.
 func Menu(in io.Reader, out io.Writer) error {
 	last, err := tea.NewProgram(newModel(), tea.WithAltScreen(), tea.WithInput(in), tea.WithOutput(out)).Run()
 	if m, ok := last.(model); ok && m.updated && err == nil {
@@ -101,7 +115,7 @@ type model struct {
 	vp      viewport.Model
 	form    *huh.Form
 	submit  func() tea.Cmd
-	head    string
+	head    head
 	busy    bool
 	updated bool // 更新 Connaio succeeded: the menu quits and starts again as the new version
 
@@ -111,7 +125,7 @@ type model struct {
 
 type (
 	contentMsg         struct{ title, body string }
-	headMsg            string // the header, read off the loop: it asks the service and the core
+	headMsg            head // the status line, read off the loop: it asks the service and the core
 	updatedMsg         struct{}
 	connectionsTickMsg uint64
 	connectionsMsg     struct {
@@ -130,8 +144,21 @@ type (
 	}
 )
 
+// head is the status line: its first block (the outbound mode, or what keeps the core from one),
+// then the service's and the core's state and the profile.
+type head struct {
+	mode  string
+	color lipgloss.Color
+	parts []part
+}
+
+type part struct {
+	k, v string
+	c    lipgloss.Color
+}
+
 func newModel() model {
-	return model{head: fg(cAccent).Bold(true).Render("Connaio"), vp: viewport.New(0, 0), title: "状态", busy: true}
+	return model{head: head{mode: "读取中", color: cBorder}, vp: viewport.New(0, 0), title: "状态", busy: true}
 }
 
 func (m model) Init() tea.Cmd { return tea.Batch(refreshHead, capture("状态", "status")) }
@@ -152,15 +179,20 @@ func readConnections(session uint64) tea.Cmd {
 	}
 }
 
+const wideMin = 90 // below this the menu and the content take turns on screen
+
 func (m model) wide() bool { return m.w >= wideMin }
 
-// menuWidth fits the longest label, the bar past it and the frame.
+// iconWidth is an entry's icon and the gap after it, kept under plainIcons: the menu as wide either way.
+const iconWidth = 3
+
+// menuWidth fits the longest label, its icon, its key and the frame.
 func menuWidth() int {
 	w := 0
 	for _, e := range entries {
-		w = max(w, lipgloss.Width(e[1]))
+		w = max(w, lipgloss.Width(e.label))
 	}
-	return w + 6
+	return w + iconWidth + 8 // a space, the label, three before the key, the key, a space; the frame
 }
 
 func (m model) contentWidth() int {
@@ -170,14 +202,11 @@ func (m model) contentWidth() int {
 	return m.w
 }
 
-func (m model) bodyHeight() int {
-	return max(m.h-lipgloss.Height(m.header())-2, 3) // header, then body, hint line and key line
-}
+func (m model) bodyHeight() int { return max(m.h-1, 3) } // the status line under it
 
-// paneWidth and paneHeight are what the content pane's frame holds: its border and padding off,
-// then the title and the blank line under it.
+// paneWidth and paneHeight are what the content pane's frame holds: its border and padding off.
 func (m model) paneWidth() int  { return max(m.contentWidth()-4, 20) }
-func (m model) paneHeight() int { return max(m.bodyHeight()-4, 1) }
+func (m model) paneHeight() int { return max(m.bodyHeight()-2, 1) }
 
 func (m *model) layout() {
 	m.vp.Width, m.vp.Height = m.paneWidth(), m.paneHeight()
@@ -193,7 +222,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layout()
 		return m, nil
 	case headMsg:
-		m.head = string(msg)
+		m.head = head(msg)
 		return m, nil
 	case contentMsg:
 		m.busy, m.title = false, msg.title
@@ -232,35 +261,48 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateForm(msg)
 	}
 	if k, ok := msg.(tea.KeyMsg); ok {
-		switch k.String() {
-		case "ctrl+c", "q":
+		s := k.String()
+		menu := !m.content || m.wide() // the menu on screen: it takes the arrows and the letters
+		switch {
+		case s == "ctrl+c" || s == "q":
 			return m, tea.Quit
-		case "up", "k":
-			if !m.content || m.wide() {
-				m.cursor = (m.cursor + len(entries) - 1) % len(entries)
-				return m, nil
-			}
-		case "down", "j":
-			if !m.content || m.wide() {
-				m.cursor = (m.cursor + 1) % len(entries)
-				return m, nil
-			}
-		case "esc", "left", "h":
+		case s == "esc" || s == "left" || s == "h":
 			// In the wide layout the connections pane stays visible.
 			if !m.wide() || !m.watchingConnections {
 				m.content, m.watchingConnections = false, false
 			}
 			return m, nil
-		case "enter", "right", "l":
-			if m.busy {
-				return m, nil
+		case !menu: // the rest scroll the content pane
+		case s == "up" || s == "k":
+			m.cursor = (m.cursor + len(entries) - 1) % len(entries)
+			return m, nil
+		case s == "down" || s == "j":
+			m.cursor = (m.cursor + 1) % len(entries)
+			return m, nil
+		case s == "enter" || s == "right" || s == "l":
+			return m.open(m.cursor)
+		default:
+			if i := slices.IndexFunc(entries, func(e entry) bool { return e.key == s }); i >= 0 {
+				m.cursor = i
+				return m.open(i)
 			}
-			m.content = true
-			return m, m.choose(entries[m.cursor][0])
 		}
 	}
 	var cmd tea.Cmd
 	m.vp, cmd = m.vp.Update(msg) // scrolling: pgup/pgdn, and arrows in the narrow content pane
+	return m, cmd
+}
+
+// open opens entries[i] in the content pane, unless a step is still running; 退出 quits even then.
+func (m model) open(i int) (tea.Model, tea.Cmd) {
+	if entries[i].id == "quit" {
+		return m, tea.Quit
+	}
+	if m.busy {
+		return m, nil
+	}
+	m.content = true
+	cmd := m.choose(entries[i].id)
 	return m, cmd
 }
 
@@ -395,8 +437,8 @@ func (m *model) choose(id string) tea.Cmd {
 	m.watchingConnections = false
 	label := id
 	for _, e := range entries {
-		if e[0] == id {
-			label = e[1]
+		if e.id == id {
+			label = e.label
 		}
 	}
 	switch id {
@@ -734,95 +776,162 @@ func (m model) View() string {
 	} else if !m.content {
 		body = m.menuView()
 	}
-	hint := entries[m.cursor][2]
-	keys := "↑↓ 移动 · 回车或 → 打开 · pgup/pgdn 滚动 · q 退出"
-	switch {
-	case m.form != nil && picking(m.form):
-		keys = "↑↓ 选择 · 回车 确定 · ← 或 esc 返回菜单"
-	case m.form != nil:
-		keys = "回车 确定 · shift+tab 上一项 · esc 返回菜单"
-	case !m.wide():
-		keys = "↑↓ 移动 · 回车或 → 打开 · ← 或 esc 返回 · q 退出"
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, m.header(),
-		lipgloss.NewStyle().Height(m.bodyHeight()).MaxHeight(m.bodyHeight()).Render(body),
-		trim(dim.Render(hint), m.w), trim(dim.Render(keys), m.w))
+	return body + "\n" + m.statusline()
 }
 
 func trim(s string, w int) string { return lipgloss.NewStyle().MaxWidth(w).Render(s) }
 
-func (m model) header() string { return frame.Width(max(m.w-2, 10)).Render(m.head) }
+// keys are what the keys do now, on the bottom edge of the pane at the right.
+func (m model) keys() string {
+	switch {
+	case m.form != nil && picking(m.form):
+		return "↑↓ 选择 · 回车 确定 · ← 或 esc 返回菜单"
+	case m.form != nil:
+		return "回车 确定 · shift+tab 上一项 · esc 返回菜单"
+	case !m.wide() && m.content:
+		return "↑↓ 滚动 · ← 或 esc 返回 · q 退出"
+	case !m.wide():
+		return "↑↓ 移动 · 回车或字母键 打开 · q 退出"
+	}
+	return "↑↓ 移动 · 回车或字母键 打开 · pgup/pgdn 滚动 · q 退出"
+}
+
+// box frames body w wide and h high, the title on the top edge and the keys on the bottom one, both
+// from the left as the text in it is; either left out when it does not fit.
+func box(w, h int, title, keys, body string, pad int) string {
+	edge := fg(cBorder)
+	label := func(s string, st lipgloss.Style, l, r string) string {
+		if s == "" || lipgloss.Width(s)+5 > w {
+			return edge.Render(l + strings.Repeat("─", w-2) + r)
+		}
+		return edge.Render(l+"─") + st.Render(" "+s+" ") + edge.Render(strings.Repeat("─", w-5-lipgloss.Width(s))+r)
+	}
+	body = lipgloss.NewStyle().MaxWidth(w - 2 - 2*pad).Render(body) // cut, not wrapped: a wrapped line would push the rest down
+	sides := lipgloss.NewStyle().Border(lipgloss.RoundedBorder(), false, true).BorderForeground(cBorder).
+		Padding(0, pad).Width(w - 2).Height(h - 2).MaxHeight(h - 2)
+	return label(title, fg(cTitle).Bold(true), "╭", "╮") + "\n" + sides.Render(body) + "\n" + label(keys, dim, "╰", "╯")
+}
 
 func (m model) menuView() string {
-	w := menuWidth()
+	w, keys := menuWidth(), ""
 	if !m.wide() {
-		w = m.w
+		w, keys = m.w, m.keys()
 	}
 	rows := m.bodyHeight() - 2
 	first := max(0, min(m.cursor-rows/2, len(entries)-rows)) // the cursor kept in view on short windows
 	var lines []string
 	for i := first; i < len(entries) && i < first+rows; i++ {
-		label, style, note := entries[i][1], fg(cText), dim
+		e := entries[i]
+		label := e.label
+		if g := glyph(e.icon); g != "" {
+			label = g + "  " + label
+		}
+		text, note, key := fg(cText), dim, fg(cAccent).Bold(true)
 		if i == m.cursor { // a bar across the pane, no marker
-			style = lipgloss.NewStyle().Foreground(lipgloss.Color("#232634")).Background(cAccent).Bold(true)
-			note = style.UnsetBold()
+			text = lipgloss.NewStyle().Foreground(cBase).Background(cAccent).Bold(true)
+			note, key = text.UnsetBold(), text
 		}
-		if !m.wide() && entries[i][2] != "" { // a full-width menu has room for what each does
-			label = style.Render(label+strings.Repeat(" ", max(14-lipgloss.Width(label), 1))) + note.Render(entries[i][2])
+		label = " " + label
+		if !m.wide() && e.note != "" { // a full-width menu has room for what each does
+			label += strings.Repeat(" ", max(iconWidth+12-lipgloss.Width(label), 1))
+			label = text.Render(label) + note.Render(e.note)
+		} else {
+			label = text.Render(label)
 		}
-		lines = append(lines, style.Width(w-4).Render(label))
+		pad := strings.Repeat(" ", max(w-2-lipgloss.Width(label)-lipgloss.Width(e.key)-1, 1))
+		lines = append(lines, label+text.Render(pad)+key.Render(e.key)+text.Render(" "))
 	}
-	return frame.Width(w - 2).Height(rows).Render(strings.Join(lines, "\n"))
+	return box(w, m.bodyHeight(), "", keys, strings.Join(lines, "\n"), 0)
 }
 
-// contentView frames the content as the menu is, the two the same height: the title on the first
-// menu entry's line, the content from the line after the blank under it.
+// contentView frames the content as the menu is, the two the same height: the title on its top
+// edge, the content from the line the first entry is on.
 func (m model) contentView() string {
 	body := m.vp.View()
 	if m.form != nil {
 		body = m.form.View()
 	}
 	body = lipgloss.NewStyle().MaxWidth(m.paneWidth()).MaxHeight(m.paneHeight()).Render(body)
-	return frame.Width(m.contentWidth() - 2).Height(m.bodyHeight() - 2).
-		Render(fg(cTitle).Bold(true).Render(m.title) + "\n\n" + body)
+	keys := ""
+	if m.wide() || m.content {
+		keys = m.keys()
+	}
+	return box(m.contentWidth(), m.bodyHeight(), m.title, keys, body, 1)
 }
 
-// summary is the header: the service's state and the core's, its mode and profile.
-func summary() string {
-	sep := dim.Render("  ·  ")
-	label := func(k, v string) string { return dim.Render(k+" ") + v }
-	parts := []string{fg(cAccent).Bold(true).Render("Connaio")}
+// statusline is the head as lualine draws it: the mode in a colored block, the state on a band
+// across the screen, Connaio's name at the right end.
+func (m model) statusline() string {
+	band := lipgloss.NewStyle().Background(cSurface)
+	edge := func(s string, f, b lipgloss.Color) string {
+		st := lipgloss.NewStyle().Foreground(f)
+		if b != "" {
+			st = st.Background(b)
+		}
+		return st.Render(glyph(s))
+	}
+	icon := glyph(entries[1].icon)
+	if icon != "" {
+		icon += " "
+	}
+	// the ends half a cell in, a half block each: from the middle of the cell, where the panes' edges are drawn
+	left := fg(m.head.color).Render("▐") + lipgloss.NewStyle().Foreground(cBase).Background(m.head.color).Bold(true).Render(icon+m.head.mode+" ") +
+		edge("\ue0b4", m.head.color, cSurface)
+	for i, p := range m.head.parts {
+		if i > 0 {
+			left += band.Foreground(cBorder).Render(" │")
+		}
+		left += band.Foreground(cMuted).Render(" "+p.k+" ") + band.Foreground(cmp.Or(p.c, cText)).Render(p.v)
+	}
+	right := edge("\ue0b6", cAccent, cSurface) + lipgloss.NewStyle().Foreground(cBase).Background(cAccent).Bold(true).Render(" Connaio") + fg(cAccent).Render("▌")
+	gap := m.w - lipgloss.Width(left) - lipgloss.Width(right)
+	if gap < 1 { // no room for the name: the state cut to the screen, the band still to its edge
+		left, right = trim(left, m.w-1), fg(cSurface).Render("▌")
+		gap = m.w - lipgloss.Width(left) - 1
+	}
+	return left + band.Render(strings.Repeat(" ", gap)) + right // the band across the screen, as wide as the panes
+}
+
+// summary is the status line: the service's state and the core's, its mode and profile.
+func summary() head {
+	h := head{mode: "离线", color: cWarn}
 	if systemd() {
 		active, _ := exec.Command("systemctl", systemctl("is-active", "connaio")...).Output()
 		enabled, _ := exec.Command("systemctl", systemctl("is-enabled", "connaio")...).Output()
-		state := map[string]string{"active": fg(cOK).Render("运行中"), "inactive": fg(cWarn).Render("未运行"), "failed": fg(cErr).Render("出错")}
-		boot := fg(cWarn).Render("否")
+		state := map[string]part{"active": {"服务", "运行中", cOK}, "inactive": {"服务", "未运行", cWarn}, "failed": {"服务", "出错", cErr}}
+		svc, ok := state[strings.TrimSpace(string(active))]
+		if !ok {
+			svc = part{"服务", "未安装", cWarn}
+		}
+		boot := part{"开机启动", "否", cWarn}
 		if strings.TrimSpace(string(enabled)) == "enabled" {
-			boot = "是"
+			boot = part{"开机启动", "是", ""}
 		}
-		parts = append(parts, label("服务", cmp.Or(state[strings.TrimSpace(string(active))], fg(cWarn).Render("未安装"))), label("开机启动", boot))
+		h.parts = append(h.parts, svc, boot)
 	} else if _, err := os.Stat(initScript); err == nil {
-		state := fg(cOK).Render("运行中")
+		svc := part{"服务", "运行中", cOK}
 		if exec.Command(initScript, "status").Run() != nil {
-			state = fg(cWarn).Render("未运行")
+			svc = part{"服务", "未运行", cWarn}
 		}
-		parts = append(parts, label("服务", state))
+		h.parts = append(h.parts, svc)
 	}
 	c, err := client0()
 	if err != nil {
-		return strings.Join(append(parts, label("内核", fg(cWarn).Render("读不到访问令牌"))), sep)
+		h.parts = append(h.parts, part{"内核", "读不到访问令牌", cWarn})
+		return h
 	}
 	var st struct {
 		Running bool
 		Version string
 	}
 	if c.call(&st, "CoreService.Status") != nil || !st.Running {
-		return strings.Join(append(parts, label("内核", fg(cErr).Render("未运行"))), sep)
+		h.mode, h.color = "内核未运行", cErr
+		return h
 	}
-	parts = append(parts, label("内核", fg(cOK).Render("运行中")+dim.Render(" "+st.Version)))
+	h.parts = append(h.parts, part{"内核", st.Version, ""})
 	var mode string
 	if c.call(&mode, "CoreService.Mode") == nil {
-		parts = append(parts, label("出站", cmp.Or(modeLabel[mode], mode)))
+		h.mode, h.color = cmp.Or(modeLabel[mode], mode), cmp.Or(modeColor[mode], cAccent)
 	}
 	var ps struct {
 		Current  string
@@ -831,11 +940,11 @@ func summary() string {
 	if c.call(&ps, "ProfileService.Profiles") == nil {
 		for _, p := range ps.Profiles {
 			if p.ID == ps.Current {
-				parts = append(parts, label("配置", p.Name))
+				h.parts = append(h.parts, part{"配置", p.Name, ""})
 			}
 		}
 	}
-	return strings.Join(parts, sep)
+	return h
 }
 
 // initScript and initLog are the service where there is no systemd, as install.sh puts it.

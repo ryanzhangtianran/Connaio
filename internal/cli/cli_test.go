@@ -2,7 +2,10 @@ package cli
 
 import (
 	"encoding/json"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/x/ansi"
 	"io"
 	"net"
 	"net/http"
@@ -234,7 +237,7 @@ func TestDisplayWidth(t *testing.T) {
 	}
 }
 
-// TestMenu: the full-screen menu shows the status first; a node and a mode picked in its forms
+// TestMenu: the start screen and the status line come first, s opens the status; a node and a mode picked in its forms
 // reach the same calls as the commands.
 func TestMenu(t *testing.T) {
 	addr, calls := fake(t, map[string]string{
@@ -249,12 +252,16 @@ func TestMenu(t *testing.T) {
 	var m tea.Model = newModel()
 	m = feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = drive(t, m, m.Init())
-	if v := m.View(); !strings.Contains(v, "状态") || !strings.Contains(v, "运行中（1.19.32）") || !strings.Contains(v, "出站 规则") {
+	if v := m.View(); !strings.Contains(v, "出站模式") || !strings.Contains(v, "规则") || !strings.Contains(v, "内核 1.19.32") {
 		t.Fatalf("first screen:\n%s", v)
 	}
+	if m = feed(t, m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")}); !strings.Contains(m.View(), "运行中（1.19.32）") {
+		t.Fatalf("s opened no status:\n%s", m.View())
+	}
 	key := func(k tea.KeyType) { m = feed(t, m, tea.KeyMsg{Type: k}) }
-	at := func(id string) { // the cursor moved to the entry, then opened
-		for m.(model).cursor != slices.IndexFunc(entries, func(e [3]string) bool { return e[0] == id }) {
+	at := func(id string) { // the float closed, the cursor moved to the entry, then opened
+		key(tea.KeyEsc)
+		for m.(model).cursor != slices.IndexFunc(entries, func(e entry) bool { return e.id == id }) {
 			key(tea.KeyDown)
 		}
 		key(tea.KeyEnter)
@@ -298,7 +305,7 @@ func TestMenuRefreshesConnections(t *testing.T) {
 	t.Setenv("CONNAIO_TOKEN", "tok")
 	m := newModel()
 	m.busy = false
-	m.cursor = slices.IndexFunc(entries, func(e [3]string) bool { return e[0] == "connections" })
+	m.cursor = slices.IndexFunc(entries, func(e entry) bool { return e.id == "connections" })
 	var screen tea.Model = m
 	screen, _ = screen.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	screen, load := screen.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -344,7 +351,7 @@ func TestMenuNotHeldUp(t *testing.T) {
 	var m tea.Model = newModel()
 	m, _ = m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m, _ = m.Update(contentMsg{"运行状态", ""})
-	for m.(model).cursor != slices.IndexFunc(entries, func(e [3]string) bool { return e[0] == "nodes" }) {
+	for m.(model).cursor != slices.IndexFunc(entries, func(e entry) bool { return e.id == "nodes" }) {
 		m, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	}
 	start := time.Now()
@@ -477,7 +484,7 @@ func TestProfileEditRemove(t *testing.T) {
 	var m tea.Model = newModel()
 	m = feed(t, m, tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = feed(t, m, contentMsg{"状态", ""}) // the first screen read: the menu takes keys
-	for m.(model).cursor != slices.IndexFunc(entries, func(e [3]string) bool { return e[0] == "profiles" }) {
+	for m.(model).cursor != slices.IndexFunc(entries, func(e entry) bool { return e.id == "profiles" }) {
 		m = feed(t, m, tea.KeyMsg{Type: tea.KeyDown})
 	}
 	m = feed(t, m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -528,4 +535,67 @@ func TestTunUsers(t *testing.T) {
 	if out, err := main(t, addr, "tun-users"); err != nil || out != "全部用户\n" {
 		t.Errorf("unset: %q %v", out, err)
 	}
+}
+
+// TestMenuAligned: every line of the screen is the window's width, and every pane's edges run
+// straight down: the menu's, the content's, a form's, wide and narrow, with and without icons.
+func TestMenuAligned(t *testing.T) {
+	hd := head{mode: "规则", color: cAccent, parts: []part{{"服务", "运行中", cOK}, {"内核", "v1.19.32", ""}, {"配置", "机场A", ""}}}
+	for _, plain := range []bool{false, true} {
+		plainIcons = plain
+		for _, size := range [][2]int{{120, 34}, {80, 24}, {200, 50}, {90, 16}, {120, 23}, {120, 24}, {60, 10}, {40, 8}, {24, 6}} {
+			for _, cursor := range []int{2, len(entries) - 1} {
+				m := model{w: size[0], h: size[1], cursor: cursor, head: hd, vp: viewport.New(0, 0), title: "帮助"}
+				m.layout()
+				m.vp.SetContent(Usage)
+				screens := map[string]string{"menu": m.View()}
+				m.content = true
+				screens["content"] = m.View()
+				mode := "rule"
+				m.openForm("出站模式", nil, huh.NewSelect[string]().Options(huh.NewOption("规则", "rule"), huh.NewOption("全局", "global")).Value(&mode))
+				screens["form"] = m.View()
+				// the columns each pane's edges are in
+				edges := []int{0, m.w - 1}
+				if m.wide() {
+					edges = []int{0, menuWidth() - 1, menuWidth() + 1, m.w - 1}
+				}
+				for name, v := range screens {
+					lines := strings.Split(ansi.Strip(v), "\n")
+					if len(lines) != m.h {
+						t.Errorf("%v plain=%v %s: %d lines", size, plain, name, len(lines))
+					}
+					for i, l := range lines {
+						if w := ansi.StringWidth(l); w != m.w {
+							t.Errorf("%v plain=%v %s line %d: width %d", size, plain, name, i, w)
+						}
+						if i == len(lines)-1 {
+							continue // the status line
+						}
+						for _, c := range edges {
+							if e := ansi.Cut(l, c, c+1); !strings.ContainsAny(e, "│╭╮╰╯") {
+								t.Errorf("%v plain=%v %s line %d: %q at column %d, not an edge", size, plain, name, i, e, c)
+							}
+						}
+					}
+				}
+				// every entry on its own line, one after another, its key in the key column
+				rows := m.bodyHeight() - 2
+				if rows < len(entries) {
+					continue // the menu scrolls
+				}
+				keyCol := m.w - 3
+				if m.wide() {
+					keyCol = menuWidth() - 3
+				}
+				lines := strings.Split(ansi.Strip(screens["menu"]), "\n")
+				for i, e := range entries {
+					l := lines[1+i]
+					if !strings.Contains(ansi.Cut(l, 0, keyCol), e.label) || ansi.Cut(l, keyCol, keyCol+1) != e.key {
+						t.Errorf("%v plain=%v: %s not on line %d with its key in column %d: %q", size, plain, e.label, 1+i, keyCol, l)
+					}
+				}
+			}
+		}
+	}
+	plainIcons = false
 }
